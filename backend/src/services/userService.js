@@ -1,0 +1,90 @@
+const User = require('../models/User');
+const AppError = require('../utils/appError');
+const pickUser = require('../utils/pickUser');
+const { logAction } = require('./auditService');
+
+async function getProfile(user, req) {
+  return pickUser(user, req);
+}
+
+async function updateProfile(user, payload, req, requestMeta) {
+  const currentUser = await User.findById(user._id);
+
+  if (!currentUser) {
+    throw new AppError('User not found', 404);
+  }
+
+  if (payload.email && payload.email.toLowerCase() !== currentUser.email) {
+    const emailExists = await User.findOne({
+      email: payload.email.toLowerCase(),
+      _id: { $ne: currentUser._id }
+    });
+
+    if (emailExists) {
+      throw new AppError('Email is already in use by another account', 409);
+    }
+
+    currentUser.email = payload.email.toLowerCase();
+  }
+
+  if (payload.fullName) {
+    currentUser.fullName = payload.fullName;
+  }
+
+  if (payload.phone) {
+    currentUser.phone = payload.phone;
+  }
+
+  if (payload.department) {
+    currentUser.department = payload.department;
+  }
+
+  if (currentUser.role === 'student' && payload.semester) {
+    currentUser.semester = Number(payload.semester);
+  }
+
+  await currentUser.save();
+
+  await logAction({
+    actorId: currentUser._id,
+    resourceType: 'user',
+    resourceId: currentUser._id,
+    action: 'update_profile',
+    message: 'Profile updated successfully',
+    requestMeta
+  });
+
+  return pickUser(currentUser, req);
+}
+
+async function uploadProfileImage(user, file, req, requestMeta) {
+  if (!file) {
+    throw new AppError('Profile image file is required', 400);
+  }
+
+  const currentUser = await User.findById(user._id);
+
+  if (!currentUser) {
+    throw new AppError('User not found', 404);
+  }
+
+  currentUser.profileImage = `/uploads/profiles/${file.filename}`;
+  await currentUser.save();
+
+  await logAction({
+    actorId: currentUser._id,
+    resourceType: 'user',
+    resourceId: currentUser._id,
+    action: 'upload_profile_image',
+    message: 'Profile image uploaded',
+    requestMeta
+  });
+
+  return pickUser(currentUser, req);
+}
+
+module.exports = {
+  getProfile,
+  updateProfile,
+  uploadProfileImage
+};

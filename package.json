@@ -1,0 +1,39 @@
+{
+  "name": "dwarpal",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vite",
+    "dev:frontend": "vite",
+    "dev:backend": "npm run dev --prefix backend",
+    "build": "vite build",
+    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
+    "preview": "vite preview",
+    "start:backend": "npm run start --prefix backend",
+    "migrate:gatepass-ids": "npm run migrate:gatepass-ids --prefix backend",
+    "seed:backend": "npm run seed:admins --prefix backend",
+    "verify": "npm run build && npm run check --prefix backend"
+  },
+  "dependencies": {
+    "@simplewebauthn/browser": "^13.3.0",
+    "lucide-react": "^1.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.8.0",
+    "socket.io-client": "^4.8.3"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.15",
+    "@types/react-dom": "^18.2.7",
+    "@vitejs/plugin-react": "^4.0.3",
+    "eslint": "^8.45.0",
+    "eslint-plugin-react": "^7.32.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.3",
+    "vite": "^4.4.5"
+  }
+}

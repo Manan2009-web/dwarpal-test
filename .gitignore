@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+.vscode/
+*.log
+*.err
+*.out
+.edge-debug/
+.edge-debug2/
+.edge-debug*/
+.tmp-vite-dev*

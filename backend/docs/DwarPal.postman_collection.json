@@ -1,0 +1,437 @@
+{
+  "info": {
+    "name": "DwarPal Backend",
+    "_postman_id": "fef4f5b0-91a7-4d3a-9d9d-dwarpal-backend",
+    "description": "Postman collection for the DwarPal digital gatepass backend.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000/api"
+    },
+    {
+      "key": "authToken",
+      "value": ""
+    },
+    {
+      "key": "seedKey",
+      "value": "seed-dwarpal-2026"
+    },
+    {
+      "key": "gatepassId",
+      "value": ""
+    },
+    {
+      "key": "verificationToken",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Admin Seed",
+      "item": [
+        {
+          "name": "Seed Default Admins",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-seed-key",
+                "value": "{{seedKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/seed-default-admins",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "seed-default-admins"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register Student",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Aarav Sharma\",\n  \"email\": \"aarav.student@example.com\",\n  \"password\": \"Password@123\",\n  \"role\": \"student\",\n  \"department\": \"Computer Engineering\",\n  \"semester\": 5,\n  \"enrollmentNo\": \"2026001\",\n  \"phone\": \"9876543210\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier\": \"aarav.student@example.com\",\n  \"password\": \"Password@123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Verify Auth",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "verify"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Gatepasses",
+      "item": [
+        {
+          "name": "Create Gatepass",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Need to visit the bank for document verification.\",\n  \"destination\": \"State Bank Branch\",\n  \"outDate\": \"2026-03-25\",\n  \"outTime\": \"14:00\",\n  \"expectedReturnDate\": \"2026-03-25\",\n  \"expectedReturnTime\": \"16:30\",\n  \"vehicleNumber\": \"GJ01 AB 1234\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/gatepasses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gatepasses"
+              ]
+            }
+          }
+        },
+        {
+          "name": "My Gatepasses",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/gatepasses/my",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gatepasses",
+                "my"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Principal Pending Gatepasses",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/gatepasses/pending/principal",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gatepasses",
+                "pending",
+                "principal"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Approve Gatepass",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comment\": \"Approved after review.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/gatepasses/{{gatepassId}}/approve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gatepasses",
+                "{{gatepassId}}",
+                "approve"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Security Ready Gatepasses",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/gatepasses/security/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gatepasses",
+                "security",
+                "ready"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Pending Security Queue",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/gatepasses/pending/security?sortBy=updatedAt&order=desc&page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gatepasses",
+                "pending",
+                "security"
+              ],
+              "query": [
+                {
+                  "key": "sortBy",
+                  "value": "updatedAt"
+                },
+                {
+                  "key": "order",
+                  "value": "desc"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Verify Gatepass Token",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/gatepasses/security/verify/{{verificationToken}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gatepasses",
+                "security",
+                "verify",
+                "{{verificationToken}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Check Out Gatepass",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"verificationToken\": \"{{verificationToken}}\",\n  \"note\": \"Verified at main exit gate\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/gatepasses/{{gatepassId}}/check-out",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gatepasses",
+                "{{gatepassId}}",
+                "check-out"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dashboard and Notifications",
+      "item": [
+        {
+          "name": "Dashboard Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "summary"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/notifications",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

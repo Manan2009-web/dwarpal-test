@@ -1,0 +1,5 @@
+node_modules
+.env
+npm-debug.log*
+uploads/profiles/*
+!uploads/profiles/.gitkeep
