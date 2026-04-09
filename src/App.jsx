@@ -954,9 +954,12 @@ function BiometricSymbolButton({ mode, active, loading, onClick }) {
 
 function LoginScreen({ onLogin, onBiometricLogin }) {
   const navigate = useNavigate()
+  const location = useLocation()
   const [form, setForm] = useState({ identifier: '', password: '' })
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [biometricSupport, setBiometricSupport] = useState({
     supported: false,
     message: '',
@@ -986,14 +989,31 @@ function LoginScreen({ onLogin, onBiometricLogin }) {
     }
   }, [])
 
+  useEffect(() => {
+    const authNotice = location.state?.authNotice
+
+    if (!authNotice) {
+      return
+    }
+
+    setSuccess(authNotice)
+    navigate(location.pathname, { replace: true, state: null })
+  }, [location.pathname, location.state, navigate])
+
   function updateFormField(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
     setFieldErrors((prev) => clearFieldError(prev, field))
     setError('')
+    setSuccess('')
   }
 
   async function handleSubmit(event) {
     event.preventDefault()
+
+    if (isSubmitting) {
+      return
+    }
+
     const nextFieldErrors = getRequiredFieldErrors({
       identifier: form.identifier,
       password: form.password,
@@ -1005,16 +1025,32 @@ function LoginScreen({ onLogin, onBiometricLogin }) {
       return
     }
 
-    const result = await onLogin(form.identifier, form.password)
-    if (!result.ok) {
-      setError(result.error)
-      return
+    setError('')
+    setSuccess('')
+    setIsSubmitting(true)
+
+    try {
+      const result = await onLogin(form.identifier, form.password)
+      if (!result?.ok) {
+        setError(result?.error || 'Unable to sign in. Please try again.')
+        return
+      }
+
+      setSuccess('Login successful. Redirecting to your dashboard...')
+      // Use replace so the previous login entry is not left as a reachable back-navigation target.
+      navigate('/app/dashboard', { replace: true })
+    } catch {
+      setError('Unable to sign in right now. Please try again.')
+    } finally {
+      setIsSubmitting(false)
     }
-    // Use replace so the previous login entry is not left as a reachable back-navigation target.
-    navigate('/app/dashboard', { replace: true })
   }
 
   async function handleBiometricLogin(mode) {
+    if (isSubmitting) {
+      return
+    }
+
     if (!biometricSupport.modes?.[mode]?.supported) {
       setError(
         mode === 'face' ? 'Face recognition is not available on this device.' : 'Fingerprint login is not available on this device.',
@@ -1032,6 +1068,7 @@ function LoginScreen({ onLogin, onBiometricLogin }) {
     }
 
     setBiometricLoadingMode(mode)
+    setSuccess('')
 
     try {
       const result = await onBiometricLogin(form.identifier.trim(), mode)
@@ -1041,7 +1078,10 @@ function LoginScreen({ onLogin, onBiometricLogin }) {
         return
       }
 
+      setSuccess('Login successful. Redirecting to your dashboard...')
       navigate('/app/dashboard', { replace: true })
+    } catch {
+      setError('Biometric verification failed. Please try again or use manual login.')
     } finally {
       setBiometricLoadingMode('')
     }
@@ -1064,6 +1104,7 @@ function LoginScreen({ onLogin, onBiometricLogin }) {
             autoComplete="username"
             className={fieldErrors.identifier ? 'field-invalid' : ''}
             aria-invalid={Boolean(fieldErrors.identifier)}
+            disabled={isSubmitting}
             required
           />
           {fieldErrors.identifier ? <p className="field-error">{fieldErrors.identifier}</p> : null}
@@ -1078,13 +1119,16 @@ function LoginScreen({ onLogin, onBiometricLogin }) {
             autoComplete="current-password"
             className={fieldErrors.password ? 'field-invalid' : ''}
             aria-invalid={Boolean(fieldErrors.password)}
+            disabled={isSubmitting}
             required
           />
           {fieldErrors.password ? <p className="field-error">{fieldErrors.password}</p> : null}
         </label>
-        {error ? <p className="form-error">{error}</p> : null}
-        <ActionButton icon={ShieldCheck} type="submit">
-          Sign In
+        {error ? <p className="form-error" aria-live="polite">{error}</p> : null}
+        {success ? <p className="form-success" aria-live="polite">{success}</p> : null}
+        {isSubmitting ? <p className="field-hint" aria-live="polite">Please wait while we sign you in...</p> : null}
+        <ActionButton icon={ShieldCheck} type="submit" disabled={isSubmitting} aria-busy={isSubmitting}>
+          {isSubmitting ? 'Please wait...' : 'Sign In'}
         </ActionButton>
       </form>
       <div className="auth-divider" aria-hidden="true">
@@ -1094,13 +1138,13 @@ function LoginScreen({ onLogin, onBiometricLogin }) {
         <div className="auth-biometric-actions">
           <BiometricSymbolButton
             mode="fingerprint"
-            active={fingerprintSupported && !biometricLoadingMode}
+            active={fingerprintSupported && !biometricLoadingMode && !isSubmitting}
             loading={biometricLoadingMode === 'fingerprint'}
             onClick={() => handleBiometricLogin('fingerprint')}
           />
           <BiometricSymbolButton
             mode="face"
-            active={faceSupported && !biometricLoadingMode}
+            active={faceSupported && !biometricLoadingMode && !isSubmitting}
             loading={biometricLoadingMode === 'face'}
             onClick={() => handleBiometricLogin('face')}
           />
@@ -1131,6 +1175,7 @@ function RegisterScreen({ onRegister }) {
   })
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const hasSelectedRole = Boolean(form.role)
   const isStudentRole = form.role === 'student'
   const isSecurityRole = form.role === 'security'
@@ -1172,6 +1217,11 @@ function RegisterScreen({ onRegister }) {
 
   async function handleSubmit(event) {
     event.preventDefault()
+
+    if (isSubmitting) {
+      return
+    }
+
     const nextFieldErrors = getRequiredFieldErrors({
       name: form.name,
       email: form.email,
@@ -1189,22 +1239,34 @@ function RegisterScreen({ onRegister }) {
       return
     }
 
-    const result = await onRegister(form)
-    if (!result?.ok) {
-      if (result?.fieldErrors) {
-        setFieldErrors((prev) => ({
-          ...prev,
-          ...mapRegisterFieldErrors(result.fieldErrors, form.role),
-        }))
+    setError('')
+    setIsSubmitting(true)
+
+    try {
+      const result = await onRegister(form)
+      if (!result?.ok) {
+        if (result?.fieldErrors) {
+          setFieldErrors((prev) => ({
+            ...prev,
+            ...mapRegisterFieldErrors(result.fieldErrors, form.role),
+          }))
+        }
+
+        setError(result?.error || 'Unable to create your account. Please review the form and try again.')
+        return
       }
 
-      setError(result?.error || 'Unable to create your account. Please review the form and try again.')
-      return
+      navigate('/login', {
+        replace: true,
+        state: {
+          authNotice: result?.message || 'Registration successful. Please sign in to continue.',
+        },
+      })
+    } catch {
+      setError('Unable to create your account right now. Please try again.')
+    } finally {
+      setIsSubmitting(false)
     }
-
-    navigate('/login', {
-      replace: true,
-    })
   }
 
   return (
@@ -1219,6 +1281,7 @@ function RegisterScreen({ onRegister }) {
             autoComplete="name"
             className={fieldErrors.name ? 'field-invalid' : ''}
             aria-invalid={Boolean(fieldErrors.name)}
+            disabled={isSubmitting}
             required
           />
           {fieldErrors.name ? <p className="field-error">{fieldErrors.name}</p> : null}
@@ -1233,6 +1296,7 @@ function RegisterScreen({ onRegister }) {
             autoComplete="email"
             className={fieldErrors.email ? 'field-invalid' : ''}
             aria-invalid={Boolean(fieldErrors.email)}
+            disabled={isSubmitting}
             required
           />
           {fieldErrors.email ? <p className="field-error">{fieldErrors.email}</p> : null}
@@ -1245,6 +1309,7 @@ function RegisterScreen({ onRegister }) {
               onChange={(event) => updateFormField('department', event.target.value)}
               className={fieldErrors.department ? 'field-invalid' : ''}
               aria-invalid={Boolean(fieldErrors.department)}
+              disabled={isSubmitting}
               required={requiresDepartment}
             >
               <option value="" disabled>
@@ -1266,6 +1331,7 @@ function RegisterScreen({ onRegister }) {
             onChange={handleRoleChange}
             className={fieldErrors.role ? 'field-invalid' : ''}
             aria-invalid={Boolean(fieldErrors.role)}
+            disabled={isSubmitting}
             required
           >
             <option value="" disabled>
@@ -1289,6 +1355,7 @@ function RegisterScreen({ onRegister }) {
             autoComplete="tel"
             className={fieldErrors.phone ? 'field-invalid' : ''}
             aria-invalid={Boolean(fieldErrors.phone)}
+            disabled={isSubmitting}
             required
           />
           {fieldErrors.phone ? <p className="field-error">{fieldErrors.phone}</p> : null}
@@ -1304,6 +1371,7 @@ function RegisterScreen({ onRegister }) {
             autoComplete="off"
             className={fieldErrors.enrollment ? 'field-invalid' : ''}
             aria-invalid={Boolean(fieldErrors.enrollment)}
+            disabled={isSubmitting}
             required
           />
           {fieldErrors.enrollment ? <p className="field-error">{fieldErrors.enrollment}</p> : null}
@@ -1316,6 +1384,7 @@ function RegisterScreen({ onRegister }) {
               onChange={(event) => updateFormField('semester', event.target.value)}
               className={fieldErrors.semester ? 'field-invalid' : ''}
               aria-invalid={Boolean(fieldErrors.semester)}
+              disabled={isSubmitting}
               required
             >
               <option value="" disabled>
@@ -1340,14 +1409,16 @@ function RegisterScreen({ onRegister }) {
             autoComplete="new-password"
             className={fieldErrors.password ? 'field-invalid' : ''}
             aria-invalid={Boolean(fieldErrors.password)}
+            disabled={isSubmitting}
             required
           />
           {fieldErrors.password ? <p className="field-error">{fieldErrors.password}</p> : null}
         </label>
-        {error ? <p className="form-error full-span">{error}</p> : null}
+        {error ? <p className="form-error full-span" aria-live="polite">{error}</p> : null}
+        {isSubmitting ? <p className="field-hint full-span" aria-live="polite">Please wait while we create your account...</p> : null}
         <div className="full-span">
-          <ActionButton icon={UserPlus2} type="submit">
-            Register
+          <ActionButton icon={UserPlus2} type="submit" disabled={isSubmitting} aria-busy={isSubmitting}>
+            {isSubmitting ? 'Please wait...' : 'Register'}
           </ActionButton>
         </div>
       </form>

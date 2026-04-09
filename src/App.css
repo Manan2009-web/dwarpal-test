@@ -181,10 +181,13 @@ button {
   align-items: center;
   justify-content: center;
   padding: 2rem;
+  padding-bottom: max(7rem, calc(env(safe-area-inset-bottom) + 6rem));
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   isolation: isolate;
   background: var(--shell-bg);
+  scroll-padding-bottom: max(7rem, calc(env(safe-area-inset-bottom) + 6rem));
 }
 
 .hero-card,
@@ -3649,8 +3652,9 @@ button {
   }
 
   .auth-shell {
-    align-items: center;
-    justify-content: center;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding-bottom: max(8rem, calc(env(safe-area-inset-bottom) + 7rem));
   }
 
   .auth-panel {

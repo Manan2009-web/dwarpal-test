@@ -124,7 +124,7 @@ export function NotificationProvider({ children, currentUser }) {
         const browserNotification = new window.Notification(notification.title, {
           body: [notification.message, notification.referenceId].filter(Boolean).join(' • '),
           tag: notification.id,
-          icon: '/favicon.svg',
+          icon: '/dwarpal-favicon.png',
         })
 
         browserNotification.onclick = () => {
