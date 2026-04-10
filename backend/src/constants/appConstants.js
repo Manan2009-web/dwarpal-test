@@ -1,11 +1,6 @@
-const DEPARTMENTS = Object.freeze([
-  'Computer Engineering',
-  'Mechanical Engineering',
-  'Civil Engineering',
-  'Nursing',
-  'Physiotherapy',
-  'Electrical Engineering'
-]);
+const STUDENT_PROGRAMS = Object.freeze(['Diploma', 'Degree']);
+const ROUTING_DEPARTMENTS = Object.freeze(['Computer', 'Civil', 'Mechanical', 'Electrical']);
+const DEPARTMENTS = Object.freeze([...ROUTING_DEPARTMENTS, 'Nursing', 'Physiotherapy']);
 
 const ROLES = Object.freeze([
   'student',
@@ -41,6 +36,50 @@ function normalizeRole(value) {
     .toLowerCase();
 
   return ROLES.includes(normalizedRole) ? normalizedRole : '';
+}
+
+function normalizeProgram(value) {
+  const normalizedProgram = String(value || '').trim().toLowerCase();
+
+  if (normalizedProgram === 'diploma') {
+    return 'Diploma';
+  }
+
+  if (normalizedProgram === 'degree') {
+    return 'Degree';
+  }
+
+  return '';
+}
+
+function normalizeDepartment(value) {
+  const normalizedValue = String(value || '').trim();
+
+  if (!normalizedValue) {
+    return '';
+  }
+
+  const normalizedKey = normalizedValue.toLowerCase();
+  const aliasMap = {
+    computer: 'Computer',
+    'computer engineering': 'Computer',
+    'computer science': 'Computer',
+    'information technology': 'Computer',
+    cse: 'Computer',
+    it: 'Computer',
+    civil: 'Civil',
+    'civil engineering': 'Civil',
+    mechanical: 'Mechanical',
+    'mechanical engineering': 'Mechanical',
+    electrical: 'Electrical',
+    'electrical engineering': 'Electrical',
+    nursing: 'Nursing',
+    physiotherapy: 'Physiotherapy',
+    administration: 'Computer',
+    security: 'Computer'
+  };
+
+  return aliasMap[normalizedKey] || '';
 }
 
 const STUDENT_GATEPASS_STATUSES = Object.freeze([
@@ -153,10 +192,14 @@ module.exports = {
   PHONE_REGEX,
   PUBLIC_REGISTRATION_ROLES,
   PENDING_GATEPASS_STATUSES,
+  ROUTING_DEPARTMENTS,
   ROLES,
   SECURITY_VISIBLE_STATUSES,
   SEMESTERS,
+  STUDENT_PROGRAMS,
   STUDENT_GATEPASS_STATUSES,
   TIME_REGEX,
-  VEHICLE_NUMBER_REGEX
+  VEHICLE_NUMBER_REGEX,
+  normalizeDepartment,
+  normalizeProgram
 };

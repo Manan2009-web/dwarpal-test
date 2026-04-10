@@ -4,6 +4,10 @@ const {
   PASSWORD_REGEX,
   PHONE_REGEX,
   PUBLIC_REGISTRATION_ROLES,
+  ROUTING_DEPARTMENTS,
+  STUDENT_PROGRAMS,
+  normalizeDepartment,
+  normalizeProgram,
   normalizeRole,
   SEMESTERS
 } = require('../constants/appConstants');
@@ -28,8 +32,25 @@ const registerValidation = [
     .customSanitizer(normalizeRole)
     .isIn(PUBLIC_REGISTRATION_ROLES)
     .withMessage(`Role must be one of: ${PUBLIC_REGISTRATION_ROLES.join(', ')}`),
+  body('program')
+    .customSanitizer(normalizeProgram)
+    .custom((value, { req }) => {
+      if (!['student', 'hod'].includes(req.body.role)) {
+        return true;
+      }
+
+      if (!value) {
+        throw new Error('Program is required.');
+      }
+
+      if (!STUDENT_PROGRAMS.includes(value)) {
+        throw new Error(`Program must be one of: ${STUDENT_PROGRAMS.join(', ')}`);
+      }
+
+      return true;
+    }),
   body('department')
-    .trim()
+    .customSanitizer((value) => normalizeDepartment(value) || String(value || '').trim())
     .custom((value, { req }) => {
       const normalizedDepartment = String(value || '').trim();
 
@@ -39,6 +60,10 @@ const registerValidation = [
         }
 
         throw new Error('Department is required');
+      }
+
+      if (['student', 'hod'].includes(req.body.role) && !ROUTING_DEPARTMENTS.includes(normalizedDepartment)) {
+        throw new Error(`Department must be one of: ${ROUTING_DEPARTMENTS.join(', ')}`);
       }
 
       if (!DEPARTMENTS.includes(normalizedDepartment)) {

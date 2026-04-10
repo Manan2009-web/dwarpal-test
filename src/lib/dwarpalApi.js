@@ -1,4 +1,4 @@
-import { normalizeRole } from '../mockData'
+import { normalizeDepartment, normalizeProgram, normalizeRole } from '../mockData'
 
 function getDefaultApiBaseUrl() {
   return import.meta.env.DEV ? 'http://localhost:5000/api' : ''
@@ -272,7 +272,8 @@ function toUiUser(user, session = null) {
     id: user.id,
     name: user.fullName,
     email: user.email,
-    department: user.department || 'Not assigned',
+    program: normalizeProgram(user.program),
+    department: normalizeDepartment(user.department) || user.department || 'Not assigned',
     enrollment: user.enrollmentNo || '',
     employeeId: user.employeeId || '',
     phone: user.phone || '',
@@ -583,7 +584,13 @@ export function toUiGatepass(gatepass) {
     enrollment: applicantId,
     enrollmentNumber,
     employeeId,
-    department: applicant.department || submittedBy.department || gatepass.department || 'Not assigned',
+    program: normalizeProgram(applicant.program || submittedBy.program || gatepass.program || ''),
+    department:
+      normalizeDepartment(applicant.department || submittedBy.department || gatepass.department || '') ||
+      applicant.department ||
+      submittedBy.department ||
+      gatepass.department ||
+      'Not assigned',
     reason: gatepass.reason,
     vehicleNumber: gatepass.vehicleNumber || '',
     outTime: outDateTime,
@@ -887,11 +894,13 @@ export async function loginUser(identifier, password) {
 export async function registerUser(payload) {
   const normalizedRole = normalizeRole(payload.role)
   const isStudent = normalizedRole === 'student'
+  const requiresProgram = isStudent || normalizedRole === 'hod'
   const cleanedId = String(payload.enrollment || '').trim()
   const requestBody = {
     fullName: payload.name.trim(),
     email: payload.email.trim(),
     department: payload.department,
+    ...(requiresProgram ? { program: payload.program } : {}),
     role: normalizedRole,
     phone: payload.phone.trim(),
     password: payload.password,

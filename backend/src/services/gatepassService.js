@@ -4,7 +4,11 @@ const AppError = require('../utils/appError');
 const { buildPaginationMeta, getPagination, getSortOptions } = require('../utils/pagination');
 const {
   APPROVED_GATEPASS_STATUSES,
-  SECURITY_VISIBLE_STATUSES
+  ROUTING_DEPARTMENTS,
+  SECURITY_VISIBLE_STATUSES,
+  STUDENT_PROGRAMS,
+  normalizeDepartment,
+  normalizeProgram
 } = require('../constants/appConstants');
 const {
   generateVerificationToken,
@@ -24,23 +28,23 @@ const detailPopulate = [
   {
     path: 'createdBy',
     select:
-      'fullName email role department semester enrollmentNo employeeId phone profileImage isActive'
+      'fullName email role program department semester enrollmentNo employeeId phone profileImage isActive'
   },
   {
     path: 'forwardedTo',
-    select: 'fullName email role department employeeId phone'
+    select: 'fullName email role program department employeeId phone'
   },
   {
     path: 'principalAction.actionBy',
-    select: 'fullName email role employeeId'
+    select: 'fullName email role program employeeId'
   },
   {
     path: 'hodAction.actionBy',
-    select: 'fullName email role employeeId department'
+    select: 'fullName email role program employeeId department'
   },
   {
     path: 'caoAction.actionBy',
-    select: 'fullName email role employeeId'
+    select: 'fullName email role program employeeId'
   },
   {
     path: 'securityAction.verifiedBy',
@@ -59,11 +63,11 @@ const detailPopulate = [
 const listPopulate = [
   {
     path: 'createdBy',
-    select: 'fullName email role department semester enrollmentNo employeeId phone profileImage'
+    select: 'fullName email role program department semester enrollmentNo employeeId phone profileImage'
   },
   {
     path: 'forwardedTo',
-    select: 'fullName email role department employeeId phone'
+    select: 'fullName email role program department employeeId phone'
   }
 ];
 
@@ -84,6 +88,7 @@ const listProjection = [
   'status',
   'currentApprovalLevel',
   'forwardedTo',
+  'forwardedToRole',
   'rejectionReason',
   'isCancelled',
   'isCompleted',
@@ -133,7 +138,8 @@ function mapUserSummary(user, fallback = null) {
       fullName: user.fullName,
       email: user.email,
       role: user.role,
-      department: user.department || null,
+      program: normalizeProgram(user.program) || null,
+      department: normalizeDepartment(user.department) || null,
       semester: user.semester || null,
       enrollmentNo: user.enrollmentNo || null,
       employeeId: user.employeeId || null,
@@ -147,7 +153,8 @@ function mapUserSummary(user, fallback = null) {
     fullName: fallback.fullName || null,
     email: fallback.email || null,
     role: null,
-    department: fallback.department || null,
+    program: normalizeProgram(fallback.program) || null,
+    department: normalizeDepartment(fallback.department) || null,
     semester: fallback.semester || null,
     enrollmentNo: fallback.enrollmentNo || null,
     employeeId: fallback.employeeId || null,
@@ -182,10 +189,12 @@ function mapGatepassListItem(gatepass) {
     gatepassId: gatepass.gatepassId || gatepass.passNumber || null,
     passNumber: gatepass.passNumber || gatepass.gatepassId || null,
     applicantType: gatepass.applicantType,
+    program: normalizeProgram(applicant.program || gatepass.createdBy?.program) || null,
     applicant: {
       fullName: applicant.fullName || gatepass.createdBy?.fullName || null,
       email: applicant.email || gatepass.createdBy?.email || null,
-      department: applicant.department || gatepass.createdBy?.department || null,
+      program: normalizeProgram(applicant.program || gatepass.createdBy?.program) || null,
+      department: normalizeDepartment(applicant.department || gatepass.createdBy?.department) || null,
       semester: applicant.semester || gatepass.createdBy?.semester || null,
       enrollmentNo: applicant.enrollmentNo || gatepass.createdBy?.enrollmentNo || null,
       employeeId: applicant.employeeId || gatepass.createdBy?.employeeId || null,
@@ -202,6 +211,7 @@ function mapGatepassListItem(gatepass) {
     status: gatepass.status,
     currentApprovalLevel: gatepass.currentApprovalLevel || null,
     forwardedTo: mapUserSummary(gatepass.forwardedTo),
+    forwardedToRole: gatepass.forwardedToRole || null,
     approvedBy: resolveGatepassApprovedBy(gatepass),
     approvedAt:
       gatepass.hodAction?.actedAt || gatepass.principalAction?.actedAt || gatepass.caoAction?.actedAt || null,
@@ -251,12 +261,72 @@ function createApplicantSnapshot(user) {
   return {
     fullName: user.fullName,
     email: user.email,
-    department: user.department || null,
+    program: normalizeProgram(user.program) || null,
+    department: normalizeDepartment(user.department) || null,
     semester: user.semester || null,
     enrollmentNo: user.enrollmentNo || null,
     employeeId: user.employeeId || null,
     phone: user.phone
   };
+}
+
+function getStudentRoutingSnapshot(source = {}) {
+  return {
+    program: normalizeProgram(source.program),
+    department: normalizeDepartment(source.department)
+  };
+}
+
+function getStudentRoutingLabel(program, department) {
+  return [program, department, 'HOD'].filter(Boolean).join(' ');
+}
+
+async function resolveStudentHodUser(gatepass, requestedUserId = null) {
+  const { program, department } = getStudentRoutingSnapshot(gatepass?.applicantSnapshot || {});
+
+  if (!program || !STUDENT_PROGRAMS.includes(program)) {
+    throw new AppError('Student program is missing on this gatepass and routing cannot continue.', 422, [
+      {
+        field: 'program',
+        message: 'Student program is required for HOD routing.'
+      }
+    ]);
+  }
+
+  if (!department || !ROUTING_DEPARTMENTS.includes(department)) {
+    throw new AppError('Student department is missing on this gatepass and routing cannot continue.', 422, [
+      {
+        field: 'department',
+        message: 'Student department is required for HOD routing.'
+      }
+    ]);
+  }
+
+  const hodCandidates = await User.find({
+    role: 'hod',
+    isActive: true,
+    ...(requestedUserId ? { _id: requestedUserId } : {})
+  })
+    .select('_id fullName email role program department employeeId phone createdAt')
+    .sort({ createdAt: 1, _id: 1 });
+
+  const matchedHod = hodCandidates.find((candidate) => {
+    const candidateProgram = normalizeProgram(candidate.program);
+    const candidateDepartment = normalizeDepartment(candidate.department);
+
+    return candidateProgram === program && candidateDepartment === department;
+  });
+
+  if (!matchedHod) {
+    throw new AppError(`No active ${getStudentRoutingLabel(program, department)} account is available for this student gatepass.`, 404, [
+      {
+        field: 'forwardToUserId',
+        message: `No active ${getStudentRoutingLabel(program, department)} account is available.`
+      }
+    ]);
+  }
+
+  return matchedHod;
 }
 
 async function assignApprovedQr(gatepass) {
@@ -416,9 +486,11 @@ function buildGatepassNotificationMetadata(gatepass, extra = {}) {
     gatepassId: gatepass.passNumber,
     applicantType: gatepass.applicantType,
     applicantName: gatepass.applicantSnapshot?.fullName || '',
+    program: gatepass.applicantSnapshot?.program || '',
     department: gatepass.applicantSnapshot?.department || '',
     status: gatepass.status,
     approvalLevel: gatepass.currentApprovalLevel || '',
+    forwardedToRole: gatepass.forwardedToRole || '',
     ...extra
   };
 }
@@ -454,6 +526,8 @@ function buildSearchFilter(searchTerm) {
       { reason: regex },
       { destination: regex },
       { 'applicantSnapshot.fullName': regex },
+      { 'applicantSnapshot.program': regex },
+      { 'applicantSnapshot.department': regex },
       { 'applicantSnapshot.enrollmentNo': regex },
       { 'applicantSnapshot.employeeId': regex }
     ]
@@ -703,11 +777,25 @@ async function createGatepass(actor, payload, requestMeta) {
   const initialState = getInitialGatepassState(actor);
   const reviewerRole = actor.role === 'student' ? 'principal' : 'cao';
   const reviewer = await getActiveUserByRole(reviewerRole);
+  const applicantSnapshot = createApplicantSnapshot(actor);
+
+  if (actor.role === 'student') {
+    const { program, department } = getStudentRoutingSnapshot(applicantSnapshot);
+
+    if (!program || !department) {
+      throw new AppError('Student profile is missing program or department required for routing.', 422, [
+        {
+          field: !program ? 'program' : 'department',
+          message: 'Student program and department are required before creating a gatepass.'
+        }
+      ]);
+    }
+  }
 
   const gatepass = await Gatepass.create({
     createdBy: actor._id,
     applicantType: actor.role,
-    applicantSnapshot: createApplicantSnapshot(actor),
+    applicantSnapshot,
     reason: payload.reason,
     destination: payload.destination || '',
     outDate: payload.outDate,
@@ -720,6 +808,7 @@ async function createGatepass(actor, payload, requestMeta) {
     isCancelled: false,
     isCompleted: false,
     forwardedTo: reviewer._id,
+    forwardedToRole: reviewerRole,
     principalAction: initialState.principalAction,
     hodAction: initialState.hodAction,
     caoAction: initialState.caoAction
@@ -808,6 +897,7 @@ async function updateGatepass(gatepassId, actor, payload, requestMeta) {
 
 async function cancelGatepass(gatepassId, actor, payload, requestMeta) {
   const gatepass = await getAccessibleGatepass(gatepassId, actor);
+  const currentReviewerId = gatepass.forwardedTo?._id || gatepass.forwardedTo || null;
 
   if (!isEditableByRequester(actor, gatepass)) {
     throw new AppError('This gatepass can no longer be cancelled', 400);
@@ -818,15 +908,17 @@ async function cancelGatepass(gatepassId, actor, payload, requestMeta) {
   gatepass.rejectionReason = payload.reason || 'Cancelled by requester';
   gatepass.isCancelled = true;
   gatepass.isCompleted = false;
+  gatepass.forwardedTo = null;
+  gatepass.forwardedToRole = null;
   if (gatepass.verificationToken || gatepass.qrCodeDataUrl) {
     revokeGatepassQr(gatepass);
   }
   await gatepass.save();
 
-  if (gatepass.forwardedTo) {
+  if (currentReviewerId) {
     await createBulkNotifications([
       {
-        recipient: gatepass.forwardedTo._id || gatepass.forwardedTo,
+        recipient: currentReviewerId,
         sender: actor._id,
         gatepass: gatepass._id,
         type: 'gatepass_cancelled',
@@ -905,13 +997,14 @@ async function forwardGatepass(gatepassId, actor, payload, requestMeta) {
     throw new AppError('Only pending student gatepasses can be forwarded to HOD', 400);
   }
 
-  const hodUser = await getActiveUserByRole('hod', payload.forwardToUserId);
+  const hodUser = await resolveStudentHodUser(gatepass, payload.forwardToUserId);
 
   gatepass.status = 'forwarded_to_hod';
   gatepass.currentApprovalLevel = 'hod';
   gatepass.isCancelled = false;
   gatepass.isCompleted = false;
   gatepass.forwardedTo = hodUser._id;
+  gatepass.forwardedToRole = 'hod';
   gatepass.principalAction = {
     status: 'forwarded',
     actionBy: actor._id,
@@ -934,7 +1027,7 @@ async function forwardGatepass(gatepassId, actor, payload, requestMeta) {
       type: 'gatepass_forwarded',
       status: 'forwarded',
       title: 'Gatepass forwarded for HOD review',
-      message: `Gatepass ${gatepass.passNumber} has been forwarded to you by Principal.`,
+      message: `Gatepass ${gatepass.passNumber} has been forwarded to you by Principal for ${hodUser.program} ${hodUser.department} review.`,
       metadata: buildGatepassNotificationMetadata(gatepass, {
         workflow: 'hod_review'
       })
@@ -946,7 +1039,7 @@ async function forwardGatepass(gatepassId, actor, payload, requestMeta) {
       type: 'gatepass_forwarded',
       status: 'forwarded',
       title: 'Gatepass forwarded to HOD',
-      message: `Your gatepass ${gatepass.passNumber} was forwarded to HOD for further review.`,
+      message: `Your gatepass ${gatepass.passNumber} was forwarded to the correct ${gatepass.applicantSnapshot?.program} ${gatepass.applicantSnapshot?.department} HOD for review.`,
       metadata: buildGatepassNotificationMetadata(gatepass, {
         workflow: 'requester_forwarded'
       })
@@ -988,6 +1081,8 @@ async function approveGatepass(gatepassId, actor, payload, requestMeta) {
       actedAt: new Date(),
       comment: payload.comment || ''
     };
+    gatepass.forwardedTo = null;
+    gatepass.forwardedToRole = 'security';
     await assignApprovedQr(gatepass);
     auditMessage = `Gatepass ${gatepass.passNumber} approved by Principal`;
 
@@ -1023,6 +1118,8 @@ async function approveGatepass(gatepassId, actor, payload, requestMeta) {
       actedAt: new Date(),
       comment: payload.comment || ''
     };
+    gatepass.forwardedTo = null;
+    gatepass.forwardedToRole = 'security';
     await assignApprovedQr(gatepass);
     auditMessage = `Gatepass ${gatepass.passNumber} approved by HOD`;
 
@@ -1073,6 +1170,8 @@ async function approveGatepass(gatepassId, actor, payload, requestMeta) {
       actedAt: new Date(),
       comment: payload.comment || ''
     };
+    gatepass.forwardedTo = null;
+    gatepass.forwardedToRole = 'security';
     await assignApprovedQr(gatepass);
     auditMessage = `Gatepass ${gatepass.passNumber} approved by CAO`;
 
@@ -1182,6 +1281,8 @@ async function rejectGatepass(gatepassId, actor, payload, requestMeta) {
   gatepass.rejectionReason = payload.rejectionReason;
   gatepass.isCancelled = false;
   gatepass.isCompleted = false;
+  gatepass.forwardedTo = null;
+  gatepass.forwardedToRole = null;
   if (gatepass.verificationToken || gatepass.qrCodeDataUrl) {
     revokeGatepassQr(gatepass);
   }
@@ -1282,6 +1383,8 @@ async function checkOutGatepass(gatepassId, actor, payload, requestMeta) {
   gatepass.currentApprovalLevel = 'security';
   gatepass.isCancelled = false;
   gatepass.isCompleted = false;
+  gatepass.forwardedTo = null;
+  gatepass.forwardedToRole = 'security';
   gatepass.securityAction = {
     ...(gatepass.securityAction ? gatepass.securityAction.toObject() : {}),
     verifiedBy: actor._id,
@@ -1334,6 +1437,8 @@ async function checkInGatepass(gatepassId, actor, payload, requestMeta) {
   gatepass.currentApprovalLevel = 'completed';
   gatepass.isCancelled = false;
   gatepass.isCompleted = true;
+  gatepass.forwardedTo = null;
+  gatepass.forwardedToRole = null;
   gatepass.securityAction = {
     ...(gatepass.securityAction ? gatepass.securityAction.toObject() : {}),
     checkedInBy: actor._id,

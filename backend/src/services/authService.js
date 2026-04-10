@@ -117,45 +117,54 @@ function mapUserDevices(user) {
 
 async function registerUser(payload, req, requestMeta) {
   const normalizedRole = normalizeRole(payload.role);
+  const normalizedEmail = String(payload.email || '').trim().toLowerCase();
+  const normalizedEnrollment = String(payload.enrollmentNo || '').trim();
+  const normalizedEmployeeId = String(payload.employeeId || '').trim().toUpperCase();
 
   if (!PUBLIC_REGISTRATION_ROLES.includes(normalizedRole)) {
     throw new AppError('Only supported roles can register through this endpoint', 403);
   }
 
-  const existingEmail = await User.findOne({ email: payload.email.toLowerCase() });
+  const duplicateLookup = [{ email: normalizedEmail }];
 
-  if (existingEmail) {
-    throw new AppError('Email is already registered', 409);
+  if (normalizedRole === 'student' && normalizedEnrollment) {
+    duplicateLookup.push({ enrollmentNo: normalizedEnrollment }, { enrollment: normalizedEnrollment });
   }
 
-  if (normalizedRole === 'student' && payload.enrollmentNo) {
-    const normalizedEnrollment = payload.enrollmentNo.trim();
-    const existingEnrollment = await User.findOne({
-      $or: [{ enrollmentNo: normalizedEnrollment }, { enrollment: normalizedEnrollment }]
-    });
+  if (normalizedRole !== 'student' && normalizedEmployeeId) {
+    duplicateLookup.push({ employeeId: normalizedEmployeeId });
+  }
 
-    if (existingEnrollment) {
+  const existingUser = await User.findOne({ $or: duplicateLookup }).select('email enrollmentNo enrollment employeeId');
+
+  if (existingUser) {
+    if (existingUser.email === normalizedEmail) {
+      throw new AppError('Email is already registered', 409);
+    }
+
+    if (
+      normalizedRole === 'student' &&
+      normalizedEnrollment &&
+      [existingUser.enrollmentNo, existingUser.enrollment].includes(normalizedEnrollment)
+    ) {
       throw new AppError('Enrollment number is already registered', 409);
     }
-  }
 
-  if (normalizedRole !== 'student' && payload.employeeId) {
-    const existingEmployee = await User.findOne({ employeeId: payload.employeeId.trim().toUpperCase() });
-
-    if (existingEmployee) {
+    if (normalizedRole !== 'student' && normalizedEmployeeId && existingUser.employeeId === normalizedEmployeeId) {
       throw new AppError('Employee ID is already registered', 409);
     }
   }
 
   const user = await User.create({
     fullName: payload.fullName,
-    email: payload.email.toLowerCase(),
+    email: normalizedEmail,
     password: payload.password,
     role: normalizedRole,
+    program: ['student', 'hod'].includes(normalizedRole) ? payload.program : undefined,
     department: payload.department,
     semester: normalizedRole === 'student' ? Number(payload.semester) : undefined,
-    enrollmentNo: normalizedRole === 'student' ? payload.enrollmentNo.trim() : undefined,
-    employeeId: normalizedRole !== 'student' ? payload.employeeId.trim().toUpperCase() : undefined,
+    enrollmentNo: normalizedRole === 'student' ? normalizedEnrollment : undefined,
+    employeeId: normalizedRole !== 'student' ? normalizedEmployeeId : undefined,
     phone: payload.phone
   });
 
@@ -200,13 +209,17 @@ async function loginUser(payload, req, requestMeta) {
     user.role = normalizedRole;
   }
 
+  const loginTimestamp = new Date();
+
   if (!isHashedPassword(user.password)) {
     user.password = payload.password;
     user.markModified('password');
+    user.lastLoginAt = loginTimestamp;
+    await user.save({ validateModifiedOnly: true });
+  } else {
+    user.lastLoginAt = loginTimestamp;
+    await User.updateOne({ _id: user._id }, { $set: { lastLoginAt: loginTimestamp } });
   }
-
-  user.lastLoginAt = new Date();
-  await user.save();
 
   const token = createSessionToken(user, 'password');
 

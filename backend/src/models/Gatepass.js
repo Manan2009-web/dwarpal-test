@@ -3,6 +3,7 @@ const {
   ACTION_STATUSES,
   APPROVAL_LEVELS,
   GATEPASS_STATUSES,
+  STUDENT_PROGRAMS,
   VEHICLE_NUMBER_REGEX
 } = require('../constants/appConstants');
 const { generateGatepassId } = require('../utils/gatepassId');
@@ -88,6 +89,11 @@ const applicantSnapshotSchema = new mongoose.Schema(
     email: String,
     department: {
       type: String,
+      default: null
+    },
+    program: {
+      type: String,
+      enum: STUDENT_PROGRAMS,
       default: null
     },
     semester: {
@@ -311,6 +317,11 @@ const gatepassSchema = new mongoose.Schema(
       ref: 'User',
       default: null
     },
+    forwardedToRole: {
+      type: String,
+      enum: ['principal', 'hod', 'cao', 'security'],
+      default: null
+    },
     principalAction: {
       type: approvalActionSchema,
       default: () => ({
@@ -433,10 +444,11 @@ gatepassSchema.index({ createdBy: 1, updatedAt: -1 });
 gatepassSchema.index({ gatepassId: 1 }, { unique: true, sparse: true });
 gatepassSchema.index({ applicantType: 1, status: 1, updatedAt: -1 });
 gatepassSchema.index({ status: 1, updatedAt: -1 });
-gatepassSchema.index({ forwardedTo: 1, status: 1, updatedAt: -1 });
+gatepassSchema.index({ forwardedTo: 1, forwardedToRole: 1, status: 1, updatedAt: -1 });
 gatepassSchema.index({ currentApprovalLevel: 1, updatedAt: -1 });
 gatepassSchema.index({ outDate: 1, status: 1 });
 gatepassSchema.index({ 'applicantSnapshot.department': 1, status: 1, updatedAt: -1 });
+gatepassSchema.index({ 'applicantSnapshot.program': 1, 'applicantSnapshot.department': 1, status: 1, updatedAt: -1 });
 gatepassSchema.index({ 'hodAction.status': 1, updatedAt: -1 });
 gatepassSchema.index({ 'caoAction.status': 1, updatedAt: -1 });
 gatepassSchema.index({ 'principalAction.status': 1, updatedAt: -1 });

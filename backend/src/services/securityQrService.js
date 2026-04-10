@@ -23,11 +23,11 @@ const {
 } = require('../utils/gatepassQr');
 
 const gatepassPopulate = [
-  { path: 'createdBy', select: 'fullName email role department semester enrollmentNo employeeId phone profileImage isActive' },
-  { path: 'forwardedTo', select: 'fullName email role department employeeId phone' },
-  { path: 'principalAction.actionBy', select: 'fullName email role employeeId' },
-  { path: 'hodAction.actionBy', select: 'fullName email role employeeId department' },
-  { path: 'caoAction.actionBy', select: 'fullName email role employeeId' },
+  { path: 'createdBy', select: 'fullName email role program department semester enrollmentNo employeeId phone profileImage isActive' },
+  { path: 'forwardedTo', select: 'fullName email role program department employeeId phone' },
+  { path: 'principalAction.actionBy', select: 'fullName email role program employeeId' },
+  { path: 'hodAction.actionBy', select: 'fullName email role program employeeId department' },
+  { path: 'caoAction.actionBy', select: 'fullName email role program employeeId' },
   { path: 'securityAction.verifiedBy', select: 'fullName email role employeeId' },
   { path: 'securityAction.checkedOutBy', select: 'fullName email role employeeId' },
   { path: 'securityAction.checkedInBy', select: 'fullName email role employeeId' }
@@ -80,7 +80,7 @@ function buildGatepassSecurityVerificationResult(gatepass) {
   if (gatepass.status === 'completed') {
     return {
       valid: false,
-      message: 'Gatepass already used.',
+      message: 'Gatepass was already used and marked returned.',
       gatepass: mapGatepassListItem(gatepass),
       nextAction: null
     };
@@ -101,7 +101,7 @@ function buildGatepassSecurityVerificationResult(gatepass) {
   ) {
     return {
       valid: false,
-      message: 'QR does not belong to a valid gatepass.',
+      message: 'Only approved gatepasses can be verified at the security desk.',
       gatepass: mapGatepassListItem(gatepass),
       nextAction: null
     };
@@ -119,7 +119,7 @@ function buildGatepassSecurityVerificationResult(gatepass) {
   if (gatepass.qrRevokedAt || !gatepass.verificationToken || isGatepassQrExpired(gatepass)) {
     return {
       valid: false,
-      message: 'Invalid QR Code',
+      message: 'This gatepass QR is invalid or expired.',
       gatepass: mapGatepassListItem(gatepass),
       nextAction: null
     };
@@ -164,7 +164,7 @@ function buildFacultyLeaveSecurityVerificationResult(request) {
   if (request.qrRevokedAt || !request.verificationToken || isFacultyLeaveQrExpired(request)) {
     return {
       valid: false,
-      message: 'Invalid QR Code',
+      message: 'This gatepass QR is invalid or expired.',
       gatepass: mapFacultyLeaveListItem(request),
       nextAction: null
     };
@@ -173,7 +173,7 @@ function buildFacultyLeaveSecurityVerificationResult(request) {
   if (request.securityAction?.checkedInAt) {
     return {
       valid: false,
-      message: 'Gatepass already used.',
+      message: 'Gatepass was already used and marked returned.',
       gatepass: mapFacultyLeaveListItem(request),
       nextAction: null
     };
@@ -348,7 +348,7 @@ async function verifyScannedQrValue(rawValue, actor) {
   if (!scanData.rawValue || !scanData.payload) {
     return {
       valid: false,
-      message: 'Invalid QR Code',
+      message: 'Scanned QR is invalid or unreadable.',
       gatepass: null,
       nextAction: null
     };
@@ -357,7 +357,7 @@ async function verifyScannedQrValue(rawValue, actor) {
   if (scanData.issuer !== QR_ISSUER || !scanData.signature || !verifySignedQrPayload(scanData.payload)) {
     return {
       valid: false,
-      message: 'Unauthorized QR',
+      message: 'Scanned QR is not a valid DwarPal gatepass.',
       gatepass: null,
       nextAction: null
     };
@@ -366,7 +366,7 @@ async function verifyScannedQrValue(rawValue, actor) {
   if (!['student_gatepass', 'faculty_gatepass', 'faculty_leave'].includes(scanData.recordType)) {
     return {
       valid: false,
-      message: 'Unauthorized QR',
+      message: 'Scanned QR is not authorized for DwarPal verification.',
       gatepass: null,
       nextAction: null
     };
@@ -383,7 +383,7 @@ async function verifyScannedQrValue(rawValue, actor) {
   if (!matchedRecord) {
     return {
       valid: false,
-      message: 'QR does not belong to a valid gatepass.',
+      message: 'Scanned QR does not match any gatepass record.',
       gatepass: null,
       nextAction: null
     };
@@ -394,7 +394,7 @@ async function verifyScannedQrValue(rawValue, actor) {
   if (!doesScannedPayloadMatchRecord(scanData, matchedRecord, matchedRecordKind)) {
     return {
       valid: false,
-      message: 'Unauthorized QR',
+      message: 'Scanned QR does not match the stored gatepass record.',
       gatepass: null,
       nextAction: null
     };

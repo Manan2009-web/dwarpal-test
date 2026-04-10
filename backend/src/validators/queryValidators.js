@@ -1,5 +1,5 @@
 const { query } = require('express-validator');
-const { DEPARTMENTS } = require('../constants/appConstants');
+const { DEPARTMENTS, normalizeDepartment } = require('../constants/appConstants');
 
 const basePaginationQueryValidation = [
   query('page').optional().isInt({ min: 1 }).withMessage('page must be a positive integer').toInt(),
@@ -26,6 +26,7 @@ const basePaginationQueryValidation = [
     .withMessage('applicantType must be student or faculty'),
   query('department')
     .optional()
+    .customSanitizer((value) => normalizeDepartment(value) || String(value || '').trim())
     .isIn(DEPARTMENTS)
     .withMessage(`department must be one of: ${DEPARTMENTS.join(', ')}`),
   query('q')

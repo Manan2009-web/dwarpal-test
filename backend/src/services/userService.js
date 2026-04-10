@@ -39,6 +39,10 @@ async function updateProfile(user, payload, req, requestMeta) {
     currentUser.department = payload.department;
   }
 
+  if (['student', 'hod'].includes(currentUser.role) && payload.program) {
+    currentUser.program = payload.program;
+  }
+
   if (currentUser.role === 'student' && payload.semester) {
     currentUser.semester = Number(payload.semester);
   }

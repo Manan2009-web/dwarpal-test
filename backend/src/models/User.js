@@ -1,7 +1,15 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const env = require('../config/env');
-const { DEPARTMENTS, ROLES, SEMESTERS } = require('../constants/appConstants');
+const {
+  DEPARTMENTS,
+  ROLES,
+  ROUTING_DEPARTMENTS,
+  SEMESTERS,
+  STUDENT_PROGRAMS,
+  normalizeDepartment,
+  normalizeProgram
+} = require('../constants/appConstants');
 const pickUser = require('../utils/pickUser');
 
 const BCRYPT_HASH_REGEX = /^\$2[aby]\$\d{2}\$/;
@@ -80,13 +88,31 @@ const userSchema = new mongoose.Schema(
       enum: ROLES,
       required: true
     },
+    program: {
+      type: String,
+      trim: true,
+      validate: {
+        validator(value) {
+          if (!value) {
+            return !['student', 'hod'].includes(this.role);
+          }
+
+          return STUDENT_PROGRAMS.includes(value);
+        },
+        message: 'Please provide a valid program'
+      }
+    },
     department: {
       type: String,
       trim: true,
       validate: {
         validator(value) {
           if (!value) {
-            return !['student', 'faculty'].includes(this.role);
+            return !['student', 'faculty', 'hod'].includes(this.role);
+          }
+
+          if (['student', 'hod'].includes(this.role)) {
+            return ROUTING_DEPARTMENTS.includes(value);
           }
 
           return DEPARTMENTS.includes(value);
@@ -201,6 +227,14 @@ userSchema.pre('validate', function syncLegacyFields(next) {
     this.phone = this.phone.trim();
   }
 
+  if (this.program) {
+    this.program = normalizeProgram(this.program) || undefined;
+  }
+
+  if (this.department) {
+    this.department = normalizeDepartment(this.department) || undefined;
+  }
+
   if (Array.isArray(this.webAuthnCredentials)) {
     this.webAuthnCredentials = this.webAuthnCredentials.map((credential) => ({
       ...credential,
@@ -214,11 +248,22 @@ userSchema.pre('validate', function syncLegacyFields(next) {
     this.enrollmentNo = normalizedEnrollment || undefined;
     this.enrollment = normalizedEnrollment || undefined;
     this.employeeId = undefined;
+    this.program = normalizeProgram(this.program) || undefined;
+    this.department = normalizeDepartment(this.department) || undefined;
+  } else if (this.role === 'hod') {
+    this.enrollmentNo = undefined;
+    this.enrollment = undefined;
+    this.semester = undefined;
+    this.employeeId = this.employeeId ? String(this.employeeId).trim().toUpperCase() : undefined;
+    this.program = normalizeProgram(this.program) || undefined;
+    this.department = normalizeDepartment(this.department) || undefined;
   } else {
     this.enrollmentNo = undefined;
     this.enrollment = undefined;
     this.semester = undefined;
     this.employeeId = this.employeeId ? String(this.employeeId).trim().toUpperCase() : undefined;
+    this.program = undefined;
+    this.department = this.department ? normalizeDepartment(this.department) || undefined : this.department;
   }
 
   this.hasBiometricCredentials = Array.isArray(this.webAuthnCredentials) && this.webAuthnCredentials.length > 0;
@@ -255,7 +300,7 @@ userSchema.methods.toPublicJSON = function toPublicJSON(req) {
   return pickUser(this, req);
 };
 
-userSchema.index({ role: 1, isActive: 1, department: 1 });
+userSchema.index({ role: 1, isActive: 1, program: 1, department: 1 });
 userSchema.index({ role: 1, createdAt: -1 });
 userSchema.index({ updatedAt: -1 });
 userSchema.index({ 'webAuthnCredentials.credentialId': 1 }, { unique: true, sparse: true });

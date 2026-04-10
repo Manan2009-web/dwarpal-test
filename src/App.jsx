@@ -30,8 +30,12 @@ import SecurityVerificationPanel from './components/SecurityVerificationPanel'
 import { useToast } from './components/ToastProvider'
 import {
   DEPARTMENTS,
+  PROGRAM_OPTIONS,
   ROLE_META,
   PUBLIC_ROLE_OPTIONS,
+  ROUTING_DEPARTMENTS,
+  normalizeDepartment,
+  normalizeProgram,
   SEMESTER_OPTIONS,
   normalizeRole,
   normalizeVehicleNumber,
@@ -259,6 +263,7 @@ function mapRegisterFieldErrors(fieldErrors = {}, role = '') {
   const normalizedErrors = {
     name: fieldErrors.name || fieldErrors.fullName || '',
     email: fieldErrors.email || '',
+    program: fieldErrors.program || '',
     department: fieldErrors.department || '',
     enrollment: fieldErrors.enrollment || fieldErrors.enrollmentNo || fieldErrors.employeeId || '',
     phone: fieldErrors.phone || '',
@@ -269,6 +274,10 @@ function mapRegisterFieldErrors(fieldErrors = {}, role = '') {
 
   if (normalizedRole !== 'student') {
     delete normalizedErrors.semester
+  }
+
+  if (!['student', 'hod'].includes(normalizedRole)) {
+    delete normalizedErrors.program
   }
 
   if (normalizedRole === 'security') {
@@ -295,6 +304,18 @@ function FieldLabel({ children, required = false }) {
       ) : null}
     </span>
   )
+}
+
+function roleUsesProgramRouting(role) {
+  return role === 'student' || role === 'hod'
+}
+
+function getRegistrationDepartmentOptions(role, program) {
+  if (roleUsesProgramRouting(role)) {
+    return program ? ROUTING_DEPARTMENTS : []
+  }
+
+  return DEPARTMENTS
 }
 
 function App() {
@@ -673,14 +694,21 @@ function App() {
 
   async function register(payload) {
     const normalizedRole = normalizeRole(payload.role)
+    const normalizedProgram = normalizeProgram(payload.program)
+    const normalizedDepartment = normalizeDepartment(payload.department)
     const semester = Number(payload.semester)
     const requiresDepartment = normalizedRole !== 'security'
+    const requiresProgram = roleUsesProgramRouting(normalizedRole)
 
     if (!normalizedRole) {
       return { ok: false, error: 'Please select a role.' }
     }
 
-    if (requiresDepartment && !payload.department) {
+    if (requiresProgram && !normalizedProgram) {
+      return { ok: false, error: 'Please select a program.' }
+    }
+
+    if (requiresDepartment && !normalizedDepartment) {
       return { ok: false, error: 'Please select a department.' }
     }
 
@@ -699,14 +727,17 @@ function App() {
     }
 
     try {
-      const result = await registerUser({ ...payload, role: normalizedRole })
-      const successMessage =
-        result?.message ||
-        'Registration successful. Please login manually first, then you can enable fingerprint or face recognition on this device.'
+      const result = await registerUser({
+        ...payload,
+        role: normalizedRole,
+        program: requiresProgram ? normalizedProgram : '',
+        department: requiresDepartment ? normalizedDepartment : '',
+      })
+      const successMessage = 'Account created successfully'
 
       toast.success({
-        title: 'Registration successful',
-        message: successMessage,
+        title: successMessage,
+        message: 'Redirecting you to the login page.',
       })
 
       return {
@@ -1126,9 +1157,9 @@ function LoginScreen({ onLogin, onBiometricLogin }) {
         </label>
         {error ? <p className="form-error" aria-live="polite">{error}</p> : null}
         {success ? <p className="form-success" aria-live="polite">{success}</p> : null}
-        {isSubmitting ? <p className="field-hint" aria-live="polite">Please wait while we sign you in...</p> : null}
+        {isSubmitting ? <p className="field-hint" aria-live="polite">Signing in...</p> : null}
         <ActionButton icon={ShieldCheck} type="submit" disabled={isSubmitting} aria-busy={isSubmitting}>
-          {isSubmitting ? 'Please wait...' : 'Sign In'}
+          {isSubmitting ? 'Signing in...' : 'Sign In'}
         </ActionButton>
       </form>
       <div className="auth-divider" aria-hidden="true">
@@ -1166,6 +1197,7 @@ function RegisterScreen({ onRegister }) {
   const [form, setForm] = useState({
     name: '',
     email: '',
+    program: '',
     department: '',
     enrollment: '',
     phone: '',
@@ -1179,7 +1211,9 @@ function RegisterScreen({ onRegister }) {
   const hasSelectedRole = Boolean(form.role)
   const isStudentRole = form.role === 'student'
   const isSecurityRole = form.role === 'security'
-  const showDepartmentField = !isSecurityRole
+  const requiresProgram = roleUsesProgramRouting(form.role)
+  const departmentOptions = getRegistrationDepartmentOptions(form.role, form.program)
+  const showDepartmentField = hasSelectedRole && !isSecurityRole && (!requiresProgram || Boolean(form.program))
   const requiresDepartment = hasSelectedRole ? !isSecurityRole : true
   const roleIdLabel = isStudentRole ? 'Enrollment Number' : hasSelectedRole ? 'Employee ID' : 'Enrollment Number / Employee ID'
   const roleIdName = isStudentRole ? 'enrollmentNo' : hasSelectedRole ? 'employeeId' : 'identifier'
@@ -1197,19 +1231,39 @@ function RegisterScreen({ onRegister }) {
 
   function handleRoleChange(event) {
     const nextRole = normalizeRole(event.target.value)
+    const nextRoleUsesProgram = roleUsesProgramRouting(nextRole)
     setForm((prev) => ({
       ...prev,
       role: nextRole,
-      department: nextRole === 'security' ? '' : prev.department,
+      program: nextRoleUsesProgram ? prev.program : '',
+      department: nextRole === 'security' ? '' : nextRoleUsesProgram ? '' : prev.department,
       enrollment: (prev.role === 'student') !== (nextRole === 'student') ? '' : prev.enrollment,
       semester: nextRole === 'student' ? prev.semester : '',
     }))
     setFieldErrors((prev) => {
       const nextErrors = { ...prev }
       delete nextErrors.role
+      delete nextErrors.program
       delete nextErrors.department
       delete nextErrors.enrollment
       delete nextErrors.semester
+      return nextErrors
+    })
+    setError('')
+  }
+
+  function handleProgramChange(event) {
+    const nextProgram = normalizeProgram(event.target.value)
+
+    setForm((prev) => ({
+      ...prev,
+      program: nextProgram,
+      department: '',
+    }))
+    setFieldErrors((prev) => {
+      const nextErrors = { ...prev }
+      delete nextErrors.program
+      delete nextErrors.department
       return nextErrors
     })
     setError('')
@@ -1225,6 +1279,7 @@ function RegisterScreen({ onRegister }) {
     const nextFieldErrors = getRequiredFieldErrors({
       name: form.name,
       email: form.email,
+      ...(requiresProgram ? { program: form.program } : {}),
       ...(showDepartmentField ? { department: form.department } : {}),
       enrollment: form.enrollment,
       phone: form.phone,
@@ -1259,7 +1314,7 @@ function RegisterScreen({ onRegister }) {
       navigate('/login', {
         replace: true,
         state: {
-          authNotice: result?.message || 'Registration successful. Please sign in to continue.',
+          authNotice: result?.message || 'Account created successfully',
         },
       })
     } catch {
@@ -1301,29 +1356,6 @@ function RegisterScreen({ onRegister }) {
           />
           {fieldErrors.email ? <p className="field-error">{fieldErrors.email}</p> : null}
         </label>
-        {showDepartmentField ? (
-          <label>
-            <FieldLabel required={requiresDepartment}>Department</FieldLabel>
-            <SelectField
-              value={form.department}
-              onChange={(event) => updateFormField('department', event.target.value)}
-              className={fieldErrors.department ? 'field-invalid' : ''}
-              aria-invalid={Boolean(fieldErrors.department)}
-              disabled={isSubmitting}
-              required={requiresDepartment}
-            >
-              <option value="" disabled>
-                Select department
-              </option>
-              {DEPARTMENTS.map((department) => (
-                <option key={department} value={department}>
-                  {department}
-                </option>
-              ))}
-            </SelectField>
-            {fieldErrors.department ? <p className="field-error">{fieldErrors.department}</p> : null}
-          </label>
-        ) : null}
         <label>
           <FieldLabel required>Role</FieldLabel>
           <SelectField
@@ -1345,6 +1377,57 @@ function RegisterScreen({ onRegister }) {
           </SelectField>
           {fieldErrors.role ? <p className="field-error">{fieldErrors.role}</p> : null}
         </label>
+        {requiresProgram ? (
+          <label>
+            <FieldLabel required>Program</FieldLabel>
+            <SelectField
+              value={form.program}
+              onChange={handleProgramChange}
+              className={fieldErrors.program ? 'field-invalid' : ''}
+              aria-invalid={Boolean(fieldErrors.program)}
+              disabled={isSubmitting}
+              required
+            >
+              <option value="" disabled>
+                Select program
+              </option>
+              {PROGRAM_OPTIONS.map((program) => (
+                <option key={program} value={program}>
+                  {program}
+                </option>
+              ))}
+            </SelectField>
+            {fieldErrors.program ? <p className="field-error">{fieldErrors.program}</p> : null}
+          </label>
+        ) : null}
+        {showDepartmentField ? (
+          <label>
+            <FieldLabel required={requiresDepartment}>Department</FieldLabel>
+            <SelectField
+              value={form.department}
+              onChange={(event) => updateFormField('department', event.target.value)}
+              className={fieldErrors.department ? 'field-invalid' : ''}
+              aria-invalid={Boolean(fieldErrors.department)}
+              disabled={isSubmitting}
+              required={requiresDepartment}
+            >
+              <option value="" disabled>
+                Select department
+              </option>
+              {departmentOptions.map((department) => (
+                <option key={department} value={department}>
+                  {department}
+                </option>
+              ))}
+            </SelectField>
+            {fieldErrors.department ? <p className="field-error">{fieldErrors.department}</p> : null}
+          </label>
+        ) : null}
+        {hasSelectedRole && requiresProgram && !form.program ? (
+          <p className="field-hint full-span">
+            Select a program first to load the available departments.
+          </p>
+        ) : null}
         <label>
           <FieldLabel required>Phone Number</FieldLabel>
           <input
@@ -1415,10 +1498,10 @@ function RegisterScreen({ onRegister }) {
           {fieldErrors.password ? <p className="field-error">{fieldErrors.password}</p> : null}
         </label>
         {error ? <p className="form-error full-span" aria-live="polite">{error}</p> : null}
-        {isSubmitting ? <p className="field-hint full-span" aria-live="polite">Please wait while we create your account...</p> : null}
+        {isSubmitting ? <p className="field-hint full-span" aria-live="polite">Creating account...</p> : null}
         <div className="full-span">
           <ActionButton icon={UserPlus2} type="submit" disabled={isSubmitting} aria-busy={isSubmitting}>
-            {isSubmitting ? 'Please wait...' : 'Register'}
+            {isSubmitting ? 'Creating account...' : 'Create Account'}
           </ActionButton>
         </div>
       </form>
@@ -1826,6 +1909,7 @@ function AppShell({
           gatepass.id,
           gatepass.name,
           gatepass.enrollment,
+          gatepass.program,
           gatepass.department,
           gatepass.status,
           gatepass.reason,
@@ -2416,6 +2500,7 @@ function CreateGatepassModal({ open, currentUser, onClose, onSubmit }) {
         <div className="read-only-grid">
           <ReadOnlyField label="Name" value={currentUser.name} />
           <ReadOnlyField label={currentUser.enrollment ? 'Enrollment' : 'Employee ID'} value={currentUser.enrollment || currentUser.employeeId} />
+          {currentUser.program ? <ReadOnlyField label="Program" value={currentUser.program} /> : null}
           <ReadOnlyField label="Department" value={currentUser.department} />
         </div>
         <label>

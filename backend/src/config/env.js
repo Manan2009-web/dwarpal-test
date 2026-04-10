@@ -138,6 +138,7 @@ module.exports = {
   uploadsDir: path.resolve(backendRoot, 'uploads'),
   seedAdminPassword: process.env.DEFAULT_ADMIN_PASSWORD || 'DwarPal@123',
   seedAdminKey: process.env.SEED_ADMIN_KEY || '',
+  defaultHodProgram: process.env.DEFAULT_HOD_PROGRAM || 'Degree',
   defaultHodDepartment: process.env.DEFAULT_HOD_DEPARTMENT || 'Computer Engineering',
   qrSignSecret: process.env.QR_SIGN_SECRET || process.env.JWT_SECRET || 'dwarpal-dev-qr-signing-secret',
   envFilePath: resolvedEnvPath

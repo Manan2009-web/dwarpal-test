@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Camera, LoaderCircle, QrCode, ScanLine, ShieldCheck } from 'lucide-react'
-import { ApiError, getApiErrorDetails } from '../lib/dwarpalApi'
+import { ApiError, extractGatepassVerificationData, getApiErrorDetails } from '../lib/dwarpalApi'
 import { useToast } from './ToastProvider'
 import { ActionButton, EmptyState, IdentityField, formatDateTime } from './ui'
 
@@ -140,6 +140,28 @@ export default function SecurityVerificationPanel({
     } finally {
       setIsManualVerifying(false)
     }
+  }
+
+  async function handleManualVerify(nextValue = gatepassId) {
+    const normalizedValue = String(nextValue || '').trim()
+
+    if (!normalizedValue) {
+      setVerificationResult(null)
+      setStatusMessage('')
+      setError('Enter a Gatepass ID or scan value to continue.')
+      return
+    }
+
+    const verificationData = extractGatepassVerificationData(normalizedValue)
+
+    if (verificationData.verificationToken) {
+      stopScanner()
+      setGatepassId(normalizedValue)
+      await handleVerifyScannedQr(normalizedValue)
+      return
+    }
+
+    await handleVerifyById(verificationData.gatepassId || normalizedValue)
   }
 
   async function handleVerifyScannedQr(rawValue) {
@@ -303,7 +325,7 @@ export default function SecurityVerificationPanel({
     <section className="workspace-card security-verify-card">
       <div className="section-heading">
         <div>
-          <h3>Scan QR</h3>
+          <h3>Scan Gatepass</h3>
           <p>Scan only DwarPal-generated QR codes. Every scan is verified securely against backend records.</p>
         </div>
       </div>
@@ -314,7 +336,7 @@ export default function SecurityVerificationPanel({
             <div className="security-scan-card-header">
               <div>
                 <span className="eyebrow">Camera Scanner</span>
-                <h4>Open camera and scan QR</h4>
+                <h4>Scan Gatepass</h4>
                 <p>
                   Works on supported laptop and mobile browsers after camera permission is granted.
                 </p>
@@ -325,7 +347,7 @@ export default function SecurityVerificationPanel({
                 onClick={isScannerActive ? stopScanner : startScanner}
                 disabled={isPreparingScanner || isScanVerifying}
               >
-                {isPreparingScanner ? 'Opening camera...' : isScannerActive ? 'Stop Scanner' : 'Start Scanner'}
+                {isPreparingScanner ? 'Opening scanner...' : isScannerActive ? 'Stop Scanner' : 'Scan Gatepass'}
               </ActionButton>
             </div>
 
@@ -335,7 +357,7 @@ export default function SecurityVerificationPanel({
               ) : (
                 <div className="scanner-placeholder">
                   <ScanLine size={20} />
-                  <p>Camera preview will appear here after permission is granted.</p>
+                  <p>Tap Scan Gatepass to open the camera and verify a QR code.</p>
                 </div>
               )}
             </div>
@@ -343,7 +365,7 @@ export default function SecurityVerificationPanel({
             {isScanVerifying ? (
               <div className="scanner-status-card">
                 <LoaderCircle size={16} className="spin" />
-                <span>QR detected. Verifying with the backend...</span>
+                <span>QR detected. Verifying the gatepass...</span>
               </div>
             ) : null}
 
@@ -358,16 +380,22 @@ export default function SecurityVerificationPanel({
           <div className="security-manual-copy">
             <span className="eyebrow">Manual Fallback</span>
             <h4>Verify by Gatepass ID</h4>
-            <p>Use this when the camera is unavailable or the QR cannot be read.</p>
+            <p>Use this when the camera is unavailable or paste a QR link/token if needed.</p>
           </div>
           <label className="security-verify-input">
             <span className="field-label">
-              <span className="field-label-text">Gatepass ID</span>
+              <span className="field-label-text">Gatepass ID or QR value</span>
             </span>
             <input
               value={gatepassId}
-              onChange={(event) => setGatepassId(event.target.value.toUpperCase())}
-              placeholder="DP-STU-2026040001"
+              onChange={(event) => setGatepassId(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  handleManualVerify()
+                }
+              }}
+              placeholder="DP-STU-2026040001 or QR link"
               autoComplete="off"
               spellCheck="false"
             />
@@ -376,10 +404,10 @@ export default function SecurityVerificationPanel({
             <ActionButton
               type="button"
               icon={QrCode}
-              onClick={() => handleVerifyById()}
-              disabled={isManualVerifying}
+              onClick={() => handleManualVerify()}
+              disabled={isManualVerifying || isScanVerifying}
             >
-              {isManualVerifying ? 'Verifying Gatepass ID...' : 'Verify Gatepass ID'}
+              {isManualVerifying || isScanVerifying ? 'Verifying...' : 'Verify Gatepass'}
             </ActionButton>
           </div>
         </div>
@@ -406,6 +434,7 @@ export default function SecurityVerificationPanel({
             <IdentityField label="Gatepass ID" value={gatepass.gatepassId || gatepass.requestNumber || gatepass.id} />
             <IdentityField label="Name" value={gatepass.name} />
             <IdentityField label="Role" value={getRoleLabel(gatepass)} />
+            <IdentityField label="Program" value={gatepass.program || 'Not assigned'} />
             <IdentityField label="Department" value={gatepass.department} />
             <IdentityField label="Reason" value={gatepass.reason} />
             <IdentityField label="Out Time" value={formatVerificationValue(gatepass.outTime)} />

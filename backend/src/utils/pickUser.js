@@ -14,6 +14,7 @@ function pickUser(user, req) {
     fullName: source.fullName,
     email: source.email,
     role: normalizedRole,
+    program: source.program || null,
     department: source.department || null,
     semester: source.semester || null,
     enrollmentNo: source.enrollmentNo || source.enrollment || null,

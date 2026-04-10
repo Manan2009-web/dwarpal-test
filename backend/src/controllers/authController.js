@@ -14,8 +14,7 @@ const register = asyncHandler(async (req, res) => {
 
   return sendSuccess(res, {
     statusCode: 201,
-    message:
-      'Registration successful. Please login manually first, then you can enable fingerprint or face recognition on this device.',
+    message: 'Account created successfully',
     data: result
   });
 });

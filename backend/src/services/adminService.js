@@ -3,19 +3,26 @@ const Gatepass = require('../models/Gatepass');
 const env = require('../config/env');
 const AppError = require('../utils/appError');
 const { buildPaginationMeta, getPagination } = require('../utils/pagination');
-const { DEPARTMENTS, ROLES } = require('../constants/appConstants');
+const { DEPARTMENTS, ROLES, normalizeDepartment, normalizeProgram } = require('../constants/appConstants');
 const { logAction } = require('./auditService');
 
 function getDefaultHodDepartment() {
-  if (DEPARTMENTS.includes(env.defaultHodDepartment)) {
-    return env.defaultHodDepartment;
+  const normalizedDepartment = normalizeDepartment(env.defaultHodDepartment);
+
+  if (DEPARTMENTS.includes(normalizedDepartment)) {
+    return normalizedDepartment;
   }
 
   return DEPARTMENTS[0];
 }
 
+function getDefaultHodProgram() {
+  return normalizeProgram(env.defaultHodProgram) || 'Degree';
+}
+
 function getDefaultAdminSeedData() {
   const hodDepartment = getDefaultHodDepartment();
+  const hodProgram = getDefaultHodProgram();
   const defaultDepartment = DEPARTMENTS[0];
 
   return [
@@ -26,6 +33,7 @@ function getDefaultAdminSeedData() {
       enrollmentNo: 'student1',
       phone: '9999999990',
       department: defaultDepartment,
+      program: 'Degree',
       semester: 6
     },
     {
@@ -50,6 +58,7 @@ function getDefaultAdminSeedData() {
       email: 'hod@dwarpal.local',
       employeeId: 'HOD',
       phone: '9999999992',
+      program: hodProgram,
       department: hodDepartment
     },
     {
@@ -96,6 +105,7 @@ async function seedDefaultAdmins({ actorId = null, requestMeta = {} } = {}) {
       foundUser.fullName = account.fullName;
       foundUser.email = account.email;
       foundUser.role = account.role;
+      foundUser.program = account.program;
       foundUser.department = account.department;
       foundUser.phone = account.phone;
       foundUser.semester = account.semester;

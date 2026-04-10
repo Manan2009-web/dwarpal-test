@@ -61,14 +61,34 @@ export const PUBLIC_ROLE_OPTIONS = [...ROLE_OPTIONS]
 
 export const SEMESTER_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8]
 
+export const PROGRAM_OPTIONS = ['Diploma', 'Degree']
+
+export const ROUTING_DEPARTMENTS = ['Computer', 'Civil', 'Mechanical', 'Electrical']
+
 export const DEPARTMENTS = [
-  'Computer Engineering',
-  'Mechanical Engineering',
-  'Civil Engineering',
+  ...ROUTING_DEPARTMENTS,
   'Nursing',
   'Physiotherapy',
-  'Electrical Engineering',
 ]
+
+const DEPARTMENT_ALIAS_MAP = {
+  computer: 'Computer',
+  'computer engineering': 'Computer',
+  'computer science': 'Computer',
+  'information technology': 'Computer',
+  cse: 'Computer',
+  it: 'Computer',
+  civil: 'Civil',
+  'civil engineering': 'Civil',
+  mechanical: 'Mechanical',
+  'mechanical engineering': 'Mechanical',
+  electrical: 'Electrical',
+  'electrical engineering': 'Electrical',
+  nursing: 'Nursing',
+  physiotherapy: 'Physiotherapy',
+  administration: 'Computer',
+  security: 'Computer',
+}
 
 export function normalizeRole(role) {
   const normalizedRole = String(role || '')
@@ -78,16 +98,19 @@ export function normalizeRole(role) {
   return ROLE_OPTIONS.includes(normalizedRole) ? normalizedRole : ''
 }
 
-const LEGACY_DEPARTMENT_MAP = {
-  'Computer Science': 'Computer Engineering',
-  'Information Technology': 'Computer Engineering',
-  Administration: 'Computer Engineering',
-  Security: 'Computer Engineering',
+export function normalizeProgram(program) {
+  const normalizedProgram = String(program || '')
+    .trim()
+    .toLowerCase()
+
+  if (normalizedProgram === 'diploma') return 'Diploma'
+  if (normalizedProgram === 'degree') return 'Degree'
+  return ''
 }
 
 export function normalizeDepartment(department) {
-  const mappedDepartment = LEGACY_DEPARTMENT_MAP[department] ?? department
-  return DEPARTMENTS.includes(mappedDepartment) ? mappedDepartment : DEPARTMENTS[0]
+  const mappedDepartment = DEPARTMENT_ALIAS_MAP[String(department || '').trim().toLowerCase()] || ''
+  return DEPARTMENTS.includes(mappedDepartment) ? mappedDepartment : ''
 }
 
 export function normalizeSemester(semester) {
@@ -109,7 +132,8 @@ export function normalizeUserRecord(user) {
   const normalizedUser = {
     ...user,
     role: normalizedRole || user.role,
-    department: normalizeDepartment(user.department),
+    program: normalizeProgram(user.program),
+    department: normalizeDepartment(user.department) || DEPARTMENTS[0],
   }
 
   if (normalizedUser.role === 'student') {
@@ -126,7 +150,8 @@ export function normalizeUserRecord(user) {
 export function normalizeGatepassRecord(gatepass) {
   return {
     ...gatepass,
-    department: normalizeDepartment(gatepass.department),
+    program: normalizeProgram(gatepass.program),
+    department: normalizeDepartment(gatepass.department) || DEPARTMENTS[0],
     vehicleNumber: normalizeVehicleNumber(gatepass.vehicleNumber),
   }
 }
@@ -136,7 +161,8 @@ export const initialUsers = [
     id: 'student-demo',
     name: 'Student Demo',
     email: 'student1@dwarpal.edu',
-    department: 'Computer Engineering',
+    program: 'Degree',
+    department: 'Computer',
     enrollment: 'student1',
     phone: '9999999999',
     role: 'student',
@@ -147,7 +173,7 @@ export const initialUsers = [
     id: 'faculty-demo',
     name: 'Faculty Demo',
     email: 'faculty1@dwarpal.edu',
-    department: 'Computer Engineering',
+    department: 'Computer',
     employeeId: 'faculty1',
     phone: '8888888888',
     role: 'faculty',
@@ -157,7 +183,7 @@ export const initialUsers = [
     id: 'principal-demo',
     name: 'Principal Demo',
     email: 'principal@dwarpal.edu',
-    department: 'Computer Engineering',
+    department: 'Computer',
     employeeId: 'principal',
     phone: '8877777777',
     role: 'principal',
@@ -167,7 +193,8 @@ export const initialUsers = [
     id: 'hod-demo',
     name: 'HOD Demo',
     email: 'hod@dwarpal.edu',
-    department: 'Computer Engineering',
+    program: 'Degree',
+    department: 'Computer',
     employeeId: 'hod',
     phone: '8866666666',
     role: 'hod',
@@ -177,7 +204,7 @@ export const initialUsers = [
     id: 'cao-demo',
     name: 'CAO Demo',
     email: 'cao@dwarpal.edu',
-    department: 'Computer Engineering',
+    department: 'Computer',
     employeeId: 'cao',
     phone: '8855555555',
     role: 'cao',
@@ -187,7 +214,7 @@ export const initialUsers = [
     id: 'security-demo',
     name: 'Security Demo',
     email: 'security@dwarpal.edu',
-    department: 'Computer Engineering',
+    department: 'Computer',
     employeeId: 'security',
     phone: '8844444444',
     role: 'security',
@@ -197,7 +224,8 @@ export const initialUsers = [
     id: 'stu-001',
     name: 'Aarav Sharma',
     email: 'aarav@dwarpal.edu',
-    department: 'Computer Engineering',
+    program: 'Degree',
+    department: 'Computer',
     enrollment: '23CS1021',
     phone: '9876543210',
     role: 'student',
@@ -208,7 +236,8 @@ export const initialUsers = [
     id: 'stu-002',
     name: 'Meera Kulkarni',
     email: 'meera@dwarpal.edu',
-    department: 'Mechanical Engineering',
+    program: 'Diploma',
+    department: 'Mechanical',
     enrollment: '23ME1014',
     phone: '9811122233',
     role: 'student',
@@ -219,7 +248,7 @@ export const initialUsers = [
     id: 'fac-001',
     name: 'Dr. Nisha Iyer',
     email: 'nisha.iyer@dwarpal.edu',
-    department: 'Computer Engineering',
+    department: 'Computer',
     employeeId: 'FAC-204',
     phone: '9898989898',
     role: 'faculty',
@@ -229,7 +258,7 @@ export const initialUsers = [
     id: 'pri-001',
     name: 'Prof. R. S. Menon',
     email: 'principal@dwarpal.edu',
-    department: 'Computer Engineering',
+    department: 'Computer',
     employeeId: 'PRI-001',
     phone: '9822012345',
     role: 'principal',
@@ -239,7 +268,8 @@ export const initialUsers = [
     id: 'hod-001',
     name: 'Dr. Kavita Deshmukh',
     email: 'hod.cse@dwarpal.edu',
-    department: 'Computer Engineering',
+    program: 'Degree',
+    department: 'Computer',
     employeeId: 'HOD-113',
     phone: '9822034567',
     role: 'hod',
@@ -249,7 +279,7 @@ export const initialUsers = [
     id: 'cao-001',
     name: 'S. R. Patil',
     email: 'cao@dwarpal.edu',
-    department: 'Computer Engineering',
+    department: 'Computer',
     employeeId: 'CAO-019',
     phone: '9867001122',
     role: 'cao',

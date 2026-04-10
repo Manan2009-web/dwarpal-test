@@ -1,5 +1,13 @@
 const { body, param } = require('express-validator');
-const { DEPARTMENTS, PHONE_REGEX, SEMESTERS } = require('../constants/appConstants');
+const {
+  DEPARTMENTS,
+  PHONE_REGEX,
+  ROUTING_DEPARTMENTS,
+  SEMESTERS,
+  STUDENT_PROGRAMS,
+  normalizeDepartment,
+  normalizeProgram
+} = require('../constants/appConstants');
 
 const updateProfileValidation = [
   body('fullName')
@@ -13,11 +21,43 @@ const updateProfileValidation = [
     .trim()
     .matches(PHONE_REGEX)
     .withMessage('Phone number must contain 10 to 15 digits'),
+  body('program')
+    .optional({ values: 'falsy' })
+    .customSanitizer(normalizeProgram)
+    .custom((value, { req }) => {
+      const role = req.user?.role;
+
+      if (!['student', 'hod'].includes(role)) {
+        return true;
+      }
+
+      if (!value || !STUDENT_PROGRAMS.includes(value)) {
+        throw new Error(`Program must be one of: ${STUDENT_PROGRAMS.join(', ')}`);
+      }
+
+      return true;
+    }),
   body('department')
     .optional()
-    .trim()
-    .isIn(DEPARTMENTS)
-    .withMessage(`Department must be one of: ${DEPARTMENTS.join(', ')}`),
+    .customSanitizer((value) => normalizeDepartment(value) || String(value || '').trim())
+    .custom((value, { req }) => {
+      const role = req.user?.role;
+      const normalizedDepartment = String(value || '').trim();
+
+      if (!normalizedDepartment) {
+        return true;
+      }
+
+      if (['student', 'hod'].includes(role) && !ROUTING_DEPARTMENTS.includes(normalizedDepartment)) {
+        throw new Error(`Department must be one of: ${ROUTING_DEPARTMENTS.join(', ')}`);
+      }
+
+      if (!DEPARTMENTS.includes(normalizedDepartment)) {
+        throw new Error(`Department must be one of: ${DEPARTMENTS.join(', ')}`);
+      }
+
+      return true;
+    }),
   body('semester').optional().custom((value) => {
     const numericSemester = Number(value);
     if (!SEMESTERS.includes(numericSemester)) {

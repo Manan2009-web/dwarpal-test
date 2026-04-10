@@ -26,7 +26,7 @@ export function DashboardHeaderBranding({
   return (
     <div className="dashboard-header-branding">
       <div className="dashboard-header-brand">
-        <AppBrand size="md" logo={logo} appName={appName} align="start" />
+        <AppBrand size="lg" logo={logo} appName={appName} align="start" />
       </div>
       <div className="dashboard-header-branding-meta dashboard-header-context">
         {roleName ? <p className="dashboard-header-role">{roleName}</p> : null}
@@ -144,14 +144,14 @@ export function Sidebar({ currentUser, currentPage, onNavigate, onLogout, open, 
       />
       <aside className={`sidebar drawer ${open ? 'open' : ''}`}>
         <div className="drawer-header">
-          <AppBrand size="sm" align="start" />
+          <AppBrand size="md" align="start" />
           <button type="button" className="icon-button drawer-close" onClick={onClose} aria-label="Close menu">
             <X size={18} />
           </button>
         </div>
         <div className="sidebar-role" style={{ '--role-accent': ROLE_META[currentUser.role].accent }}>
           <span>{ROLE_META[currentUser.role].shortTitle}</span>
-          <p>{currentUser.department}</p>
+          <p>{[currentUser.program, currentUser.department].filter(Boolean).join(' | ') || 'Not assigned'}</p>
         </div>
         <nav className="sidebar-nav">
           {navItems.map((item) => (
@@ -240,6 +240,7 @@ export function ProfileCard({ currentUser, onLogout, children = null }) {
         <ProfileField label="Name" value={currentUser.name} />
         <ProfileField label={ROLE_META[currentUser.role].idLabel} value={primaryId} />
         <ProfileField label="Department" value={currentUser.department} />
+        {currentUser.program ? <ProfileField label="Program" value={currentUser.program} /> : null}
         <ProfileField label="Mobile" value={currentUser.phone} />
         <ProfileField label="Email" value={currentUser.email} />
         {currentUser.role === 'student' ? (
@@ -395,6 +396,7 @@ export const GatepassCard = memo(function GatepassCard({
       <div className="gatepass-footer">
         <div className="gatepass-tags">
           {!isUserPanel && <span className="tag">{gatepass.requesterType}</span>}
+          {gatepass.program ? <span className="tag">{gatepass.program}</span> : null}
           <span className="tag">{gatepass.department}</span>
           {isFacultyLeave ? (
             <>
