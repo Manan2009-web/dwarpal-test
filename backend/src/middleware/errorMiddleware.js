@@ -42,8 +42,21 @@ function errorHandler(err, req, res, next) {
     timestamp: new Date().toISOString()
   };
 
+  if (error.code) {
+    response.code = error.code;
+  }
+
   if (error.errors) {
     response.errors = error.errors;
+  }
+
+  if (error.retryAfterSeconds) {
+    response.retryAfterSeconds = error.retryAfterSeconds;
+    res.set('Retry-After', String(error.retryAfterSeconds));
+  }
+
+  if (error.rateLimit) {
+    response.rateLimit = error.rateLimit;
   }
 
   if (process.env.NODE_ENV !== 'production' && err && err.stack) {

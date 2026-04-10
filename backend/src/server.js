@@ -3,6 +3,7 @@ const app = require('./app');
 const env = require('./config/env');
 const connectDatabase = require('./config/db');
 const Gatepass = require('./models/Gatepass');
+const { ensureRateLimitStorage } = require('./services/authRateLimitService');
 const { seedDefaultAdmins } = require('./services/adminService');
 const { closeRealtimeServer, createRealtimeServer } = require('./services/realtimeService');
 
@@ -59,6 +60,7 @@ async function shutdownServer(server, exitCode = 0) {
 
 async function startServer() {
   const database = await connectDatabase();
+  await ensureRateLimitStorage();
   await repairVerificationTokens();
   await ensureDemoAccounts();
 

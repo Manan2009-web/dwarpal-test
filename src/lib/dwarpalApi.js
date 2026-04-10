@@ -1,7 +1,7 @@
 import { normalizeDepartment, normalizeProgram, normalizeRole } from '../mockData'
 
 function getDefaultApiBaseUrl() {
-  return import.meta.env.DEV ? 'http://localhost:5000/api' : ''
+  return import.meta.env.DEV ? 'http://localhost:5000/api' : '/api'
 }
 
 
@@ -167,6 +167,10 @@ function getDefaultErrorMessage(status, path) {
 
   if (status === 403) {
     return 'You do not have permission to perform this action.'
+  }
+
+  if (status === 429) {
+    return 'Too many requests. Please wait a moment and try again.'
   }
 
   return 'Request failed.'

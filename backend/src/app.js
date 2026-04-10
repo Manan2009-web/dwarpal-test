@@ -15,6 +15,10 @@ const frontendDistDir = path.resolve(__dirname, '..', '..', 'dist');
 const frontendIndexPath = path.join(frontendDistDir, 'index.html');
 const hasFrontendBuild = fs.existsSync(frontendIndexPath);
 
+// Trust the first upstream proxy in production so req.ip reflects the real client
+// instead of the load balancer address when rate limiting auth traffic.
+app.set('trust proxy', env.trustProxy);
+
 const corsOptions = {
   origin(origin, callback) {
     if (env.isOriginAllowed(origin)) {

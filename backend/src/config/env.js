@@ -105,6 +105,29 @@ function parseAllowedOrigins(value) {
 const allowedOrigins = parseAllowedOrigins(process.env.ALLOWED_ORIGINS);
 const isProduction = process.env.NODE_ENV === 'production';
 
+function parseTrustProxy(value) {
+  const normalizedValue = String(value || '').trim();
+
+  if (!normalizedValue) {
+    return isProduction ? 1 : false;
+  }
+
+  if (normalizedValue === 'true') {
+    return true;
+  }
+
+  if (normalizedValue === 'false') {
+    return false;
+  }
+
+  const numericValue = Number(normalizedValue);
+  if (Number.isInteger(numericValue) && numericValue >= 0) {
+    return numericValue;
+  }
+
+  return normalizedValue;
+}
+
 function isOriginAllowed(origin) {
   if (!origin) {
     return true;
@@ -135,6 +158,7 @@ module.exports = {
   serverUrl: normalizeUrl(process.env.SERVER_URL || ''),
   allowedOrigins,
   isOriginAllowed,
+  trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
   uploadsDir: path.resolve(backendRoot, 'uploads'),
   seedAdminPassword: process.env.DEFAULT_ADMIN_PASSWORD || 'DwarPal@123',
   seedAdminKey: process.env.SEED_ADMIN_KEY || '',

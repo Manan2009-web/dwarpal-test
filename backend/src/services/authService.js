@@ -9,7 +9,14 @@ const User = require('../models/User');
 const AppError = require('../utils/appError');
 const pickUser = require('../utils/pickUser');
 const { createAccessToken } = require('../utils/token');
+const { getClientFingerprint } = require('../utils/request');
 const { logAction } = require('./auditService');
+const {
+  consumeRateLimit,
+  createRateLimitError,
+  getRateLimitState,
+  resetRateLimits
+} = require('./authRateLimitService');
 const {
   PASSWORD_REGEX,
   PUBLIC_REGISTRATION_ROLES,
@@ -24,6 +31,12 @@ const {
 } = require('../utils/webauthn');
 
 const BCRYPT_HASH_REGEX = /^\$2[aby]\$\d{2}\$/;
+const LOGIN_FAILURE_SOURCE_SCOPE = 'auth:login:failed:source';
+const LOGIN_FAILURE_IDENTITY_SCOPE = 'auth:login:failed:identity';
+const LOGIN_FAILURE_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_FAILURE_SOURCE_LIMIT = 5;
+const LOGIN_FAILURE_IDENTITY_LIMIT = 20;
+const LOGIN_FAILURE_BLOCK_MS = 15 * 60 * 1000;
 
 function buildSessionPayload(auth = {}) {
   const expiresAt = auth.expiresAt || (auth.exp ? new Date(auth.exp * 1000).toISOString() : null);
@@ -49,6 +62,10 @@ function escapeRegex(value) {
 
 function extractLoginIdentifier(payload = {}) {
   return normalizeIdentifier(payload.identifier || payload.enrollment || payload.employeeId || payload.email);
+}
+
+function normalizeRateLimitIdentifier(identifier) {
+  return normalizeIdentifier(identifier).toLowerCase();
 }
 
 function isHashedPassword(value) {
@@ -84,6 +101,113 @@ function createSessionToken(user, authMethod = 'password') {
     email: user.email,
     authMethod
   });
+}
+
+function formatRetryWindow(retryAfterSeconds) {
+  const minutes = Math.max(1, Math.ceil(Number(retryAfterSeconds || 0) / 60));
+  return minutes === 1 ? 'about 1 minute' : `about ${minutes} minutes`;
+}
+
+function buildLoginFailureSourceKey(identifier, req) {
+  const normalizedIdentifier = normalizeRateLimitIdentifier(identifier);
+  if (!normalizedIdentifier) {
+    return '';
+  }
+
+  return `${normalizedIdentifier}|${getClientFingerprint(req)}`;
+}
+
+function buildLoginFailureIdentityKey(identifier) {
+  return normalizeRateLimitIdentifier(identifier);
+}
+
+function buildLoginLockedError(retryAfterSeconds) {
+  const message = `Too many failed sign-in attempts for this account. Please wait ${formatRetryWindow(retryAfterSeconds)} before trying again or use Forgot Password.`;
+
+  return createRateLimitError({
+    message,
+    retryAfterSeconds,
+    code: 'AUTH_LOGIN_FAILED_ATTEMPTS_LOCKED',
+    errors: [
+      {
+        field: 'identifier',
+        message
+      }
+    ],
+    rateLimit: {
+      scope: 'auth:login:failed'
+    }
+  });
+}
+
+async function assertLoginFailureBucketsAreOpen(identifier, req) {
+  const normalizedIdentifier = normalizeRateLimitIdentifier(identifier);
+  if (!normalizedIdentifier) {
+    return;
+  }
+
+  const [sourceState, identityState] = await Promise.all([
+    getRateLimitState({
+      scope: LOGIN_FAILURE_SOURCE_SCOPE,
+      key: buildLoginFailureSourceKey(normalizedIdentifier, req)
+    }),
+    getRateLimitState({
+      scope: LOGIN_FAILURE_IDENTITY_SCOPE,
+      key: buildLoginFailureIdentityKey(normalizedIdentifier)
+    })
+  ]);
+
+  const blockedState = [sourceState, identityState].find((state) => state.blocked);
+  if (blockedState) {
+    throw buildLoginLockedError(blockedState.retryAfterSeconds);
+  }
+}
+
+async function recordFailedLoginAttempt(identifier, req) {
+  const normalizedIdentifier = normalizeRateLimitIdentifier(identifier);
+  if (!normalizedIdentifier) {
+    return;
+  }
+
+  const [sourceResult, identityResult] = await Promise.all([
+    consumeRateLimit({
+      scope: LOGIN_FAILURE_SOURCE_SCOPE,
+      key: buildLoginFailureSourceKey(normalizedIdentifier, req),
+      limit: LOGIN_FAILURE_SOURCE_LIMIT,
+      windowMs: LOGIN_FAILURE_WINDOW_MS,
+      blockDurationMs: LOGIN_FAILURE_BLOCK_MS
+    }),
+    consumeRateLimit({
+      scope: LOGIN_FAILURE_IDENTITY_SCOPE,
+      key: buildLoginFailureIdentityKey(normalizedIdentifier),
+      limit: LOGIN_FAILURE_IDENTITY_LIMIT,
+      windowMs: LOGIN_FAILURE_WINDOW_MS,
+      blockDurationMs: LOGIN_FAILURE_BLOCK_MS
+    })
+  ]);
+
+  const blockedResult = [sourceResult, identityResult].find((result) => !result.allowed);
+  if (blockedResult) {
+    throw buildLoginLockedError(blockedResult.retryAfterSeconds);
+  }
+}
+
+async function clearFailedLoginAttempts(identifier, req) {
+  const normalizedIdentifier = normalizeRateLimitIdentifier(identifier);
+  if (!normalizedIdentifier) {
+    return;
+  }
+
+  await resetRateLimits([
+    {
+      scope: LOGIN_FAILURE_SOURCE_SCOPE,
+      key: buildLoginFailureSourceKey(normalizedIdentifier, req)
+    },
+    {
+      scope: LOGIN_FAILURE_IDENTITY_SCOPE,
+      key: buildLoginFailureIdentityKey(normalizedIdentifier)
+    }
+  ]);
 }
 
 function ensureBiometricSetupAllowed(auth = {}) {
@@ -188,10 +312,14 @@ async function registerUser(payload, req, requestMeta) {
 
 async function loginUser(payload, req, requestMeta) {
   const identifier = extractLoginIdentifier(payload);
+  // Failed-login buckets are keyed to the account plus client fingerprint so one
+  // noisy shared-Wi-Fi user does not block everyone else on the same network.
+  await assertLoginFailureBucketsAreOpen(identifier, req);
   const user = await findUserByIdentifier(identifier);
 
   if (!user) {
-    throw new AppError('Invalid credentials', 401);
+    await recordFailedLoginAttempt(identifier, req);
+    throw new AppError('Invalid credentials. Please check your ID and password and try again.', 401);
   }
 
   if (!user.isActive) {
@@ -201,7 +329,8 @@ async function loginUser(payload, req, requestMeta) {
   const passwordMatches = await user.comparePassword(payload.password);
 
   if (!passwordMatches) {
-    throw new AppError('Invalid credentials', 401);
+    await recordFailedLoginAttempt(identifier, req);
+    throw new AppError('Invalid credentials. Please check your ID and password and try again.', 401);
   }
 
   const normalizedRole = normalizeRole(user.role);
@@ -220,6 +349,8 @@ async function loginUser(payload, req, requestMeta) {
     user.lastLoginAt = loginTimestamp;
     await User.updateOne({ _id: user._id }, { $set: { lastLoginAt: loginTimestamp } });
   }
+
+  await clearFailedLoginAttempts(identifier, req);
 
   const token = createSessionToken(user, 'password');
 

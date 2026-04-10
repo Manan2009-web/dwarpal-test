@@ -1,5 +1,27 @@
 const env = require('../config/env');
 
+function readForwardedFor(req) {
+  const forwardedFor = req?.headers?.['x-forwarded-for'];
+  const forwardedValue = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor;
+  return String(forwardedValue || '')
+    .split(',')[0]
+    .trim();
+}
+
+function getClientIp(req) {
+  return String(req?.ip || readForwardedFor(req) || req?.socket?.remoteAddress || '').trim();
+}
+
+function getUserAgent(req) {
+  return String(req?.get?.('user-agent') || req?.headers?.['user-agent'] || '').trim();
+}
+
+function getClientFingerprint(req) {
+  const clientIp = getClientIp(req) || 'unknown-ip';
+  const userAgent = getUserAgent(req).slice(0, 160).toLowerCase() || 'unknown-agent';
+  return `${clientIp}|${userAgent}`;
+}
+
 function getRequestBaseUrl(req) {
   return `${req.protocol}://${req.get('host')}`.replace(/\/$/, '');
 }
@@ -32,16 +54,17 @@ function toPublicUrl(pathname, req) {
 }
 
 function getRequestMeta(req) {
-  const forwardedFor = req.headers['x-forwarded-for'];
-
   return {
-    ipAddress: Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor || req.ip || '',
-    userAgent: req.get('user-agent') || ''
+    ipAddress: getClientIp(req),
+    userAgent: getUserAgent(req)
   };
 }
 
 module.exports = {
+  getClientFingerprint,
   getBaseUrl,
+  getClientIp,
   getRequestMeta,
+  getUserAgent,
   toPublicUrl
 };

@@ -991,6 +991,7 @@ function LoginScreen({ onLogin, onBiometricLogin }) {
   const [success, setSuccess] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const submitLockRef = useRef(false)
   const [biometricSupport, setBiometricSupport] = useState({
     supported: false,
     message: '',
@@ -1041,7 +1042,7 @@ function LoginScreen({ onLogin, onBiometricLogin }) {
   async function handleSubmit(event) {
     event.preventDefault()
 
-    if (isSubmitting) {
+    if (isSubmitting || submitLockRef.current) {
       return
     }
 
@@ -1058,6 +1059,7 @@ function LoginScreen({ onLogin, onBiometricLogin }) {
 
     setError('')
     setSuccess('')
+    submitLockRef.current = true
     setIsSubmitting(true)
 
     try {
@@ -1073,6 +1075,7 @@ function LoginScreen({ onLogin, onBiometricLogin }) {
     } catch {
       setError('Unable to sign in right now. Please try again.')
     } finally {
+      submitLockRef.current = false
       setIsSubmitting(false)
     }
   }
@@ -1208,6 +1211,7 @@ function RegisterScreen({ onRegister }) {
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const submitLockRef = useRef(false)
   const hasSelectedRole = Boolean(form.role)
   const isStudentRole = form.role === 'student'
   const isSecurityRole = form.role === 'security'
@@ -1272,7 +1276,7 @@ function RegisterScreen({ onRegister }) {
   async function handleSubmit(event) {
     event.preventDefault()
 
-    if (isSubmitting) {
+    if (isSubmitting || submitLockRef.current) {
       return
     }
 
@@ -1295,6 +1299,7 @@ function RegisterScreen({ onRegister }) {
     }
 
     setError('')
+    submitLockRef.current = true
     setIsSubmitting(true)
 
     try {
@@ -1320,6 +1325,7 @@ function RegisterScreen({ onRegister }) {
     } catch {
       setError('Unable to create your account right now. Please try again.')
     } finally {
+      submitLockRef.current = false
       setIsSubmitting(false)
     }
   }
