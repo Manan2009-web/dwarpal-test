@@ -45,6 +45,22 @@ function getDuplicateFieldMessage(field) {
     return 'Gatepass ID already exists.';
   }
 
+  if (field === 'email') {
+    return 'This email is already registered.';
+  }
+
+  if (field === 'phone') {
+    return 'This phone number is already registered.';
+  }
+
+  if (field === 'enrollmentNo' || field === 'enrollment') {
+    return 'This enrollment ID already exists.';
+  }
+
+  if (field === 'employeeId') {
+    return 'This employee ID already exists.';
+  }
+
   return `${toHumanFieldName(field)} already exists.`;
 }
 

@@ -7,6 +7,19 @@ import './index.css'
 const rootElement = document.getElementById('root')
 const STATUS_FONT_FAMILY = "'Segoe UI', 'Trebuchet MS', Helvetica, Arial, sans-serif"
 
+function logBootstrapStatus(event, details) {
+  if (!import.meta.env.DEV) {
+    return
+  }
+
+  if (details === undefined) {
+    console.info(`[DwarPal main] ${event}`)
+    return
+  }
+
+  console.info(`[DwarPal main] ${event}`, details)
+}
+
 function getFatalErrorMessage(error, fallbackMessage) {
   if (!error) {
     return fallbackMessage
@@ -247,6 +260,7 @@ class RootErrorBoundary extends React.Component {
 
 function AppMountProbe() {
   React.useEffect(() => {
+    logBootstrapStatus('React root mounted')
     getBootStatusController()?.markStarted?.()
     void cleanupLegacyBrowserState()
   }, [])
@@ -269,6 +283,7 @@ if (!rootElement) {
 }
 
 function bootstrap() {
+  logBootstrapStatus('Bootstrapping React root')
   renderBootStatus()
 
   try {

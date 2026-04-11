@@ -165,5 +165,17 @@ module.exports = {
   defaultHodProgram: process.env.DEFAULT_HOD_PROGRAM || 'Degree',
   defaultHodDepartment: process.env.DEFAULT_HOD_DEPARTMENT || 'Computer Engineering',
   qrSignSecret: process.env.QR_SIGN_SECRET || process.env.JWT_SECRET || 'dwarpal-dev-qr-signing-secret',
-  envFilePath: resolvedEnvPath
+  envFilePath: resolvedEnvPath,
+  defaultPhoneCountryCode: process.env.DEFAULT_PHONE_COUNTRY_CODE || '+91',
+  phoneOtpChannel: process.env.PHONE_OTP_CHANNEL || 'sms',
+  phoneOtpResendCooldownSeconds: Number(process.env.PHONE_OTP_RESEND_COOLDOWN_SECONDS) || 60,
+  phoneOtpCodeExpiresMinutes: Number(process.env.PHONE_OTP_CODE_EXPIRES_MINUTES) || 10,
+  phoneOtpVerificationTokenTtlMinutes: Number(process.env.PHONE_OTP_VERIFICATION_TOKEN_TTL_MINUTES) || 30,
+  passwordResetTokenExpiresMinutes: Number(process.env.PASSWORD_RESET_TOKEN_EXPIRES_MINUTES) || 15,
+  passwordResetUrl: normalizeUrl(process.env.PASSWORD_RESET_URL || ''),
+  resendApiKey: String(process.env.RESEND_API_KEY || '').trim(),
+  emailFrom: String(process.env.EMAIL_FROM || '').trim(),
+  twilioAccountSid: String(process.env.TWILIO_ACCOUNT_SID || '').trim(),
+  twilioAuthToken: String(process.env.TWILIO_AUTH_TOKEN || '').trim(),
+  twilioVerifyServiceSid: String(process.env.TWILIO_VERIFY_SERVICE_SID || '').trim()
 };

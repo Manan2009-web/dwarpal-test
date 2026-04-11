@@ -2,7 +2,6 @@ const { body, param } = require('express-validator');
 const {
   DEPARTMENTS,
   PASSWORD_REGEX,
-  PHONE_REGEX,
   PUBLIC_REGISTRATION_ROLES,
   ROUTING_DEPARTMENTS,
   STUDENT_PROGRAMS,
@@ -11,6 +10,19 @@ const {
   normalizeRole,
   SEMESTERS
 } = require('../constants/appConstants');
+const { isValidPhoneNumber, normalizePhoneNumber } = require('../utils/phone');
+
+function normalizePhoneValue(value) {
+  return normalizePhoneNumber(value);
+}
+
+function validatePhoneValue(value, message = 'Please enter a valid phone number.') {
+  if (!value || !isValidPhoneNumber(value)) {
+    throw new Error(message);
+  }
+
+  return true;
+}
 
 const registerValidation = [
   body('fullName')
@@ -97,9 +109,9 @@ const registerValidation = [
       return true;
     }),
   body('phone')
-    .trim()
-    .matches(PHONE_REGEX)
-    .withMessage('Phone number must contain 10 to 15 digits')
+    .customSanitizer(normalizePhoneValue)
+    .custom((value) => validatePhoneValue(value)),
+  body('firebaseUid').optional({ values: 'falsy' }).trim()
 ];
 
 const loginValidation = [
@@ -132,6 +144,67 @@ const resetPasswordValidation = [
     .withMessage(
       'New password must be at least 8 characters and include uppercase, lowercase, number, and special character'
     )
+];
+
+const registrationAvailabilityValidation = [
+  body('role')
+    .optional({ values: 'falsy' })
+    .trim()
+    .customSanitizer(normalizeRole)
+    .custom((value) => {
+      if (!value) {
+        throw new Error(`Role must be one of: ${PUBLIC_REGISTRATION_ROLES.join(', ')}`);
+      }
+
+      return true;
+    }),
+  body('email').optional({ values: 'falsy' }).trim().isEmail().withMessage('Valid email is required').normalizeEmail(),
+  body('phone')
+    .optional({ values: 'falsy' })
+    .customSanitizer(normalizePhoneValue)
+    .custom((value) => validatePhoneValue(value)),
+  body('enrollmentNo').optional({ values: 'falsy' }).trim(),
+  body('employeeId')
+    .optional({ values: 'falsy' })
+    .trim()
+    .customSanitizer((value) => String(value || '').trim().toUpperCase())
+];
+
+const sendPhoneOtpValidation = [
+  body('phone')
+    .customSanitizer(normalizePhoneValue)
+    .custom((value) => validatePhoneValue(value)),
+  body('role')
+    .optional({ values: 'falsy' })
+    .trim()
+    .customSanitizer(normalizeRole)
+    .custom((value, { req }) => {
+      if (!String(req.body.role || '').trim()) {
+        return true;
+      }
+
+      if (!value) {
+        throw new Error(`Role must be one of: ${PUBLIC_REGISTRATION_ROLES.join(', ')}`);
+      }
+
+      return true;
+    }),
+  body('email').optional({ values: 'falsy' }).trim().isEmail().withMessage('Valid email is required').normalizeEmail(),
+  body('enrollmentNo').optional({ values: 'falsy' }).trim(),
+  body('employeeId')
+    .optional({ values: 'falsy' })
+    .trim()
+    .customSanitizer((value) => String(value || '').trim().toUpperCase())
+];
+
+const verifyPhoneOtpValidation = [
+  body('phone')
+    .customSanitizer(normalizePhoneValue)
+    .custom((value) => validatePhoneValue(value)),
+  body('otp')
+    .trim()
+    .matches(/^\d{4,8}$/)
+    .withMessage('Please enter the OTP sent to your phone.')
 ];
 
 const webAuthnRegistrationOptionsValidation = [
@@ -180,8 +253,11 @@ module.exports = {
   changePasswordValidation,
   forgotPasswordValidation,
   loginValidation,
+  registrationAvailabilityValidation,
   registerValidation,
   resetPasswordValidation,
+  sendPhoneOtpValidation,
+  verifyPhoneOtpValidation,
   webAuthnAuthenticationOptionsValidation,
   webAuthnAuthenticationVerifyValidation,
   webAuthnRegistrationOptionsValidation,

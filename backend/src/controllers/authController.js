@@ -19,6 +19,33 @@ const register = asyncHandler(async (req, res) => {
   });
 });
 
+const checkRegistrationAvailability = asyncHandler(async (req, res) => {
+  const result = await authService.checkRegistrationAvailability(req.body);
+
+  return sendSuccess(res, {
+    message: 'Registration details are available.',
+    data: result
+  });
+});
+
+const sendRegistrationOtp = asyncHandler(async (req, res) => {
+  const result = await authService.sendRegistrationOtp(req.body, getRequestMeta(req));
+
+  return sendSuccess(res, {
+    message: result.message,
+    data: result
+  });
+});
+
+const verifyRegistrationOtp = asyncHandler(async (req, res) => {
+  const result = await authService.verifyRegistrationOtp(req.body, getRequestMeta(req));
+
+  return sendSuccess(res, {
+    message: result.message,
+    data: result
+  });
+});
+
 const login = asyncHandler(async (req, res) => {
   const result = await authService.loginUser(req.body, req, getRequestMeta(req));
   setAuthCookie(res, result.token);
@@ -72,9 +99,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
 
   return sendSuccess(res, {
     message: result.message,
-    data: {
-      resetToken: result.resetToken
-    }
+    data: null
   });
 });
 
@@ -168,6 +193,7 @@ const removeWebAuthnDevice = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
+  checkRegistrationAvailability,
   changePassword,
   forgotPassword,
   getMe,
@@ -179,7 +205,9 @@ module.exports = {
   removeWebAuthnDevice,
   register,
   resetPassword,
+  sendRegistrationOtp,
   verify,
+  verifyRegistrationOtp,
   verifyWebAuthnAuthentication,
   verifyWebAuthnRegistration
 };

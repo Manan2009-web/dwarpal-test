@@ -58,6 +58,7 @@ import {
 } from './components/ui'
 import {
   ApiError,
+  checkRegistrationAvailability,
   clearBiometricDeviceId,
   clearStoredAuthToken,
   createBiometricAuthenticationOptions,
@@ -66,17 +67,23 @@ import {
   getBiometricDevices,
   getApiErrorDetails,
   hasStoredAuthToken,
+  isValidPhoneNumberInput,
   loginUser,
   logoutUser,
+  normalizePhoneNumberInput,
+  requestPasswordReset,
   readBiometricDeviceId,
   registerUser,
   removeBiometricDevice,
+  resetPassword as resetPasswordWithApi,
+  sendRegistrationOtp,
   submitRequest,
   updateRequestStatus,
   verifyBiometricAuthentication,
   verifyBiometricRegistration,
   verifyGatepassQr,
   verifyGatepassById,
+  verifyRegistrationOtp,
   verifySession,
 } from './lib/dwarpalApi'
 import {
@@ -85,6 +92,13 @@ import {
   detectBiometricSupport,
   getBiometricErrorMessage,
 } from './lib/biometricAuth'
+import {
+  createFirebaseUser,
+  getFirebaseAuthErrorMessage,
+  rollbackFirebaseUser,
+  signInFirebaseUser,
+  signOutFirebaseUser,
+} from './firebase'
 import {
   getResolvedNotificationPermissionState,
   isBrowserNotificationSupported,
@@ -101,10 +115,37 @@ import {
 
 const DASHBOARD_REFRESH_MS = 10000
 const REFRESH_ERROR_TOAST_COOLDOWN_MS = 30000
+const AUTH_BOOTSTRAP_TIMEOUT_MS = 5000
 const VEHICLE_NUMBER_PATTERN = /^[A-Za-z0-9 -]+$/
 const REQUIRED_FIELD_MESSAGE = 'Please fill this field'
 const REASON_MIN_LENGTH = 5
 const REASON_MAX_LENGTH = 500
+
+function logBootstrapDebug(event, details) {
+  if (!import.meta.env.DEV) {
+    return
+  }
+
+  if (details === undefined) {
+    console.info(`[DwarPal bootstrap] ${event}`)
+    return
+  }
+
+  console.info(`[DwarPal bootstrap] ${event}`, details)
+}
+
+function useRouteGuardDebug(label, authReady, currentUser) {
+  const location = useLocation()
+
+  useEffect(() => {
+    logBootstrapDebug(`route guard: ${label}`, {
+      path: location.pathname,
+      authReady,
+      currentUserId: currentUser?.id || null,
+      currentUserRole: currentUser?.role || null,
+    })
+  }, [authReady, currentUser?.id, currentUser?.role, label, location.pathname])
+}
 const APP_PAGES = new Set(['dashboard', 'notifications', 'profile'])
 
 function getRequestLabel(request) {
@@ -267,6 +308,7 @@ function mapRegisterFieldErrors(fieldErrors = {}, role = '') {
     department: fieldErrors.department || '',
     enrollment: fieldErrors.enrollment || fieldErrors.enrollmentNo || fieldErrors.employeeId || '',
     phone: fieldErrors.phone || '',
+    otp: fieldErrors.otp || fieldErrors.phoneVerificationToken || '',
     role: fieldErrors.role || '',
     semester: fieldErrors.semester || '',
     password: fieldErrors.password || '',
@@ -291,6 +333,32 @@ function mapRegisterFieldErrors(fieldErrors = {}, role = '') {
 
     return errors
   }, {})
+}
+
+function getSecondsUntil(value) {
+  if (!value) {
+    return 0
+  }
+
+  const timestamp = new Date(value).getTime()
+
+  if (Number.isNaN(timestamp)) {
+    return 0
+  }
+
+  return Math.max(0, Math.ceil((timestamp - Date.now()) / 1000))
+}
+
+function formatCountdown(seconds) {
+  const safeSeconds = Math.max(0, Number(seconds) || 0)
+  const minutes = Math.floor(safeSeconds / 60)
+  const remainingSeconds = safeSeconds % 60
+
+  return `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`
+}
+
+function isLikelyEmailAddress(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim())
 }
 
 function FieldLabel({ children, required = false }) {
@@ -502,6 +570,14 @@ function App() {
         }
 
         if (error.status >= 500) {
+          if (
+            errorDetails.message &&
+            errorDetails.message !== fallbackMessage &&
+            errorDetails.message !== 'Request failed.'
+          ) {
+            return errorDetails
+          }
+
           return {
             ...errorDetails,
             fieldErrors: {},
@@ -586,7 +662,16 @@ function App() {
     const controller = new AbortController()
 
     async function restoreSession() {
-      if (!hasStoredAuthToken()) {
+      const hasStoredSession = hasStoredAuthToken()
+      let restoredUser = null
+
+      logBootstrapDebug('auth restore started', {
+        hasStoredSession,
+        timeoutMs: AUTH_BOOTSTRAP_TIMEOUT_MS,
+      })
+
+      if (!hasStoredSession) {
+        logBootstrapDebug('auth restore skipped', { reason: 'no stored session token' })
         if (!ignore) {
           setAuthReady(true)
         }
@@ -594,17 +679,45 @@ function App() {
       }
 
       try {
-        const restoredUser = await verifySession(controller.signal)
+        restoredUser = await verifySession({
+          signal: controller.signal,
+          timeoutMs: AUTH_BOOTSTRAP_TIMEOUT_MS,
+        })
 
-        if (!ignore && restoredUser) {
+        if (controller.signal.aborted || ignore) {
+          return
+        }
+
+        if (restoredUser) {
+          logBootstrapDebug('auth restore succeeded', {
+            userId: restoredUser.id,
+            role: restoredUser.role,
+          })
           setCurrentUser(restoredUser)
+          return
         }
+
+        logBootstrapDebug('auth restore completed without an active session')
       } catch (error) {
-        if (!ignore && error instanceof ApiError && error.status === 401) {
-          clearSession()
+        if (controller.signal.aborted || error?.name === 'AbortError') {
+          logBootstrapDebug('auth restore aborted')
+          return
         }
+
+        const errorDetails = resolveApiError(error, {
+          fallbackMessage: 'Unable to restore your DwarPal session right now.',
+        })
+
+        console.error('DwarPal auth bootstrap failed', error)
+        logBootstrapDebug('auth restore failed', {
+          status: errorDetails.status,
+          message: errorDetails.message,
+        })
       } finally {
         if (!ignore) {
+          logBootstrapDebug('auth bootstrap resolved', {
+            restoredUserId: restoredUser?.id || null,
+          })
           setAuthReady(true)
         }
       }
@@ -616,7 +729,7 @@ function App() {
       ignore = true
       controller.abort()
     }
-  }, [clearSession])
+  }, [resolveApiError])
 
   useEffect(() => {
     if (!currentUser?.role) {
@@ -632,8 +745,29 @@ function App() {
   }, [currentUser?.id, currentUser?.role, refreshAppData, resetWorkspace])
 
   async function login(identifier, password) {
+    const normalizedEmail = String(identifier || '').trim().toLowerCase()
+
     try {
-      const user = await loginUser(identifier, password)
+      await signInFirebaseUser(normalizedEmail, password)
+    } catch (error) {
+      const message = getFirebaseAuthErrorMessage(
+        error,
+        'Unable to sign in with Firebase. Please try again.',
+      )
+
+      toast.error({
+        title: 'Login failed',
+        message,
+      })
+
+      return {
+        ok: false,
+        error: message,
+      }
+    }
+
+    try {
+      const user = await loginUser(normalizedEmail, password)
       setCurrentUser(user)
       toast.success({
         title: 'Login successful',
@@ -641,8 +775,16 @@ function App() {
       })
       return { ok: true, user }
     } catch (error) {
+      console.error('DwarPal backend login failed after Firebase sign-in', error)
+
+      try {
+        await signOutFirebaseUser()
+      } catch {
+        // Ignore Firebase sign-out cleanup issues and surface the backend error instead.
+      }
+
       const { message } = resolveApiError(error, {
-        fallbackMessage: 'Unable to sign in. Please try again.',
+        fallbackMessage: 'Unable to complete DwarPal sign-in. Please try again.',
         authMode: 'login',
       })
       toast.error({
@@ -696,6 +838,7 @@ function App() {
     const normalizedRole = normalizeRole(payload.role)
     const normalizedProgram = normalizeProgram(payload.program)
     const normalizedDepartment = normalizeDepartment(payload.department)
+    const normalizedPhone = normalizePhoneNumberInput(payload.phone)
     const semester = Number(payload.semester)
     const requiresDepartment = normalizedRole !== 'security'
     const requiresProgram = roleUsesProgramRouting(normalizedRole)
@@ -726,23 +869,156 @@ function App() {
       return { ok: false, error: 'Please select a semester for student accounts.' }
     }
 
-    try {
-      const result = await registerUser({
-        ...payload,
-        role: normalizedRole,
-        program: requiresProgram ? normalizedProgram : '',
-        department: requiresDepartment ? normalizedDepartment : '',
-      })
-      const successMessage = 'Account created successfully'
-
-      toast.success({
-        title: successMessage,
-        message: 'Redirecting you to the login page.',
-      })
-
+    if (!payload.phoneVerificationToken || !normalizedPhone) {
       return {
-        ok: true,
-        message: successMessage,
+        ok: false,
+        error: 'Please verify your phone number before creating your account.',
+        fieldErrors: {
+          phone: 'Please verify your phone number before creating your account.',
+        },
+      }
+    }
+
+    const normalizedEmail = String(payload.email || '').trim().toLowerCase()
+    let firebaseCredential = null
+
+    try {
+      try {
+        await checkRegistrationAvailability({
+          ...payload,
+          email: normalizedEmail,
+          role: normalizedRole,
+          program: requiresProgram ? normalizedProgram : '',
+          department: requiresDepartment ? normalizedDepartment : '',
+          phone: normalizedPhone,
+        })
+      } catch (error) {
+        const { message, fieldErrors } = resolveApiError(error, {
+          fallbackMessage: 'Please review your registration details and try again.',
+        })
+
+        return {
+          ok: false,
+          error: message,
+          fieldErrors,
+        }
+      }
+
+      try {
+        firebaseCredential = await createFirebaseUser(normalizedEmail, payload.password)
+      } catch (firebaseError) {
+        const message = getFirebaseAuthErrorMessage(
+          firebaseError,
+          'Unable to create your Firebase account right now.',
+        )
+
+        toast.error({
+          title: 'Registration failed',
+          message,
+        })
+
+        return {
+          ok: false,
+          error: message,
+        }
+      }
+
+      let registrationResult = null
+
+      try {
+        registrationResult = await registerUser({
+          ...payload,
+          email: normalizedEmail,
+          firebaseUid: firebaseCredential.user.uid,
+          role: normalizedRole,
+          program: requiresProgram ? normalizedProgram : '',
+          department: requiresDepartment ? normalizedDepartment : '',
+          phone: normalizedPhone,
+        })
+      } catch (error) {
+        console.error('DwarPal backend registration failed after Firebase account creation', error)
+
+        try {
+          const recoveredUser = await loginUser(normalizedEmail, payload.password)
+          setCurrentUser(recoveredUser)
+
+          toast.warning({
+            title: 'Registration recovered',
+            message: 'Your account appears to have been created successfully, and DwarPal restored your session automatically.',
+          })
+
+          return {
+            ok: true,
+            user: recoveredUser,
+            message: 'Account created successfully',
+          }
+        } catch (recoveryError) {
+          console.error('Automatic recovery login failed after backend registration error', recoveryError)
+        }
+
+        const rollbackResult = await rollbackFirebaseUser(firebaseCredential.user)
+        const { message, fieldErrors } = resolveApiError(error, {
+          fallbackMessage: 'Unable to create your account right now.',
+        })
+        const resolvedMessage = rollbackResult.ok
+          ? message
+          : `${message} The Firebase account could not be rolled back automatically. Please try signing in or contact support.`
+
+        if (!rollbackResult.ok) {
+          console.error('Firebase rollback failed after backend registration error', rollbackResult.error)
+        }
+
+        toast.error({
+          title: 'Registration failed',
+          message: resolvedMessage,
+        })
+
+        return {
+          ok: false,
+          error: resolvedMessage,
+          fieldErrors,
+        }
+      }
+
+      try {
+        const user = await loginUser(normalizedEmail, payload.password)
+        setCurrentUser(user)
+
+        const successMessage = registrationResult?.message || 'Account created successfully'
+
+        toast.success({
+          title: successMessage,
+          message: `Welcome to DwarPal, ${user.name}.`,
+        })
+
+        return {
+          ok: true,
+          user,
+          message: successMessage,
+        }
+      } catch (error) {
+        console.error('Automatic DwarPal login failed after successful registration', error)
+
+        try {
+          await signOutFirebaseUser()
+        } catch {
+          // Ignore Firebase sign-out cleanup issues and surface the backend error instead.
+        }
+
+        const { message } = resolveApiError(error, {
+          fallbackMessage: 'Unable to complete sign-in after registration.',
+        })
+        const resolvedMessage = `Account created successfully, but sign-in could not be completed. ${message}`
+
+        toast.warning({
+          title: 'Registration completed',
+          message: resolvedMessage,
+        })
+
+        return {
+          ok: false,
+          error: resolvedMessage,
+        }
       }
     } catch (error) {
       const { message, fieldErrors } = resolveApiError(error, {
@@ -757,6 +1033,107 @@ function App() {
         ok: false,
         error: message,
         fieldErrors,
+      }
+    }
+  }
+
+  async function sendRegisterOtp(payload) {
+    try {
+      const result = await sendRegistrationOtp(payload)
+      return {
+        ok: true,
+        ...result,
+      }
+    } catch (error) {
+      const errorDetails = resolveApiError(error, {
+        fallbackMessage: 'Unable to send OTP right now. Please try again.',
+      })
+
+      return {
+        ok: false,
+        error: errorDetails.message,
+        fieldErrors: errorDetails.fieldErrors,
+        retryAfterSeconds: Number(errorDetails.payload?.retryAfterSeconds) || 0,
+      }
+    }
+  }
+
+  async function verifyRegisterOtp(payload) {
+    try {
+      const result = await verifyRegistrationOtp(payload)
+      return {
+        ok: true,
+        ...result,
+      }
+    } catch (error) {
+      const errorDetails = resolveApiError(error, {
+        fallbackMessage: 'Unable to verify OTP right now. Please try again.',
+      })
+
+      return {
+        ok: false,
+        error: errorDetails.message,
+        fieldErrors: errorDetails.fieldErrors,
+      }
+    }
+  }
+
+  async function forgotPassword(email) {
+    try {
+      const result = await requestPasswordReset(email)
+      toast.success({
+        title: 'Reset email sent',
+        message: result.message,
+      })
+
+      return {
+        ok: true,
+        message: result.message,
+      }
+    } catch (error) {
+      const errorDetails = resolveApiError(error, {
+        fallbackMessage: 'Unable to send the password reset email right now.',
+      })
+
+      toast.error({
+        title: 'Password reset failed',
+        message: errorDetails.message,
+      })
+
+      return {
+        ok: false,
+        error: errorDetails.message,
+        fieldErrors: errorDetails.fieldErrors,
+      }
+    }
+  }
+
+  async function completePasswordReset(token, newPassword) {
+    try {
+      const result = await resetPasswordWithApi(token, newPassword)
+      toast.success({
+        title: 'Password updated',
+        message: result.message,
+      })
+
+      return {
+        ok: true,
+        message: result.message,
+      }
+    } catch (error) {
+      const errorDetails = resolveApiError(error, {
+        fallbackMessage: 'Unable to reset your password right now.',
+      })
+
+      toast.error({
+        title: 'Password reset failed',
+        message: errorDetails.message,
+      })
+
+      return {
+        ok: false,
+        error: errorDetails.message,
+        fieldErrors: errorDetails.fieldErrors,
       }
     }
   }
@@ -866,7 +1243,11 @@ function App() {
           path="/login"
           element={
             <PublicAuthRoute currentUser={currentUser} authReady={authReady}>
-              <LoginScreen onBiometricLogin={loginWithBiometric} onLogin={login} />
+              <LoginScreen
+                onBiometricLogin={loginWithBiometric}
+                onForgotPassword={forgotPassword}
+                onLogin={login}
+              />
             </PublicAuthRoute>
           }
         />
@@ -874,10 +1255,15 @@ function App() {
           path="/register"
           element={
             <PublicAuthRoute currentUser={currentUser} authReady={authReady}>
-              <RegisterScreen onRegister={register} />
+              <RegisterScreen
+                onRegister={register}
+                onSendPhoneOtp={sendRegisterOtp}
+                onVerifyPhoneOtp={verifyRegisterOtp}
+              />
             </PublicAuthRoute>
           }
         />
+        <Route path="/reset-password" element={<ResetPasswordScreen onResetPassword={completePasswordReset} />} />
         <Route
           path="/app/:page"
           element={
@@ -919,6 +1305,8 @@ function App() {
 }
 
 function ProtectedRoute({ currentUser, authReady, children }) {
+  useRouteGuardDebug('protected', authReady, currentUser)
+
   // Protected route logic: every authenticated screen verifies auth on render and replaces history on failure.
   if (!authReady) return <AuthBootstrapScreen />
   if (!currentUser) return <Navigate to="/login" replace />
@@ -926,14 +1314,17 @@ function ProtectedRoute({ currentUser, authReady, children }) {
 }
 
 function PublicAuthRoute({ currentUser, authReady, children }) {
+  useRouteGuardDebug('public-auth', authReady, currentUser)
+
   // Login redirect protection: authenticated users are pushed away from public auth screens with replace
   // so the browser back button cannot reopen login/register as an active page.
-  if (!authReady) return <AuthBootstrapScreen />
   if (currentUser) return <Navigate to="/app/dashboard" replace />
   return children
 }
 
 function DefaultRoute({ currentUser, authReady }) {
+  useRouteGuardDebug('default', authReady, currentUser)
+
   if (!authReady) return <AuthBootstrapScreen />
   return <Navigate to={currentUser ? '/app/dashboard' : '/login'} replace />
 }
@@ -983,7 +1374,7 @@ function BiometricSymbolButton({ mode, active, loading, onClick }) {
   )
 }
 
-function LoginScreen({ onLogin, onBiometricLogin }) {
+function LoginScreen({ onLogin, onBiometricLogin, onForgotPassword }) {
   const navigate = useNavigate()
   const location = useLocation()
   const [form, setForm] = useState({ identifier: '', password: '' })
@@ -991,6 +1382,11 @@ function LoginScreen({ onLogin, onBiometricLogin }) {
   const [success, setSuccess] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false)
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('')
+  const [forgotPasswordFieldErrors, setForgotPasswordFieldErrors] = useState({})
+  const [forgotPasswordError, setForgotPasswordError] = useState('')
+  const [isForgotPasswordSubmitting, setIsForgotPasswordSubmitting] = useState(false)
   const submitLockRef = useRef(false)
   const [biometricSupport, setBiometricSupport] = useState({
     supported: false,
@@ -1037,6 +1433,68 @@ function LoginScreen({ onLogin, onBiometricLogin }) {
     setFieldErrors((prev) => clearFieldError(prev, field))
     setError('')
     setSuccess('')
+  }
+
+  function openForgotPasswordModal() {
+    setForgotPasswordEmail(String(form.identifier || '').trim())
+    setForgotPasswordFieldErrors({})
+    setForgotPasswordError('')
+    setForgotPasswordOpen(true)
+  }
+
+  function closeForgotPasswordModal() {
+    if (isForgotPasswordSubmitting) {
+      return
+    }
+
+    setForgotPasswordOpen(false)
+    setForgotPasswordFieldErrors({})
+    setForgotPasswordError('')
+  }
+
+  async function handleForgotPasswordSubmit(event) {
+    event.preventDefault()
+
+    const normalizedEmail = String(forgotPasswordEmail || '').trim().toLowerCase()
+    const nextFieldErrors = {}
+
+    if (!normalizedEmail) {
+      nextFieldErrors.email = 'Please enter your registered email address.'
+    } else if (!isLikelyEmailAddress(normalizedEmail)) {
+      nextFieldErrors.email = 'Please enter a valid email address.'
+    }
+
+    if (Object.keys(nextFieldErrors).length) {
+      setForgotPasswordFieldErrors(nextFieldErrors)
+      setForgotPasswordError('')
+      return
+    }
+
+    setIsForgotPasswordSubmitting(true)
+    setForgotPasswordFieldErrors({})
+    setForgotPasswordError('')
+
+    try {
+      const result = await onForgotPassword(normalizedEmail)
+
+      if (!result?.ok) {
+        if (result?.fieldErrors) {
+          setForgotPasswordFieldErrors((prev) => ({
+            ...prev,
+            email: result.fieldErrors.email || prev.email,
+          }))
+        }
+
+        setForgotPasswordError(result?.error || 'Unable to send the password reset email right now.')
+        return
+      }
+
+      setForgotPasswordOpen(false)
+      setSuccess(result?.message || 'We sent you a password reset email.')
+      setError('')
+    } finally {
+      setIsForgotPasswordSubmitting(false)
+    }
   }
 
   async function handleSubmit(event) {
@@ -1095,7 +1553,7 @@ function LoginScreen({ onLogin, onBiometricLogin }) {
     if (!form.identifier.trim()) {
       setFieldErrors((prev) => ({
         ...prev,
-        identifier: 'Enter your enrollment number, employee ID, or email before using biometric login.',
+        identifier: 'Enter your registered email address before using biometric login.',
       }))
       setError('')
       return
@@ -1130,12 +1588,12 @@ function LoginScreen({ onLogin, onBiometricLogin }) {
     <AuthShell title="Login">
       <form className="auth-form" onSubmit={handleSubmit} noValidate>
         <label>
-          <FieldLabel required>Enrollment / ID</FieldLabel>
+          <FieldLabel required>Email</FieldLabel>
           <input
             value={form.identifier}
             onChange={(event) => updateFormField('identifier', event.target.value)}
-            placeholder="Enter your enrollment number, employee ID, or email address"
-            autoComplete="username"
+            placeholder="Enter your registered email address"
+            autoComplete="email"
             className={fieldErrors.identifier ? 'field-invalid' : ''}
             aria-invalid={Boolean(fieldErrors.identifier)}
             disabled={isSubmitting}
@@ -1158,6 +1616,16 @@ function LoginScreen({ onLogin, onBiometricLogin }) {
           />
           {fieldErrors.password ? <p className="field-error">{fieldErrors.password}</p> : null}
         </label>
+        <div className="auth-inline-action-row">
+          <button
+            type="button"
+            className="auth-inline-link"
+            onClick={openForgotPasswordModal}
+            disabled={isSubmitting}
+          >
+            Forgot Password?
+          </button>
+        </div>
         {error ? <p className="form-error" aria-live="polite">{error}</p> : null}
         {success ? <p className="form-success" aria-live="polite">{success}</p> : null}
         {isSubmitting ? <p className="field-hint" aria-live="polite">Signing in...</p> : null}
@@ -1191,11 +1659,53 @@ function LoginScreen({ onLogin, onBiometricLogin }) {
           Register
         </Link>
       </p>
+      <ModalForm
+        open={forgotPasswordOpen}
+        title="Forgot Password?"
+        subtitle="Enter your registered email address to receive a reset link."
+        onClose={closeForgotPasswordModal}
+      >
+        <form className="modal-form" onSubmit={handleForgotPasswordSubmit} noValidate>
+          <label>
+            <FieldLabel required>Email</FieldLabel>
+            <input
+              type="email"
+              value={forgotPasswordEmail}
+              onChange={(event) => {
+                setForgotPasswordEmail(event.target.value)
+                setForgotPasswordFieldErrors((prev) => clearFieldError(prev, 'email'))
+                setForgotPasswordError('')
+              }}
+              placeholder="Enter your registered email address"
+              autoComplete="email"
+              className={forgotPasswordFieldErrors.email ? 'field-invalid' : ''}
+              aria-invalid={Boolean(forgotPasswordFieldErrors.email)}
+              disabled={isForgotPasswordSubmitting}
+              required
+            />
+            {forgotPasswordFieldErrors.email ? <p className="field-error">{forgotPasswordFieldErrors.email}</p> : null}
+          </label>
+          {forgotPasswordError ? <p className="form-error">{forgotPasswordError}</p> : null}
+          <div className="modal-actions">
+            <ActionButton
+              tone="secondary"
+              type="button"
+              onClick={closeForgotPasswordModal}
+              disabled={isForgotPasswordSubmitting}
+            >
+              Cancel
+            </ActionButton>
+            <ActionButton type="submit" icon={Send} disabled={isForgotPasswordSubmitting}>
+              {isForgotPasswordSubmitting ? 'Sending...' : 'Send Reset Link'}
+            </ActionButton>
+          </div>
+        </form>
+      </ModalForm>
     </AuthShell>
   )
 }
 
-function RegisterScreen({ onRegister }) {
+function RegisterScreen({ onRegister, onSendPhoneOtp, onVerifyPhoneOtp }) {
   const navigate = useNavigate()
   const [form, setForm] = useState({
     name: '',
@@ -1211,6 +1721,15 @@ function RegisterScreen({ onRegister }) {
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [otpCode, setOtpCode] = useState('')
+  const [otpSentPhone, setOtpSentPhone] = useState('')
+  const [verifiedPhone, setVerifiedPhone] = useState('')
+  const [phoneVerificationToken, setPhoneVerificationToken] = useState('')
+  const [otpError, setOtpError] = useState('')
+  const [otpSuccess, setOtpSuccess] = useState('')
+  const [otpResendCountdown, setOtpResendCountdown] = useState(0)
+  const [isSendingOtp, setIsSendingOtp] = useState(false)
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false)
   const submitLockRef = useRef(false)
   const hasSelectedRole = Boolean(form.role)
   const isStudentRole = form.role === 'student'
@@ -1226,8 +1745,53 @@ function RegisterScreen({ onRegister }) {
     : hasSelectedRole
       ? 'Enter your employee ID'
       : 'Select a role to continue'
+  const normalizedPhone = normalizePhoneNumberInput(form.phone)
+  const phoneCanRequestOtp = isValidPhoneNumberInput(form.phone)
+  const phoneIsVerified = Boolean(phoneVerificationToken) && Boolean(normalizedPhone) && normalizedPhone === verifiedPhone
+  const showOtpPanel = Boolean(otpSentPhone) && normalizedPhone === otpSentPhone && !phoneIsVerified
+
+  useEffect(() => {
+    if (otpResendCountdown <= 0) {
+      return undefined
+    }
+
+    const timerId = window.setInterval(() => {
+      setOtpResendCountdown((previousCount) => (previousCount <= 1 ? 0 : previousCount - 1))
+    }, 1000)
+
+    return () => window.clearInterval(timerId)
+  }, [otpResendCountdown])
+
+  function resetPhoneVerificationState() {
+    setOtpCode('')
+    setOtpSentPhone('')
+    setVerifiedPhone('')
+    setPhoneVerificationToken('')
+    setOtpError('')
+    setOtpSuccess('')
+    setOtpResendCountdown(0)
+    setIsSendingOtp(false)
+    setIsVerifyingOtp(false)
+    setFieldErrors((prev) => {
+      const nextErrors = { ...prev }
+      delete nextErrors.otp
+      return nextErrors
+    })
+  }
 
   function updateFormField(field, value) {
+    if (field === 'phone') {
+      const nextNormalizedPhone = normalizePhoneNumberInput(value)
+
+      if (
+        !nextNormalizedPhone ||
+        (otpSentPhone && nextNormalizedPhone !== otpSentPhone) ||
+        (verifiedPhone && nextNormalizedPhone !== verifiedPhone)
+      ) {
+        resetPhoneVerificationState()
+      }
+    }
+
     setForm((prev) => ({ ...prev, [field]: value }))
     setFieldErrors((prev) => clearFieldError(prev, field))
     setError('')
@@ -1273,6 +1837,115 @@ function RegisterScreen({ onRegister }) {
     setError('')
   }
 
+  async function handleSendOtp() {
+    if (isSubmitting || isSendingOtp || isVerifyingOtp) {
+      return
+    }
+
+    if (!phoneCanRequestOtp || !normalizedPhone) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        phone: 'Please enter a valid phone number.',
+      }))
+      setOtpError('')
+      return
+    }
+
+    setIsSendingOtp(true)
+    setOtpError('')
+    setOtpSuccess('')
+    setFieldErrors((prev) => {
+      const nextErrors = { ...prev }
+      delete nextErrors.phone
+      delete nextErrors.otp
+      return nextErrors
+    })
+
+    try {
+      const result = await onSendPhoneOtp({
+        ...form,
+        phone: normalizedPhone,
+      })
+
+      if (!result?.ok) {
+        if (result?.fieldErrors) {
+          setFieldErrors((prev) => ({
+            ...prev,
+            ...mapRegisterFieldErrors(result.fieldErrors, form.role),
+          }))
+        }
+
+        if (result?.retryAfterSeconds) {
+          setOtpResendCountdown(result.retryAfterSeconds)
+        }
+
+        setOtpError(result?.error || 'Unable to send OTP right now. Please try again.')
+        return
+      }
+
+      setOtpSentPhone(result.phone || normalizedPhone)
+      setVerifiedPhone('')
+      setPhoneVerificationToken('')
+      setOtpCode('')
+      setOtpError('')
+      setOtpSuccess(result?.message || 'OTP sent successfully.')
+      setOtpResendCountdown(
+        result?.retryAfterSeconds || getSecondsUntil(result?.resendAvailableAt) || 60,
+      )
+    } finally {
+      setIsSendingOtp(false)
+    }
+  }
+
+  async function handleVerifyOtp() {
+    if (isSubmitting || isSendingOtp || isVerifyingOtp) {
+      return
+    }
+
+    const normalizedOtp = String(otpCode || '').trim()
+
+    if (!normalizedOtp) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        otp: 'Please enter the OTP sent to your phone.',
+      }))
+      setOtpError('')
+      return
+    }
+
+    setIsVerifyingOtp(true)
+    setOtpError('')
+    setFieldErrors((prev) => clearFieldError(prev, 'otp'))
+
+    try {
+      const result = await onVerifyPhoneOtp({
+        phone: normalizedPhone,
+        otp: normalizedOtp,
+      })
+
+      if (!result?.ok) {
+        if (result?.fieldErrors) {
+          setFieldErrors((prev) => ({
+            ...prev,
+            ...mapRegisterFieldErrors(result.fieldErrors, form.role),
+          }))
+        }
+
+        setOtpError(result?.error || 'Unable to verify OTP right now. Please try again.')
+        return
+      }
+
+      setVerifiedPhone(result.phone || normalizedPhone)
+      setPhoneVerificationToken(result.phoneVerificationToken || '')
+      setOtpError('')
+      setOtpSuccess(result?.message || 'Phone number verified successfully.')
+      setOtpSentPhone(result.phone || normalizedPhone)
+      setFieldErrors((prev) => clearFieldError(prev, 'otp'))
+    } finally {
+      setIsVerifyingOtp(false)
+    }
+  }
+
   async function handleSubmit(event) {
     event.preventDefault()
 
@@ -1298,12 +1971,26 @@ function RegisterScreen({ onRegister }) {
       return
     }
 
+    if (!phoneIsVerified) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        phone: 'Please verify your phone number before creating your account.',
+      }))
+      setOtpError('Please verify your phone number before creating your account.')
+      setError('')
+      return
+    }
+
     setError('')
     submitLockRef.current = true
     setIsSubmitting(true)
 
     try {
-      const result = await onRegister(form)
+      const result = await onRegister({
+        ...form,
+        phone: normalizedPhone,
+        phoneVerificationToken,
+      })
       if (!result?.ok) {
         if (result?.fieldErrors) {
           setFieldErrors((prev) => ({
@@ -1316,12 +2003,7 @@ function RegisterScreen({ onRegister }) {
         return
       }
 
-      navigate('/login', {
-        replace: true,
-        state: {
-          authNotice: result?.message || 'Account created successfully',
-        },
-      })
+      navigate('/app/dashboard', { replace: true })
     } catch {
       setError('Unable to create your account right now. Please try again.')
     } finally {
@@ -1436,18 +2118,76 @@ function RegisterScreen({ onRegister }) {
         ) : null}
         <label>
           <FieldLabel required>Phone Number</FieldLabel>
-          <input
-            type="tel"
-            value={form.phone}
-            onChange={(event) => updateFormField('phone', event.target.value)}
-            placeholder="Enter your phone number"
-            autoComplete="tel"
-            className={fieldErrors.phone ? 'field-invalid' : ''}
-            aria-invalid={Boolean(fieldErrors.phone)}
-            disabled={isSubmitting}
-            required
-          />
+          <div className="inline-input-row">
+            <input
+              type="tel"
+              value={form.phone}
+              onChange={(event) => updateFormField('phone', event.target.value)}
+              placeholder="Enter your phone number"
+              autoComplete="tel"
+              className={fieldErrors.phone ? 'field-invalid' : ''}
+              aria-invalid={Boolean(fieldErrors.phone)}
+              disabled={isSubmitting}
+              required
+            />
+            {phoneIsVerified ? (
+              <strong className="field-inline-badge">Verified</strong>
+            ) : phoneCanRequestOtp ? (
+              <button
+                type="button"
+                className="field-inline-button"
+                onClick={handleSendOtp}
+                disabled={isSubmitting || isSendingOtp || isVerifyingOtp || otpResendCountdown > 0}
+              >
+                {isSendingOtp ? 'Sending...' : otpSentPhone && normalizedPhone === otpSentPhone ? 'Resend OTP' : 'Send OTP'}
+              </button>
+            ) : null}
+          </div>
           {fieldErrors.phone ? <p className="field-error">{fieldErrors.phone}</p> : null}
+          {showOtpPanel ? (
+            <div className="otp-panel">
+              <div className="otp-panel-row">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={otpCode}
+                  onChange={(event) => {
+                    setOtpCode(event.target.value.replace(/\D/g, '').slice(0, 8))
+                    setFieldErrors((prev) => clearFieldError(prev, 'otp'))
+                    setOtpError('')
+                  }}
+                  placeholder="Enter OTP"
+                  className={fieldErrors.otp ? 'field-invalid' : ''}
+                  aria-invalid={Boolean(fieldErrors.otp)}
+                  disabled={isSubmitting || isVerifyingOtp}
+                />
+                <button
+                  type="button"
+                  className="field-inline-button"
+                  onClick={handleVerifyOtp}
+                  disabled={isSubmitting || isSendingOtp || isVerifyingOtp}
+                >
+                  {isVerifyingOtp ? 'Verifying...' : 'Verify OTP'}
+                </button>
+              </div>
+              <div className="otp-actions">
+                <button
+                  type="button"
+                  className="auth-inline-link"
+                  onClick={handleSendOtp}
+                  disabled={isSubmitting || isSendingOtp || otpResendCountdown > 0}
+                >
+                  {otpResendCountdown > 0 ? `Resend OTP in ${formatCountdown(otpResendCountdown)}` : 'Resend OTP'}
+                </button>
+                <span className="field-hint">Use the code sent to {normalizedPhone || form.phone}.</span>
+              </div>
+              {fieldErrors.otp ? <p className="field-error">{fieldErrors.otp}</p> : null}
+              {otpError ? <p className="form-error">{otpError}</p> : null}
+              {otpSuccess ? <p className="form-success">{otpSuccess}</p> : null}
+            </div>
+          ) : null}
+          {phoneIsVerified && otpSuccess ? <p className="form-success">{otpSuccess}</p> : null}
         </label>
         <label>
           <FieldLabel required>{roleIdLabel}</FieldLabel>
@@ -1513,6 +2253,133 @@ function RegisterScreen({ onRegister }) {
       </form>
       <p className="auth-nav">
         Already have an account?{' '}
+        <Link to="/login" replace className="auth-link">
+          Login
+        </Link>
+      </p>
+    </AuthShell>
+  )
+}
+
+function ResetPasswordScreen({ onResetPassword }) {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
+  const resetToken = searchParams.get('token')?.trim() || ''
+  const resetEmail = searchParams.get('email')?.trim() || ''
+  const [form, setForm] = useState({
+    password: '',
+    confirmPassword: '',
+  })
+  const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  function updateField(field, value) {
+    setForm((prev) => ({ ...prev, [field]: value }))
+    setFieldErrors((prev) => clearFieldError(prev, field))
+    setError('')
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+
+    const nextFieldErrors = getRequiredFieldErrors({
+      password: form.password,
+      confirmPassword: form.confirmPassword,
+    })
+
+    if (!resetToken) {
+      setError('Reset link is invalid or incomplete.')
+      return
+    }
+
+    if (form.password !== form.confirmPassword) {
+      nextFieldErrors.confirmPassword = 'Passwords do not match.'
+    }
+
+    if (Object.keys(nextFieldErrors).length) {
+      setFieldErrors(nextFieldErrors)
+      setError('')
+      return
+    }
+
+    setIsSubmitting(true)
+
+    try {
+      const result = await onResetPassword(resetToken, form.password)
+
+      if (!result?.ok) {
+        if (result?.fieldErrors) {
+          setFieldErrors((prev) => ({
+            ...prev,
+            password: result.fieldErrors.newPassword || prev.password,
+          }))
+
+          if (result.fieldErrors.token) {
+            setError(result.fieldErrors.token)
+          }
+        }
+
+        if (!result?.fieldErrors?.token) {
+          setError(result?.error || 'Unable to reset your password right now.')
+        }
+
+        return
+      }
+
+      navigate('/login', {
+        replace: true,
+        state: {
+          authNotice: result?.message || 'Password reset successful. You can sign in with your new password.',
+        },
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <AuthShell title="Reset Password">
+      <form className="auth-form" onSubmit={handleSubmit} noValidate>
+        {resetEmail ? <p className="field-hint">Resetting password for {resetEmail}.</p> : null}
+        <label>
+          <FieldLabel required>New Password</FieldLabel>
+          <input
+            type="password"
+            value={form.password}
+            onChange={(event) => updateField('password', event.target.value)}
+            placeholder="Enter your new password"
+            autoComplete="new-password"
+            className={fieldErrors.password ? 'field-invalid' : ''}
+            aria-invalid={Boolean(fieldErrors.password)}
+            disabled={isSubmitting}
+            required
+          />
+          {fieldErrors.password ? <p className="field-error">{fieldErrors.password}</p> : null}
+        </label>
+        <label>
+          <FieldLabel required>Confirm Password</FieldLabel>
+          <input
+            type="password"
+            value={form.confirmPassword}
+            onChange={(event) => updateField('confirmPassword', event.target.value)}
+            placeholder="Confirm your new password"
+            autoComplete="new-password"
+            className={fieldErrors.confirmPassword ? 'field-invalid' : ''}
+            aria-invalid={Boolean(fieldErrors.confirmPassword)}
+            disabled={isSubmitting}
+            required
+          />
+          {fieldErrors.confirmPassword ? <p className="field-error">{fieldErrors.confirmPassword}</p> : null}
+        </label>
+        {error ? <p className="form-error">{error}</p> : null}
+        <ActionButton icon={ShieldCheck} type="submit" disabled={isSubmitting || !resetToken}>
+          {isSubmitting ? 'Updating password...' : 'Update Password'}
+        </ActionButton>
+      </form>
+      <p className="auth-nav">
+        Back to{' '}
         <Link to="/login" replace className="auth-link">
           Login
         </Link>

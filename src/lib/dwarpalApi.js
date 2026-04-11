@@ -23,11 +23,13 @@ const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL || ge
 
 export const AUTH_TOKEN_KEY = 'dwarpal-auth-token'
 export const BIOMETRIC_DEVICE_KEY = 'dwarpal-biometric-device-id'
+const DEFAULT_PHONE_COUNTRY_CODE = '+91'
 
 const APPROVED_GATEPASS_STATUSES = new Set(['approved_final', 'approved_by_hod', 'approved_by_cao'])
 const REJECTED_GATEPASS_STATUSES = new Set(['rejected_by_principal', 'rejected_by_hod', 'rejected_by_cao'])
 const PENDING_GATEPASS_STATUSES = new Set(['pending_principal', 'forwarded_to_hod', 'pending_cao'])
 const GENERIC_API_MESSAGES = new Set(['Validation error', 'Please review the highlighted fields.', 'Request failed.'])
+const DEFAULT_AUTH_SESSION_TIMEOUT_MS = 5000
 
 class ApiError extends Error {
   constructor(message, status = 500, payload = null) {
@@ -35,6 +37,64 @@ class ApiError extends Error {
     this.name = 'ApiError'
     this.status = status
     this.payload = payload
+  }
+}
+
+function createRequestSignal(signal, timeoutMs) {
+  const hasTimeout = Number.isFinite(timeoutMs) && timeoutMs > 0
+
+  if (!signal && !hasTimeout) {
+    return {
+      signal: undefined,
+      cleanup() {},
+      didTimeout() {
+        return false
+      },
+    }
+  }
+
+  const controller = new AbortController()
+  let timeoutId = null
+  let timedOut = false
+
+  const abortFromSignal = () => {
+    if (!controller.signal.aborted) {
+      controller.abort(signal?.reason)
+    }
+  }
+
+  if (signal) {
+    if (signal.aborted) {
+      abortFromSignal()
+    } else {
+      signal.addEventListener('abort', abortFromSignal, { once: true })
+    }
+  }
+
+  if (hasTimeout) {
+    timeoutId = setTimeout(() => {
+      timedOut = true
+
+      if (!controller.signal.aborted) {
+        controller.abort(new DOMException('The request timed out.', 'TimeoutError'))
+      }
+    }, timeoutMs)
+  }
+
+  return {
+    signal: controller.signal,
+    cleanup() {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+
+      if (signal) {
+        signal.removeEventListener('abort', abortFromSignal)
+      }
+    },
+    didTimeout() {
+      return timedOut
+    },
   }
 }
 
@@ -212,14 +272,81 @@ export function getApiErrorDetails(error, fallbackMessage = 'Request failed.') {
   }
 }
 
-export async function apiRequest(path, { method = 'GET', body, headers, signal } = {}) {
+export function normalizePhoneNumberInput(value, defaultCountryCode = DEFAULT_PHONE_COUNTRY_CODE) {
+  let sanitizedValue = String(value || '')
+    .trim()
+    .replace(/[\s().-]/g, '')
+
+  if (!sanitizedValue) {
+    return ''
+  }
+
+  if (sanitizedValue.startsWith('00')) {
+    sanitizedValue = `+${sanitizedValue.slice(2)}`
+  }
+
+  if (sanitizedValue.startsWith('+')) {
+    const normalizedInternational = `+${sanitizedValue.slice(1).replace(/\D/g, '')}`
+    return /^\+[1-9]\d{9,14}$/.test(normalizedInternational) ? normalizedInternational : ''
+  }
+
+  const digitsOnly = sanitizedValue.replace(/\D/g, '')
+  if (!digitsOnly) {
+    return ''
+  }
+
+  const normalizedValue =
+    digitsOnly.length === 10
+      ? `${String(defaultCountryCode || DEFAULT_PHONE_COUNTRY_CODE).trim()}${digitsOnly}`
+      : `+${digitsOnly}`
+
+  return /^\+[1-9]\d{9,14}$/.test(normalizedValue) ? normalizedValue : ''
+}
+
+export function isValidPhoneNumberInput(value, defaultCountryCode = DEFAULT_PHONE_COUNTRY_CODE) {
+  return Boolean(normalizePhoneNumberInput(value, defaultCountryCode))
+}
+
+function buildRegistrationIdentityPayload(payload = {}) {
+  const normalizedRole = normalizeRole(payload.role)
+  const isStudent = normalizedRole === 'student'
+  const requiresProgram = isStudent || normalizedRole === 'hod'
+  const cleanedId = String(payload.enrollment || payload.enrollmentNo || payload.employeeId || '')
+    .trim()
+
+  return {
+    fullName: String(payload.name || payload.fullName || '').trim(),
+    email: String(payload.email || '').trim().toLowerCase(),
+    phone: normalizePhoneNumberInput(payload.phone),
+    role: normalizedRole,
+    ...(requiresProgram ? { program: payload.program } : {}),
+    ...(normalizedRole && normalizedRole !== 'security' ? { department: payload.department } : {}),
+    ...(isStudent
+      ? {
+          semester: Number(payload.semester),
+          enrollmentNo: cleanedId,
+        }
+      : normalizedRole
+        ? {
+            employeeId: cleanedId.toUpperCase(),
+          }
+        : {}),
+    ...(payload.firebaseUid ? { firebaseUid: String(payload.firebaseUid).trim() } : {}),
+    ...(payload.phoneVerificationToken
+      ? { phoneVerificationToken: String(payload.phoneVerificationToken).trim() }
+      : {})
+  }
+}
+
+export async function apiRequest(path, { method = 'GET', body, headers, signal, timeoutMs } = {}) {
   const requestHeaders = buildHeaders(headers)
   const requestUrl = `${API_BASE_URL}${path}`
+  const requestController = createRequestSignal(signal, timeoutMs)
   const requestInit = {
     method,
     headers: requestHeaders,
     credentials: 'include',
-    signal,
+    signal: requestController.signal,
   }
 
   if (body !== undefined) {
@@ -236,11 +363,26 @@ export async function apiRequest(path, { method = 'GET', body, headers, signal }
   try {
     response = await fetch(requestUrl, requestInit)
   } catch (error) {
+    if (requestController.didTimeout()) {
+      const seconds = Math.ceil(timeoutMs / 1000)
+      throw new ApiError(
+        `The DwarPal backend did not respond within ${seconds} seconds.`,
+        408,
+        { code: 'REQUEST_TIMEOUT', requestUrl },
+      )
+    }
+
+    if (signal?.aborted || error?.name === 'AbortError') {
+      throw error
+    }
+
     if (import.meta.env.DEV) {
       console.error('DwarPal API network error', { requestUrl, method, error })
     }
 
     throw new ApiError(`Unable to reach the DwarPal backend at ${API_BASE_URL}. Please start the backend server and try again.`, 0, error)
+  } finally {
+    requestController.cleanup()
   }
 
   let payload = null
@@ -870,12 +1012,12 @@ export function toUiFacultyLeaveRequest(request) {
   }
 }
 
-export async function verifySession(signal) {
+export async function verifySession({ signal, timeoutMs = DEFAULT_AUTH_SESSION_TIMEOUT_MS } = {}) {
   if (!hasStoredAuthToken()) {
     return null
   }
 
-  const payload = await apiRequest('/auth/me', { signal })
+  const payload = await apiRequest('/auth/me', { signal, timeoutMs })
   return toUiUser(payload?.data?.user, payload?.data?.session)
 }
 
@@ -895,37 +1037,88 @@ export async function loginUser(identifier, password) {
   return toUiUser(payload?.data?.user, { authMethod: 'password' })
 }
 
-export async function registerUser(payload) {
-  const normalizedRole = normalizeRole(payload.role)
-  const isStudent = normalizedRole === 'student'
-  const requiresProgram = isStudent || normalizedRole === 'hod'
-  const cleanedId = String(payload.enrollment || '').trim()
-  const requestBody = {
-    fullName: payload.name.trim(),
-    email: payload.email.trim(),
-    department: payload.department,
-    ...(requiresProgram ? { program: payload.program } : {}),
-    role: normalizedRole,
-    phone: payload.phone.trim(),
-    password: payload.password,
-    ...(isStudent
-      ? {
-          semester: Number(payload.semester),
-          enrollmentNo: cleanedId,
-        }
-      : {
-          employeeId: cleanedId.toUpperCase(),
-        }),
-  }
+export async function checkRegistrationAvailability(payload) {
+  const response = await apiRequest('/auth/register/check-availability', {
+    method: 'POST',
+    body: buildRegistrationIdentityPayload(payload),
+  })
 
+  return {
+    available: Boolean(response?.data?.available),
+    phone: response?.data?.phone || null,
+  }
+}
+
+export async function sendRegistrationOtp(payload) {
+  const response = await apiRequest('/auth/phone-otp/send', {
+    method: 'POST',
+    body: buildRegistrationIdentityPayload(payload),
+  })
+
+  return {
+    message: response?.message || 'OTP sent successfully.',
+    phone: response?.data?.phone || normalizePhoneNumberInput(payload?.phone),
+    resendAvailableAt: response?.data?.resendAvailableAt || null,
+    expiresAt: response?.data?.expiresAt || null,
+  }
+}
+
+export async function verifyRegistrationOtp(payload) {
+  const response = await apiRequest('/auth/phone-otp/verify', {
+    method: 'POST',
+    body: {
+      phone: normalizePhoneNumberInput(payload?.phone),
+      otp: String(payload?.otp || '').trim(),
+    },
+  })
+
+  return {
+    message: response?.message || 'Phone number verified successfully.',
+    phone: response?.data?.phone || normalizePhoneNumberInput(payload?.phone),
+    phoneVerificationToken: response?.data?.phoneVerificationToken || '',
+    verifiedUntil: response?.data?.verifiedUntil || null,
+  }
+}
+
+export async function registerUser(payload) {
   const response = await apiRequest('/auth/register', {
     method: 'POST',
-    body: requestBody,
+    body: {
+      ...buildRegistrationIdentityPayload(payload),
+      password: payload.password,
+    },
   })
 
   return {
     message: response?.message || '',
     user: toUiUser(response?.data?.user),
+  }
+}
+
+export async function requestPasswordReset(email) {
+  const response = await apiRequest('/auth/forgot-password', {
+    method: 'POST',
+    body: {
+      email: String(email || '').trim().toLowerCase(),
+    },
+  })
+
+  return {
+    message: response?.message || 'We sent you a password reset email.',
+  }
+}
+
+export async function resetPassword(token, newPassword) {
+  const response = await apiRequest('/auth/reset-password', {
+    method: 'POST',
+    body: {
+      token: String(token || '').trim(),
+      newPassword,
+    },
+  })
+
+  return {
+    message: response?.message || 'Password reset successfully.',
   }
 }
 

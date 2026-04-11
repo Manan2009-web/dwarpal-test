@@ -9,8 +9,11 @@ const {
   changePasswordValidation,
   forgotPasswordValidation,
   loginValidation,
+  registrationAvailabilityValidation,
   registerValidation,
   resetPasswordValidation,
+  sendPhoneOtpValidation,
+  verifyPhoneOtpValidation,
   webAuthnAuthenticationOptionsValidation,
   webAuthnAuthenticationVerifyValidation,
   webAuthnRegistrationOptionsValidation,
@@ -42,6 +45,10 @@ function getRegisterIdentityKey(req) {
 
 function getForgotPasswordKey(req) {
   return normalizeLookupValue(req.body?.email);
+}
+
+function getPhoneOtpKey(req) {
+  return normalizeLookupValue(req.body?.phone);
 }
 
 const router = express.Router();
@@ -116,6 +123,56 @@ const forgotPasswordIdentityRateLimit = createRateLimiter({
     return [{ field: 'email', message }];
   }
 });
+const phoneOtpSendNetworkRateLimit = createRateLimiter({
+  scope: 'auth:phone-otp:send:network',
+  windowMs: 15 * 60 * 1000,
+  blockDurationMs: 15 * 60 * 1000,
+  max: 80,
+  keyGenerator: getClientIp,
+  message: ({ result }) =>
+    `Too many OTP requests from this network. Please wait ${formatRetryWindow(result.retryAfterSeconds)} and try again.`,
+  errorCode: 'AUTH_PHONE_OTP_SEND_NETWORK_RATE_LIMITED'
+});
+const phoneOtpSendIdentityRateLimit = createRateLimiter({
+  scope: 'auth:phone-otp:send:phone',
+  windowMs: 30 * 60 * 1000,
+  blockDurationMs: 30 * 60 * 1000,
+  max: 6,
+  keyGenerator: getPhoneOtpKey,
+  skip: (req) => !getPhoneOtpKey(req),
+  message: ({ result }) =>
+    `Too many OTP requests for this phone number. Please wait ${formatRetryWindow(result.retryAfterSeconds)} before trying again.`,
+  errorCode: 'AUTH_PHONE_OTP_SEND_PHONE_RATE_LIMITED',
+  errors: ({ result }) => {
+    const message = `Too many OTP requests for this phone number. Please wait ${formatRetryWindow(result.retryAfterSeconds)} before trying again.`;
+    return [{ field: 'phone', message }];
+  }
+});
+const phoneOtpVerifyNetworkRateLimit = createRateLimiter({
+  scope: 'auth:phone-otp:verify:network',
+  windowMs: 15 * 60 * 1000,
+  blockDurationMs: 15 * 60 * 1000,
+  max: 120,
+  keyGenerator: getClientIp,
+  message: ({ result }) =>
+    `Too many OTP verification attempts from this network. Please wait ${formatRetryWindow(result.retryAfterSeconds)} and try again.`,
+  errorCode: 'AUTH_PHONE_OTP_VERIFY_NETWORK_RATE_LIMITED'
+});
+const phoneOtpVerifyIdentityRateLimit = createRateLimiter({
+  scope: 'auth:phone-otp:verify:phone',
+  windowMs: 15 * 60 * 1000,
+  blockDurationMs: 15 * 60 * 1000,
+  max: 12,
+  keyGenerator: getPhoneOtpKey,
+  skip: (req) => !getPhoneOtpKey(req),
+  message: ({ result }) =>
+    `Too many OTP verification attempts for this phone number. Please wait ${formatRetryWindow(result.retryAfterSeconds)} before trying again.`,
+  errorCode: 'AUTH_PHONE_OTP_VERIFY_PHONE_RATE_LIMITED',
+  errors: ({ result }) => {
+    const message = `Too many OTP verification attempts for this phone number. Please wait ${formatRetryWindow(result.retryAfterSeconds)} before trying again.`;
+    return [{ field: 'otp', message }];
+  }
+});
 const biometricRateLimit = createRateLimiter({
   scope: 'auth:webauthn:client',
   windowMs: 10 * 60 * 1000,
@@ -127,6 +184,29 @@ const biometricRateLimit = createRateLimiter({
   errorCode: 'AUTH_WEBAUTHN_RATE_LIMITED'
 });
 
+router.post(
+  '/register/check-availability',
+  registerNetworkRateLimit,
+  registrationAvailabilityValidation,
+  validateRequest,
+  authController.checkRegistrationAvailability
+);
+router.post(
+  '/phone-otp/send',
+  phoneOtpSendNetworkRateLimit,
+  phoneOtpSendIdentityRateLimit,
+  sendPhoneOtpValidation,
+  validateRequest,
+  authController.sendRegistrationOtp
+);
+router.post(
+  '/phone-otp/verify',
+  phoneOtpVerifyNetworkRateLimit,
+  phoneOtpVerifyIdentityRateLimit,
+  verifyPhoneOtpValidation,
+  validateRequest,
+  authController.verifyRegistrationOtp
+);
 router.post(
   '/register',
   registerNetworkRateLimit,

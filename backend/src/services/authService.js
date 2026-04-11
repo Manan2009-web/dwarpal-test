@@ -5,11 +5,16 @@ const {
   verifyAuthenticationResponse,
   verifyRegistrationResponse
 } = require('@simplewebauthn/server');
+const env = require('../config/env');
 const User = require('../models/User');
+const PhoneVerificationSession = require('../models/PhoneVerificationSession');
 const AppError = require('../utils/appError');
 const pickUser = require('../utils/pickUser');
 const { createAccessToken } = require('../utils/token');
 const { getClientFingerprint } = require('../utils/request');
+const { getFirebaseAdminAuth, isFirebaseAdminConfigured } = require('../config/firebaseAdmin');
+const { sendPasswordResetEmail } = require('./emailService');
+const { sendPhoneVerificationOtp, verifyPhoneVerificationOtp } = require('./smsService');
 const { logAction } = require('./auditService');
 const {
   consumeRateLimit,
@@ -22,6 +27,7 @@ const {
   PUBLIC_REGISTRATION_ROLES,
   normalizeRole
 } = require('../constants/appConstants');
+const { normalizePhoneNumber } = require('../utils/phone');
 const {
   getExpectedOrigins,
   getExpectedRpIds,
@@ -37,6 +43,17 @@ const LOGIN_FAILURE_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_FAILURE_SOURCE_LIMIT = 5;
 const LOGIN_FAILURE_IDENTITY_LIMIT = 20;
 const LOGIN_FAILURE_BLOCK_MS = 15 * 60 * 1000;
+const REGISTRATION_PHONE_VERIFICATION_PURPOSE = 'registration';
+const PHONE_OTP_CODE_TTL_MS = env.phoneOtpCodeExpiresMinutes * 60 * 1000;
+const PHONE_VERIFICATION_TOKEN_TTL_MS = env.phoneOtpVerificationTokenTtlMinutes * 60 * 1000;
+const PASSWORD_RESET_TOKEN_TTL_MS = env.passwordResetTokenExpiresMinutes * 60 * 1000;
+
+const DUPLICATE_REGISTRATION_MESSAGES = Object.freeze({
+  email: 'This email is already registered.',
+  phone: 'This phone number is already registered.',
+  enrollmentNo: 'This enrollment ID already exists.',
+  employeeId: 'This employee ID already exists.'
+});
 
 function buildSessionPayload(auth = {}) {
   const expiresAt = auth.expiresAt || (auth.exp ? new Date(auth.exp * 1000).toISOString() : null);
@@ -70,6 +87,185 @@ function normalizeRateLimitIdentifier(identifier) {
 
 function isHashedPassword(value) {
   return BCRYPT_HASH_REGEX.test(String(value || ''));
+}
+
+function hashToken(token) {
+  return crypto.createHash('sha256').update(String(token || '')).digest('hex');
+}
+
+function buildFieldError(field, message) {
+  return {
+    field,
+    message
+  };
+}
+
+function createFieldErrorResponse(field, message, statusCode = 400) {
+  return new AppError(message, statusCode, [buildFieldError(field, message)]);
+}
+
+function normalizeRegistrationPayload(payload = {}) {
+  const normalizedRole = normalizeRole(payload.role);
+  const normalizedEmail = String(payload.email || '').trim().toLowerCase();
+  const normalizedEnrollment = String(payload.enrollmentNo || payload.enrollment || '').trim();
+  const normalizedEmployeeId = String(payload.employeeId || '').trim().toUpperCase();
+  const normalizedPhone = normalizePhoneNumber(payload.phone, {
+    defaultCountryCode: env.defaultPhoneCountryCode
+  });
+
+  return {
+    fullName: String(payload.fullName || payload.name || '').trim(),
+    email: normalizedEmail,
+    role: normalizedRole,
+    program: payload.program,
+    department: payload.department,
+    semester: payload.semester,
+    enrollmentNo: normalizedEnrollment,
+    employeeId: normalizedEmployeeId,
+    phone: normalizedPhone,
+    password: payload.password,
+    firebaseUid: String(payload.firebaseUid || '').trim(),
+    phoneVerificationToken: String(payload.phoneVerificationToken || '').trim()
+  };
+}
+
+async function collectRegistrationConflictErrors(payload = {}) {
+  const normalizedPayload = normalizeRegistrationPayload(payload);
+  const duplicateLookup = [];
+
+  if (normalizedPayload.email) {
+    duplicateLookup.push({ email: normalizedPayload.email });
+  }
+
+  if (normalizedPayload.phone) {
+    duplicateLookup.push({ phone: normalizedPayload.phone });
+  }
+
+  if (normalizedPayload.role === 'student' && normalizedPayload.enrollmentNo) {
+    duplicateLookup.push({ enrollmentNo: normalizedPayload.enrollmentNo }, { enrollment: normalizedPayload.enrollmentNo });
+  }
+
+  if (normalizedPayload.role && normalizedPayload.role !== 'student' && normalizedPayload.employeeId) {
+    duplicateLookup.push({ employeeId: normalizedPayload.employeeId });
+  }
+
+  if (!duplicateLookup.length) {
+    return [];
+  }
+
+  const existingUsers = await User.find({ $or: duplicateLookup }).select('email phone enrollmentNo enrollment employeeId').lean();
+  const errors = [];
+
+  if (normalizedPayload.email && existingUsers.some((user) => user.email === normalizedPayload.email)) {
+    errors.push(buildFieldError('email', DUPLICATE_REGISTRATION_MESSAGES.email));
+  }
+
+  if (normalizedPayload.phone && existingUsers.some((user) => user.phone === normalizedPayload.phone)) {
+    errors.push(buildFieldError('phone', DUPLICATE_REGISTRATION_MESSAGES.phone));
+  }
+
+  if (
+    normalizedPayload.role === 'student' &&
+    normalizedPayload.enrollmentNo &&
+    existingUsers.some(
+      (user) =>
+        user.enrollmentNo === normalizedPayload.enrollmentNo || user.enrollment === normalizedPayload.enrollmentNo
+    )
+  ) {
+    errors.push(buildFieldError('enrollmentNo', DUPLICATE_REGISTRATION_MESSAGES.enrollmentNo));
+  }
+
+  if (
+    normalizedPayload.role &&
+    normalizedPayload.role !== 'student' &&
+    normalizedPayload.employeeId &&
+    existingUsers.some((user) => user.employeeId === normalizedPayload.employeeId)
+  ) {
+    errors.push(buildFieldError('employeeId', DUPLICATE_REGISTRATION_MESSAGES.employeeId));
+  }
+
+  return errors;
+}
+
+async function assertRegistrationAvailability(payload = {}) {
+  const conflictErrors = await collectRegistrationConflictErrors(payload);
+
+  if (conflictErrors.length) {
+    throw new AppError(conflictErrors[0].message, 409, conflictErrors);
+  }
+}
+
+function getPasswordResetBaseUrl() {
+  const configuredUrl = String(env.passwordResetUrl || '').trim();
+  return configuredUrl || `${env.clientUrl}/reset-password`;
+}
+
+function buildPasswordResetUrl(resetToken, email) {
+  const resetUrl = new URL(getPasswordResetBaseUrl(), env.clientUrl || 'http://localhost:5173');
+
+  resetUrl.searchParams.set('token', String(resetToken || '').trim());
+  resetUrl.searchParams.set('email', String(email || '').trim().toLowerCase());
+
+  return resetUrl.toString();
+}
+
+async function syncFirebasePassword(user, newPassword) {
+  const firebaseAdminAuth = getFirebaseAdminAuth();
+
+  if (!firebaseAdminAuth) {
+    throw new AppError(
+      'Firebase Admin is not configured. Add service account credentials before using password reset.',
+      503
+    );
+  }
+
+  try {
+    if (user.firebaseUid) {
+      try {
+        const firebaseUser = await firebaseAdminAuth.updateUser(user.firebaseUid, {
+          password: newPassword
+        });
+
+        return {
+          uid: firebaseUser.uid
+        };
+      } catch (error) {
+        if (error?.code !== 'auth/user-not-found') {
+          throw error;
+        }
+      }
+    }
+
+    try {
+      const existingFirebaseUser = await firebaseAdminAuth.getUserByEmail(user.email);
+      const updatedFirebaseUser = await firebaseAdminAuth.updateUser(existingFirebaseUser.uid, {
+        password: newPassword
+      });
+
+      return {
+        uid: updatedFirebaseUser.uid
+      };
+    } catch (error) {
+      if (error?.code !== 'auth/user-not-found') {
+        throw error;
+      }
+    }
+
+    const createdFirebaseUser = await firebaseAdminAuth.createUser({
+      email: user.email,
+      password: newPassword,
+      displayName: user.fullName || undefined
+    });
+
+    return {
+      uid: createdFirebaseUser.uid
+    };
+  } catch (error) {
+    throw new AppError(
+      error?.message || 'Unable to synchronize the new password with Firebase. Please try the reset link again.',
+      502
+    );
+  }
 }
 
 async function findUserByIdentifier(identifier) {
@@ -239,58 +435,224 @@ function mapUserDevices(user) {
     : [];
 }
 
+async function checkRegistrationAvailability(payload) {
+  const normalizedPayload = normalizeRegistrationPayload(payload);
+
+  await assertRegistrationAvailability(normalizedPayload);
+
+  return {
+    available: true,
+    phone: normalizedPayload.phone || null
+  };
+}
+
+async function sendRegistrationOtp(payload, requestMeta) {
+  const normalizedPayload = normalizeRegistrationPayload(payload);
+  const now = Date.now();
+
+  if (!normalizedPayload.phone) {
+    throw createFieldErrorResponse('phone', 'Please enter a valid phone number.');
+  }
+
+  await assertRegistrationAvailability(normalizedPayload);
+
+  const existingSession = await PhoneVerificationSession.findOne({
+    phone: normalizedPayload.phone,
+    purpose: REGISTRATION_PHONE_VERIFICATION_PURPOSE
+  }).select('+verificationTokenHash +verificationTokenExpiresAt');
+
+  const cooldownMs = env.phoneOtpResendCooldownSeconds * 1000;
+  const retryAfterSeconds =
+    existingSession?.lastSentAt instanceof Date
+      ? Math.ceil((existingSession.lastSentAt.getTime() + cooldownMs - now) / 1000)
+      : 0;
+
+  if (retryAfterSeconds > 0) {
+    const message = `Please wait ${retryAfterSeconds} seconds before requesting another OTP.`;
+    throw createRateLimitError({
+      message,
+      retryAfterSeconds,
+      code: 'AUTH_PHONE_OTP_COOLDOWN',
+      errors: [buildFieldError('phone', message)],
+      rateLimit: {
+        scope: 'auth:phone-otp:cooldown',
+        resetAt: new Date(now + retryAfterSeconds * 1000).toISOString()
+      }
+    });
+  }
+
+  const otpDelivery = await sendPhoneVerificationOtp(normalizedPayload.phone);
+  const resendCount = existingSession?.resendCount ? existingSession.resendCount + 1 : 0;
+  const lastSentAt = new Date(now);
+  const expiresAt = new Date(now + PHONE_OTP_CODE_TTL_MS);
+
+  await PhoneVerificationSession.findOneAndUpdate(
+    {
+      phone: normalizedPayload.phone,
+      purpose: REGISTRATION_PHONE_VERIFICATION_PURPOSE
+    },
+    {
+      $set: {
+        phone: normalizedPayload.phone,
+        purpose: REGISTRATION_PHONE_VERIFICATION_PURPOSE,
+        provider: 'twilio-verify',
+        providerSid: String(otpDelivery?.sid || existingSession?.providerSid || '').trim(),
+        status: 'pending',
+        resendCount,
+        lastSentAt,
+        verifiedAt: null,
+        consumedAt: null,
+        expiresAt,
+        verificationTokenHash: null,
+        verificationTokenExpiresAt: null
+      }
+    },
+    {
+      upsert: true,
+      new: true,
+      setDefaultsOnInsert: true
+    }
+  );
+
+  await logAction({
+    resourceType: 'auth',
+    action: 'send_registration_phone_otp',
+    message: 'Registration phone OTP sent',
+    metadata: {
+      phone: normalizedPayload.phone
+    },
+    requestMeta
+  });
+
+  return {
+    message: 'OTP sent successfully.',
+    phone: normalizedPayload.phone,
+    resendAvailableAt: new Date(now + cooldownMs).toISOString(),
+    expiresAt: expiresAt.toISOString()
+  };
+}
+
+async function verifyRegistrationOtp(payload, requestMeta) {
+  const normalizedPhone = normalizePhoneNumber(payload.phone, {
+    defaultCountryCode: env.defaultPhoneCountryCode
+  });
+
+  if (!normalizedPhone) {
+    throw createFieldErrorResponse('phone', 'Please enter a valid phone number.');
+  }
+
+  await assertRegistrationAvailability({ phone: normalizedPhone });
+
+  const session = await PhoneVerificationSession.findOne({
+    phone: normalizedPhone,
+    purpose: REGISTRATION_PHONE_VERIFICATION_PURPOSE
+  }).select('+verificationTokenHash +verificationTokenExpiresAt');
+
+  if (!session) {
+    throw createFieldErrorResponse('otp', 'Please request a new OTP before verifying this phone number.');
+  }
+
+  if (session.expiresAt && session.expiresAt.getTime() <= Date.now()) {
+    session.status = 'expired';
+    await session.save();
+    throw createFieldErrorResponse('otp', 'OTP has expired. Please request a new OTP.');
+  }
+
+  const verificationResult = await verifyPhoneVerificationOtp(normalizedPhone, payload.otp);
+  const verificationStatus = String(verificationResult?.status || '').trim().toLowerCase();
+  const isApproved = verificationResult?.valid === true || verificationStatus === 'approved';
+
+  if (!isApproved) {
+    if (verificationStatus === 'expired' || verificationStatus === 'canceled') {
+      session.status = 'expired';
+      await session.save();
+      throw createFieldErrorResponse('otp', 'OTP has expired. Please request a new OTP.');
+    }
+
+    throw createFieldErrorResponse('otp', 'The OTP you entered is invalid. Please try again.');
+  }
+
+  const phoneVerificationToken = crypto.randomBytes(32).toString('hex');
+
+  session.status = 'verified';
+  session.providerSid = String(verificationResult?.sid || session.providerSid || '').trim();
+  session.verifiedAt = new Date();
+  session.consumedAt = null;
+  session.verificationTokenHash = hashToken(phoneVerificationToken);
+  session.verificationTokenExpiresAt = new Date(Date.now() + PHONE_VERIFICATION_TOKEN_TTL_MS);
+  session.expiresAt = session.verificationTokenExpiresAt;
+  await session.save();
+
+  await logAction({
+    resourceType: 'auth',
+    action: 'verify_registration_phone_otp',
+    message: 'Registration phone OTP verified',
+    metadata: {
+      phone: normalizedPhone
+    },
+    requestMeta
+  });
+
+  return {
+    message: 'Phone number verified successfully.',
+    phone: normalizedPhone,
+    phoneVerificationToken,
+    verifiedUntil: session.verificationTokenExpiresAt.toISOString()
+  };
+}
+
 async function registerUser(payload, req, requestMeta) {
-  const normalizedRole = normalizeRole(payload.role);
-  const normalizedEmail = String(payload.email || '').trim().toLowerCase();
-  const normalizedEnrollment = String(payload.enrollmentNo || '').trim();
-  const normalizedEmployeeId = String(payload.employeeId || '').trim().toUpperCase();
+  const normalizedPayload = normalizeRegistrationPayload(payload);
+  const normalizedRole = normalizedPayload.role;
+  const normalizedEmail = normalizedPayload.email;
+  const normalizedEnrollment = normalizedPayload.enrollmentNo;
+  const normalizedEmployeeId = normalizedPayload.employeeId;
+  const normalizedPhone = normalizedPayload.phone;
 
   if (!PUBLIC_REGISTRATION_ROLES.includes(normalizedRole)) {
     throw new AppError('Only supported roles can register through this endpoint', 403);
   }
 
-  const duplicateLookup = [{ email: normalizedEmail }];
+  await assertRegistrationAvailability(normalizedPayload);
 
-  if (normalizedRole === 'student' && normalizedEnrollment) {
-    duplicateLookup.push({ enrollmentNo: normalizedEnrollment }, { enrollment: normalizedEnrollment });
+  if (!normalizedPhone) {
+    throw createFieldErrorResponse('phone', 'Please enter a valid phone number.');
   }
 
-  if (normalizedRole !== 'student' && normalizedEmployeeId) {
-    duplicateLookup.push({ employeeId: normalizedEmployeeId });
+  if (!normalizedPayload.phoneVerificationToken) {
+    throw createFieldErrorResponse('phone', 'Please verify your phone number before creating your account.');
   }
 
-  const existingUser = await User.findOne({ $or: duplicateLookup }).select('email enrollmentNo enrollment employeeId');
+  const verificationSession = await PhoneVerificationSession.findOne({
+    phone: normalizedPhone,
+    purpose: REGISTRATION_PHONE_VERIFICATION_PURPOSE,
+    status: 'verified',
+    verificationTokenHash: hashToken(normalizedPayload.phoneVerificationToken),
+    verificationTokenExpiresAt: { $gt: new Date() },
+    consumedAt: null
+  }).select('+verificationTokenHash +verificationTokenExpiresAt');
 
-  if (existingUser) {
-    if (existingUser.email === normalizedEmail) {
-      throw new AppError('Email is already registered', 409);
-    }
-
-    if (
-      normalizedRole === 'student' &&
-      normalizedEnrollment &&
-      [existingUser.enrollmentNo, existingUser.enrollment].includes(normalizedEnrollment)
-    ) {
-      throw new AppError('Enrollment number is already registered', 409);
-    }
-
-    if (normalizedRole !== 'student' && normalizedEmployeeId && existingUser.employeeId === normalizedEmployeeId) {
-      throw new AppError('Employee ID is already registered', 409);
-    }
+  if (!verificationSession) {
+    throw createFieldErrorResponse('phone', 'Phone verification is missing or expired. Please verify your number again.');
   }
 
   const user = await User.create({
-    fullName: payload.fullName,
+    fullName: normalizedPayload.fullName,
     email: normalizedEmail,
-    password: payload.password,
+    firebaseUid: normalizedPayload.firebaseUid || undefined,
+    password: normalizedPayload.password,
     role: normalizedRole,
-    program: ['student', 'hod'].includes(normalizedRole) ? payload.program : undefined,
-    department: payload.department,
-    semester: normalizedRole === 'student' ? Number(payload.semester) : undefined,
+    program: ['student', 'hod'].includes(normalizedRole) ? normalizedPayload.program : undefined,
+    department: normalizedPayload.department,
+    semester: normalizedRole === 'student' ? Number(normalizedPayload.semester) : undefined,
     enrollmentNo: normalizedRole === 'student' ? normalizedEnrollment : undefined,
     employeeId: normalizedRole !== 'student' ? normalizedEmployeeId : undefined,
-    phone: payload.phone
+    phone: normalizedPhone
   });
+
+  verificationSession.status = 'consumed';
+  verificationSession.consumedAt = new Date();
+  await verificationSession.save();
 
   await logAction({
     actorId: user._id,
@@ -683,23 +1045,50 @@ async function changePassword(userId, payload, requestMeta) {
 }
 
 async function forgotPassword(payload, requestMeta) {
-  const user = await User.findOne({ email: payload.email.toLowerCase() }).select(
+  const normalizedEmail = String(payload.email || '').trim().toLowerCase();
+
+  if (!isFirebaseAdminConfigured()) {
+    throw new AppError(
+      'Firebase Admin is not configured. Add service account credentials before using forgot password.',
+      503
+    );
+  }
+
+  const user = await User.findOne({ email: normalizedEmail }).select(
     '+passwordResetToken +passwordResetExpiresAt'
   );
 
   if (!user) {
-    return {
-      message: 'If the email exists, a reset instruction has been prepared.',
-      resetToken: null
-    };
+    throw new AppError('No account was found for this email address.', 404, [
+      {
+        field: 'email',
+        message: 'No account was found for this email address.'
+      }
+    ]);
   }
 
-  const resetToken = crypto.randomBytes(20).toString('hex');
-  const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+  const resetToken = crypto.randomBytes(32).toString('hex');
+  const hashedToken = hashToken(resetToken);
+  const passwordResetExpiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS);
+  const resetUrl = buildPasswordResetUrl(resetToken, user.email);
 
   user.passwordResetToken = hashedToken;
-  user.passwordResetExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
-  await user.save();
+  user.passwordResetExpiresAt = passwordResetExpiresAt;
+  await user.save({ validateModifiedOnly: true });
+
+  try {
+    await sendPasswordResetEmail({
+      to: user.email,
+      fullName: user.fullName,
+      resetUrl,
+      expiresInMinutes: env.passwordResetTokenExpiresMinutes
+    });
+  } catch (error) {
+    user.passwordResetToken = null;
+    user.passwordResetExpiresAt = null;
+    await user.save({ validateModifiedOnly: true });
+    throw error;
+  }
 
   await logAction({
     actorId: user._id,
@@ -711,16 +1100,12 @@ async function forgotPassword(payload, requestMeta) {
   });
 
   return {
-    message:
-      process.env.NODE_ENV === 'production'
-        ? 'Reset workflow placeholder created. Connect your email service to deliver this token.'
-        : 'Reset workflow placeholder created. Use the returned token in Postman or local testing.',
-    resetToken: process.env.NODE_ENV === 'production' ? null : resetToken
+    message: 'We sent you a password reset email.'
   };
 }
 
 async function resetPassword(payload, requestMeta) {
-  const hashedToken = crypto.createHash('sha256').update(payload.token).digest('hex');
+  const hashedToken = hashToken(payload.token);
 
   const user = await User.findOne({
     passwordResetToken: hashedToken,
@@ -728,13 +1113,35 @@ async function resetPassword(payload, requestMeta) {
   }).select('+passwordResetToken +passwordResetExpiresAt');
 
   if (!user) {
-    throw new AppError('Reset token is invalid or has expired', 400);
+    throw new AppError('Reset link is invalid or has expired.', 400, [
+      {
+        field: 'token',
+        message: 'Reset link is invalid or has expired.'
+      }
+    ]);
   }
 
   user.password = payload.newPassword;
+  await user.save();
+
+  let firebaseSyncResult = null;
+
+  try {
+    firebaseSyncResult = await syncFirebasePassword(user, payload.newPassword);
+  } catch (error) {
+    throw new AppError(
+      `${error.message} Your reset link is still active, so please try the same link again after fixing the Firebase configuration.`,
+      error.statusCode || 502
+    );
+  }
+
+  if (firebaseSyncResult?.uid && user.firebaseUid !== firebaseSyncResult.uid) {
+    user.firebaseUid = firebaseSyncResult.uid;
+  }
+
   user.passwordResetToken = null;
   user.passwordResetExpiresAt = null;
-  await user.save();
+  await user.save({ validateModifiedOnly: true });
 
   await logAction({
     actorId: user._id,
@@ -746,12 +1153,13 @@ async function resetPassword(payload, requestMeta) {
   });
 
   return {
-    message: 'Password reset successfully'
+    message: 'Password reset successfully. You can now log in with your new password.'
   };
 }
 
 module.exports = {
   buildSessionPayload,
+  checkRegistrationAvailability,
   changePassword,
   forgotPassword,
   getCurrentUser,
@@ -762,7 +1170,9 @@ module.exports = {
   removeWebAuthnDevice,
   registerUser,
   resetPassword,
+  sendRegistrationOtp,
   verifyAuthState,
+  verifyRegistrationOtp,
   verifyWebAuthnAuthentication,
   verifyWebAuthnRegistration
 };

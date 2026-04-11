@@ -10,6 +10,7 @@ const {
   normalizeDepartment,
   normalizeProgram
 } = require('../constants/appConstants');
+const { E164_PHONE_REGEX, normalizePhoneNumber } = require('../utils/phone');
 const pickUser = require('../utils/pickUser');
 
 const BCRYPT_HASH_REGEX = /^\$2[aby]\$\d{2}\$/;
@@ -74,6 +75,13 @@ const userSchema = new mongoose.Schema(
       unique: true,
       trim: true,
       lowercase: true
+    },
+    firebaseUid: {
+      type: String,
+      trim: true,
+      unique: true,
+      sparse: true,
+      default: undefined
     },
     password: {
       type: String,
@@ -176,7 +184,14 @@ const userSchema = new mongoose.Schema(
     phone: {
       type: String,
       required: true,
-      trim: true
+      unique: true,
+      trim: true,
+      validate: {
+        validator(value) {
+          return E164_PHONE_REGEX.test(String(value || '').trim());
+        },
+        message: 'Please provide a valid phone number'
+      }
     },
     profileImage: {
       type: String,
@@ -224,7 +239,13 @@ userSchema.pre('validate', function syncLegacyFields(next) {
   }
 
   if (this.phone) {
-    this.phone = this.phone.trim();
+    this.phone = normalizePhoneNumber(this.phone, {
+      defaultCountryCode: env.defaultPhoneCountryCode
+    });
+  }
+
+  if (this.firebaseUid) {
+    this.firebaseUid = String(this.firebaseUid).trim();
   }
 
   if (this.program) {
