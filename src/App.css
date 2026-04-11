@@ -1324,77 +1324,7 @@ button {
   white-space: pre-wrap;
 }
 
-.inline-input-row,
-.otp-panel-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.inline-input-row input,
-.otp-panel-row input {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.field-inline-button,
-.field-inline-badge {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 3.2rem;
-  padding: 0.82rem 1rem;
-  border-radius: 1rem;
-  font: inherit;
-  font-size: 0.88rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.field-inline-button {
-  border: 1px solid rgba(25, 42, 86, 0.18);
-  background: var(--auth-primary);
-  color: var(--auth-primary-text);
-  box-shadow: 0 12px 24px rgba(25, 42, 86, 0.18);
-  cursor: pointer;
-  transition:
-    transform 160ms ease,
-    box-shadow 160ms ease,
-    opacity 160ms ease;
-}
-
-.field-inline-button:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 16px 28px rgba(25, 42, 86, 0.22);
-}
-
-.field-inline-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.58;
-  transform: none;
-  box-shadow: none;
-}
-
-.field-inline-badge {
-  border: 1px solid rgba(22, 101, 52, 0.18);
-  background: rgba(22, 163, 74, 0.1);
-  color: var(--success);
-}
-
-.otp-panel {
-  display: grid;
-  gap: 0.8rem;
-  margin-top: 0.8rem;
-  padding: 0.95rem 1rem;
-  border-radius: 1.1rem;
-  border: 1px solid rgba(31, 79, 139, 0.14);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(245, 249, 255, 0.82)),
-    rgba(255, 255, 255, 0.88);
-}
-
-.otp-actions {
+.verification-modal-links {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3771,15 +3701,9 @@ button {
     grid-template-columns: 1fr;
   }
 
-  .inline-input-row,
-  .otp-panel-row {
+  .verification-modal-links {
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .field-inline-button,
-  .field-inline-badge {
-    width: 100%;
   }
 
   .auth-shell {

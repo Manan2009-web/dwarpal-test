@@ -58,7 +58,6 @@ import {
 } from './components/ui'
 import {
   ApiError,
-  checkRegistrationAvailability,
   clearBiometricDeviceId,
   clearStoredAuthToken,
   createBiometricAuthenticationOptions,
@@ -67,23 +66,21 @@ import {
   getBiometricDevices,
   getApiErrorDetails,
   hasStoredAuthToken,
-  isValidPhoneNumberInput,
   loginUser,
   logoutUser,
   normalizePhoneNumberInput,
   requestPasswordReset,
   readBiometricDeviceId,
-  registerUser,
   removeBiometricDevice,
   resetPassword as resetPasswordWithApi,
-  sendRegistrationOtp,
+  sendRegistrationVerificationCode,
   submitRequest,
   updateRequestStatus,
+  verifyRegistrationEmail,
   verifyBiometricAuthentication,
   verifyBiometricRegistration,
   verifyGatepassQr,
   verifyGatepassById,
-  verifyRegistrationOtp,
   verifySession,
 } from './lib/dwarpalApi'
 import {
@@ -92,13 +89,6 @@ import {
   detectBiometricSupport,
   getBiometricErrorMessage,
 } from './lib/biometricAuth'
-import {
-  createFirebaseUser,
-  getFirebaseAuthErrorMessage,
-  rollbackFirebaseUser,
-  signInFirebaseUser,
-  signOutFirebaseUser,
-} from './firebase'
 import {
   getResolvedNotificationPermissionState,
   isBrowserNotificationSupported,
@@ -308,7 +298,7 @@ function mapRegisterFieldErrors(fieldErrors = {}, role = '') {
     department: fieldErrors.department || '',
     enrollment: fieldErrors.enrollment || fieldErrors.enrollmentNo || fieldErrors.employeeId || '',
     phone: fieldErrors.phone || '',
-    otp: fieldErrors.otp || fieldErrors.phoneVerificationToken || '',
+    verificationCode: fieldErrors.verificationCode || fieldErrors.code || '',
     role: fieldErrors.role || '',
     semester: fieldErrors.semester || '',
     password: fieldErrors.password || '',
@@ -745,29 +735,8 @@ function App() {
   }, [currentUser?.id, currentUser?.role, refreshAppData, resetWorkspace])
 
   async function login(identifier, password) {
-    const normalizedEmail = String(identifier || '').trim().toLowerCase()
-
     try {
-      await signInFirebaseUser(normalizedEmail, password)
-    } catch (error) {
-      const message = getFirebaseAuthErrorMessage(
-        error,
-        'Unable to sign in with Firebase. Please try again.',
-      )
-
-      toast.error({
-        title: 'Login failed',
-        message,
-      })
-
-      return {
-        ok: false,
-        error: message,
-      }
-    }
-
-    try {
-      const user = await loginUser(normalizedEmail, password)
+      const user = await loginUser(String(identifier || '').trim(), password)
       setCurrentUser(user)
       toast.success({
         title: 'Login successful',
@@ -775,14 +744,6 @@ function App() {
       })
       return { ok: true, user }
     } catch (error) {
-      console.error('DwarPal backend login failed after Firebase sign-in', error)
-
-      try {
-        await signOutFirebaseUser()
-      } catch {
-        // Ignore Firebase sign-out cleanup issues and surface the backend error instead.
-      }
-
       const { message } = resolveApiError(error, {
         fallbackMessage: 'Unable to complete DwarPal sign-in. Please try again.',
         authMode: 'login',
@@ -834,11 +795,13 @@ function App() {
     }
   }
 
-  async function register(payload) {
+  async function sendRegisterVerificationCode(payload) {
     const normalizedRole = normalizeRole(payload.role)
     const normalizedProgram = normalizeProgram(payload.program)
     const normalizedDepartment = normalizeDepartment(payload.department)
     const normalizedPhone = normalizePhoneNumberInput(payload.phone)
+    const normalizedEnrollment = String(payload.enrollment || '').trim()
+    const normalizedEmail = String(payload.email || '').trim().toLowerCase()
     const semester = Number(payload.semester)
     const requiresDepartment = normalizedRole !== 'security'
     const requiresProgram = roleUsesProgramRouting(normalizedRole)
@@ -869,164 +832,39 @@ function App() {
       return { ok: false, error: 'Please select a semester for student accounts.' }
     }
 
-    if (!payload.phoneVerificationToken || !normalizedPhone) {
+    if (!normalizedPhone) {
       return {
         ok: false,
-        error: 'Please verify your phone number before creating your account.',
+        error: 'Please enter a valid phone number.',
         fieldErrors: {
-          phone: 'Please verify your phone number before creating your account.',
+          phone: 'Please enter a valid phone number.',
         },
       }
     }
 
-    const normalizedEmail = String(payload.email || '').trim().toLowerCase()
-    let firebaseCredential = null
-
     try {
-      try {
-        await checkRegistrationAvailability({
-          ...payload,
-          email: normalizedEmail,
-          role: normalizedRole,
-          program: requiresProgram ? normalizedProgram : '',
-          department: requiresDepartment ? normalizedDepartment : '',
-          phone: normalizedPhone,
-        })
-      } catch (error) {
-        const { message, fieldErrors } = resolveApiError(error, {
-          fallbackMessage: 'Please review your registration details and try again.',
-        })
+      const result = await sendRegistrationVerificationCode({
+        ...payload,
+        email: normalizedEmail,
+        enrollment: normalizedEnrollment,
+        role: normalizedRole,
+        program: requiresProgram ? normalizedProgram : '',
+        department: requiresDepartment ? normalizedDepartment : '',
+        phone: normalizedPhone,
+      })
 
-        return {
-          ok: false,
-          error: message,
-          fieldErrors,
-        }
-      }
-
-      try {
-        firebaseCredential = await createFirebaseUser(normalizedEmail, payload.password)
-      } catch (firebaseError) {
-        const message = getFirebaseAuthErrorMessage(
-          firebaseError,
-          'Unable to create your Firebase account right now.',
-        )
-
-        toast.error({
-          title: 'Registration failed',
-          message,
-        })
-
-        return {
-          ok: false,
-          error: message,
-        }
-      }
-
-      let registrationResult = null
-
-      try {
-        registrationResult = await registerUser({
-          ...payload,
-          email: normalizedEmail,
-          firebaseUid: firebaseCredential.user.uid,
-          role: normalizedRole,
-          program: requiresProgram ? normalizedProgram : '',
-          department: requiresDepartment ? normalizedDepartment : '',
-          phone: normalizedPhone,
-        })
-      } catch (error) {
-        console.error('DwarPal backend registration failed after Firebase account creation', error)
-
-        try {
-          const recoveredUser = await loginUser(normalizedEmail, payload.password)
-          setCurrentUser(recoveredUser)
-
-          toast.warning({
-            title: 'Registration recovered',
-            message: 'Your account appears to have been created successfully, and DwarPal restored your session automatically.',
-          })
-
-          return {
-            ok: true,
-            user: recoveredUser,
-            message: 'Account created successfully',
-          }
-        } catch (recoveryError) {
-          console.error('Automatic recovery login failed after backend registration error', recoveryError)
-        }
-
-        const rollbackResult = await rollbackFirebaseUser(firebaseCredential.user)
-        const { message, fieldErrors } = resolveApiError(error, {
-          fallbackMessage: 'Unable to create your account right now.',
-        })
-        const resolvedMessage = rollbackResult.ok
-          ? message
-          : `${message} The Firebase account could not be rolled back automatically. Please try signing in or contact support.`
-
-        if (!rollbackResult.ok) {
-          console.error('Firebase rollback failed after backend registration error', rollbackResult.error)
-        }
-
-        toast.error({
-          title: 'Registration failed',
-          message: resolvedMessage,
-        })
-
-        return {
-          ok: false,
-          error: resolvedMessage,
-          fieldErrors,
-        }
-      }
-
-      try {
-        const user = await loginUser(normalizedEmail, payload.password)
-        setCurrentUser(user)
-
-        const successMessage = registrationResult?.message || 'Account created successfully'
-
-        toast.success({
-          title: successMessage,
-          message: `Welcome to DwarPal, ${user.name}.`,
-        })
-
-        return {
-          ok: true,
-          user,
-          message: successMessage,
-        }
-      } catch (error) {
-        console.error('Automatic DwarPal login failed after successful registration', error)
-
-        try {
-          await signOutFirebaseUser()
-        } catch {
-          // Ignore Firebase sign-out cleanup issues and surface the backend error instead.
-        }
-
-        const { message } = resolveApiError(error, {
-          fallbackMessage: 'Unable to complete sign-in after registration.',
-        })
-        const resolvedMessage = `Account created successfully, but sign-in could not be completed. ${message}`
-
-        toast.warning({
-          title: 'Registration completed',
-          message: resolvedMessage,
-        })
-
-        return {
-          ok: false,
-          error: resolvedMessage,
-        }
+      return {
+        ok: true,
+        message: result.message,
+        email: result.email || normalizedEmail,
+        maskedEmail: result.maskedEmail || normalizedEmail,
+        resendAvailableAt: result.resendAvailableAt,
+        retryAfterSeconds: result.retryAfterSeconds,
+        expiresAt: result.expiresAt,
       }
     } catch (error) {
       const { message, fieldErrors } = resolveApiError(error, {
-        fallbackMessage: 'Unable to create your account right now.',
-      })
-      toast.error({
-        title: 'Registration failed',
-        message,
+        fallbackMessage: 'Unable to send the verification code right now.',
       })
 
       return {
@@ -1037,37 +875,29 @@ function App() {
     }
   }
 
-  async function sendRegisterOtp(payload) {
+  async function verifyRegisterEmail(payload) {
     try {
-      const result = await sendRegistrationOtp(payload)
-      return {
-        ok: true,
-        ...result,
+      const result = await verifyRegistrationEmail(payload)
+      const user = result?.user || null
+
+      if (user) {
+        setCurrentUser(user)
       }
-    } catch (error) {
-      const errorDetails = resolveApiError(error, {
-        fallbackMessage: 'Unable to send OTP right now. Please try again.',
+
+      toast.success({
+        title: 'Email verified',
+        message: result?.message || 'Account created successfully.',
       })
 
       return {
-        ok: false,
-        error: errorDetails.message,
-        fieldErrors: errorDetails.fieldErrors,
-        retryAfterSeconds: Number(errorDetails.payload?.retryAfterSeconds) || 0,
-      }
-    }
-  }
-
-  async function verifyRegisterOtp(payload) {
-    try {
-      const result = await verifyRegistrationOtp(payload)
-      return {
         ok: true,
-        ...result,
+        message: result?.message || 'Account created successfully.',
+        user,
+        verification: result?.verification || null,
       }
     } catch (error) {
       const errorDetails = resolveApiError(error, {
-        fallbackMessage: 'Unable to verify OTP right now. Please try again.',
+        fallbackMessage: 'Unable to verify your email right now.',
       })
 
       return {
@@ -1256,9 +1086,8 @@ function App() {
           element={
             <PublicAuthRoute currentUser={currentUser} authReady={authReady}>
               <RegisterScreen
-                onRegister={register}
-                onSendPhoneOtp={sendRegisterOtp}
-                onVerifyPhoneOtp={verifyRegisterOtp}
+                onRequestVerificationCode={sendRegisterVerificationCode}
+                onVerifyEmailCode={verifyRegisterEmail}
               />
             </PublicAuthRoute>
           }
@@ -1705,7 +1534,7 @@ function LoginScreen({ onLogin, onBiometricLogin, onForgotPassword }) {
   )
 }
 
-function RegisterScreen({ onRegister, onSendPhoneOtp, onVerifyPhoneOtp }) {
+function RegisterScreen({ onRequestVerificationCode, onVerifyEmailCode }) {
   const navigate = useNavigate()
   const [form, setForm] = useState({
     name: '',
@@ -1720,17 +1549,16 @@ function RegisterScreen({ onRegister, onSendPhoneOtp, onVerifyPhoneOtp }) {
   })
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [otpCode, setOtpCode] = useState('')
-  const [otpSentPhone, setOtpSentPhone] = useState('')
-  const [verifiedPhone, setVerifiedPhone] = useState('')
-  const [phoneVerificationToken, setPhoneVerificationToken] = useState('')
-  const [otpError, setOtpError] = useState('')
-  const [otpSuccess, setOtpSuccess] = useState('')
-  const [otpResendCountdown, setOtpResendCountdown] = useState(0)
-  const [isSendingOtp, setIsSendingOtp] = useState(false)
-  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false)
-  const submitLockRef = useRef(false)
+  const [verificationCode, setVerificationCode] = useState('')
+  const [verificationEmail, setVerificationEmail] = useState('')
+  const [maskedVerificationEmail, setMaskedVerificationEmail] = useState('')
+  const [verificationPayload, setVerificationPayload] = useState(null)
+  const [verificationOpen, setVerificationOpen] = useState(false)
+  const [verificationError, setVerificationError] = useState('')
+  const [verificationSuccess, setVerificationSuccess] = useState('')
+  const [resendCountdown, setResendCountdown] = useState(0)
+  const [isSendingVerificationCode, setIsSendingVerificationCode] = useState(false)
+  const [isVerifyingEmail, setIsVerifyingEmail] = useState(false)
   const hasSelectedRole = Boolean(form.role)
   const isStudentRole = form.role === 'student'
   const isSecurityRole = form.role === 'security'
@@ -1745,51 +1573,96 @@ function RegisterScreen({ onRegister, onSendPhoneOtp, onVerifyPhoneOtp }) {
     : hasSelectedRole
       ? 'Enter your employee ID'
       : 'Select a role to continue'
-  const normalizedPhone = normalizePhoneNumberInput(form.phone)
-  const phoneCanRequestOtp = isValidPhoneNumberInput(form.phone)
-  const phoneIsVerified = Boolean(phoneVerificationToken) && Boolean(normalizedPhone) && normalizedPhone === verifiedPhone
-  const showOtpPanel = Boolean(otpSentPhone) && normalizedPhone === otpSentPhone && !phoneIsVerified
 
   useEffect(() => {
-    if (otpResendCountdown <= 0) {
+    if (resendCountdown <= 0) {
       return undefined
     }
 
     const timerId = window.setInterval(() => {
-      setOtpResendCountdown((previousCount) => (previousCount <= 1 ? 0 : previousCount - 1))
+      setResendCountdown((previousCount) => (previousCount <= 1 ? 0 : previousCount - 1))
     }, 1000)
 
     return () => window.clearInterval(timerId)
-  }, [otpResendCountdown])
+  }, [resendCountdown])
 
-  function resetPhoneVerificationState() {
-    setOtpCode('')
-    setOtpSentPhone('')
-    setVerifiedPhone('')
-    setPhoneVerificationToken('')
-    setOtpError('')
-    setOtpSuccess('')
-    setOtpResendCountdown(0)
-    setIsSendingOtp(false)
-    setIsVerifyingOtp(false)
+  function clearVerificationFieldError() {
+    setFieldErrors((prev) => clearFieldError(prev, 'verificationCode'))
+  }
+
+  function resetVerificationState({ preserveModal = false } = {}) {
+    setVerificationCode('')
+    setVerificationEmail('')
+    setMaskedVerificationEmail('')
+    setVerificationPayload(null)
+    setVerificationError('')
+    setVerificationSuccess('')
+    setResendCountdown(0)
+    setIsSendingVerificationCode(false)
+    setIsVerifyingEmail(false)
+    if (!preserveModal) {
+      setVerificationOpen(false)
+    }
     setFieldErrors((prev) => {
       const nextErrors = { ...prev }
-      delete nextErrors.otp
+      delete nextErrors.verificationCode
       return nextErrors
     })
   }
 
-  function updateFormField(field, value) {
-    if (field === 'phone') {
-      const nextNormalizedPhone = normalizePhoneNumberInput(value)
+  function buildSubmissionPayload() {
+    const normalizedRole = normalizeRole(form.role)
+    const normalizedProgram = normalizeProgram(form.program)
+    const normalizedDepartment = normalizeDepartment(form.department)
+    const normalizedPhone = normalizePhoneNumberInput(form.phone)
+    const normalizedEmail = String(form.email || '').trim().toLowerCase()
+    const normalizedEnrollment = String(form.enrollment || '').trim()
+    const semester = Number(form.semester)
 
-      if (
-        !nextNormalizedPhone ||
-        (otpSentPhone && nextNormalizedPhone !== otpSentPhone) ||
-        (verifiedPhone && nextNormalizedPhone !== verifiedPhone)
-      ) {
-        resetPhoneVerificationState()
+    const nextFieldErrors = getRequiredFieldErrors({
+      name: form.name,
+      email: form.email,
+      ...(requiresProgram ? { program: form.program } : {}),
+      ...(showDepartmentField ? { department: form.department } : {}),
+      enrollment: form.enrollment,
+      phone: form.phone,
+      role: form.role,
+      ...(isStudentRole ? { semester: form.semester } : {}),
+      password: form.password,
+    })
+
+    if (!normalizedPhone) {
+      nextFieldErrors.phone = 'Please enter a valid phone number.'
+    }
+
+    if (isStudentRole && !SEMESTER_OPTIONS.includes(semester)) {
+      nextFieldErrors.semester = 'Please select a valid semester.'
+    }
+
+    if (Object.keys(nextFieldErrors).length) {
+      return {
+        ok: false,
+        fieldErrors: nextFieldErrors,
       }
+    }
+
+    return {
+      ok: true,
+      payload: {
+        ...form,
+        email: normalizedEmail,
+        enrollment: normalizedEnrollment,
+        phone: normalizedPhone,
+        role: normalizedRole,
+        program: requiresProgram ? normalizedProgram : '',
+        department: requiresDepartment ? normalizedDepartment : '',
+      },
+    }
+  }
+
+  function updateFormField(field, value) {
+    if (verificationPayload && form[field] !== value) {
+      resetVerificationState()
     }
 
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -1800,6 +1673,11 @@ function RegisterScreen({ onRegister, onSendPhoneOtp, onVerifyPhoneOtp }) {
   function handleRoleChange(event) {
     const nextRole = normalizeRole(event.target.value)
     const nextRoleUsesProgram = roleUsesProgramRouting(nextRole)
+
+    if (verificationPayload && form.role !== nextRole) {
+      resetVerificationState()
+    }
+
     setForm((prev) => ({
       ...prev,
       role: nextRole,
@@ -1823,6 +1701,10 @@ function RegisterScreen({ onRegister, onSendPhoneOtp, onVerifyPhoneOtp }) {
   function handleProgramChange(event) {
     const nextProgram = normalizeProgram(event.target.value)
 
+    if (verificationPayload && form.program !== nextProgram) {
+      resetVerificationState()
+    }
+
     setForm((prev) => ({
       ...prev,
       program: nextProgram,
@@ -1837,35 +1719,39 @@ function RegisterScreen({ onRegister, onSendPhoneOtp, onVerifyPhoneOtp }) {
     setError('')
   }
 
-  async function handleSendOtp() {
-    if (isSubmitting || isSendingOtp || isVerifyingOtp) {
+  async function handleCreateAccount(event) {
+    event.preventDefault()
+
+    if (isSendingVerificationCode || isVerifyingEmail) {
       return
     }
 
-    if (!phoneCanRequestOtp || !normalizedPhone) {
-      setFieldErrors((prev) => ({
-        ...prev,
-        phone: 'Please enter a valid phone number.',
-      }))
-      setOtpError('')
+    const preparedSubmission = buildSubmissionPayload()
+
+    if (!preparedSubmission.ok) {
+      setFieldErrors(preparedSubmission.fieldErrors)
+      setError('')
       return
     }
 
-    setIsSendingOtp(true)
-    setOtpError('')
-    setOtpSuccess('')
-    setFieldErrors((prev) => {
-      const nextErrors = { ...prev }
-      delete nextErrors.phone
-      delete nextErrors.otp
-      return nextErrors
-    })
+    const submissionPayload = preparedSubmission.payload
+
+    if (
+      verificationPayload &&
+      JSON.stringify(verificationPayload) === JSON.stringify(submissionPayload)
+    ) {
+      setVerificationOpen(true)
+      setError('')
+      return
+    }
+
+    setIsSendingVerificationCode(true)
+    setError('')
+    setVerificationError('')
+    setVerificationSuccess('')
 
     try {
-      const result = await onSendPhoneOtp({
-        ...form,
-        phone: normalizedPhone,
-      })
+      const result = await onRequestVerificationCode(submissionPayload)
 
       if (!result?.ok) {
         if (result?.fieldErrors) {
@@ -1876,52 +1762,38 @@ function RegisterScreen({ onRegister, onSendPhoneOtp, onVerifyPhoneOtp }) {
         }
 
         if (result?.retryAfterSeconds) {
-          setOtpResendCountdown(result.retryAfterSeconds)
+          setResendCountdown(result.retryAfterSeconds)
         }
 
-        setOtpError(result?.error || 'Unable to send OTP right now. Please try again.')
+        setError(result?.error || 'Unable to send the verification code right now.')
         return
       }
 
-      setOtpSentPhone(result.phone || normalizedPhone)
-      setVerifiedPhone('')
-      setPhoneVerificationToken('')
-      setOtpCode('')
-      setOtpError('')
-      setOtpSuccess(result?.message || 'OTP sent successfully.')
-      setOtpResendCountdown(
-        result?.retryAfterSeconds || getSecondsUntil(result?.resendAvailableAt) || 60,
-      )
+      setVerificationPayload(submissionPayload)
+      setVerificationEmail(result.email || submissionPayload.email)
+      setMaskedVerificationEmail(result.maskedEmail || result.email || submissionPayload.email)
+      setVerificationCode('')
+      setVerificationError('')
+      setVerificationSuccess(result?.message || 'We sent a verification code to your email.')
+      setVerificationOpen(true)
+      setResendCountdown(result?.retryAfterSeconds || getSecondsUntil(result?.resendAvailableAt))
+      clearVerificationFieldError()
     } finally {
-      setIsSendingOtp(false)
+      setIsSendingVerificationCode(false)
     }
   }
 
-  async function handleVerifyOtp() {
-    if (isSubmitting || isSendingOtp || isVerifyingOtp) {
+  async function handleResendVerificationCode() {
+    if (!verificationPayload || isSendingVerificationCode || isVerifyingEmail || resendCountdown > 0) {
       return
     }
 
-    const normalizedOtp = String(otpCode || '').trim()
-
-    if (!normalizedOtp) {
-      setFieldErrors((prev) => ({
-        ...prev,
-        otp: 'Please enter the OTP sent to your phone.',
-      }))
-      setOtpError('')
-      return
-    }
-
-    setIsVerifyingOtp(true)
-    setOtpError('')
-    setFieldErrors((prev) => clearFieldError(prev, 'otp'))
+    setIsSendingVerificationCode(true)
+    setVerificationError('')
+    setVerificationSuccess('')
 
     try {
-      const result = await onVerifyPhoneOtp({
-        phone: normalizedPhone,
-        otp: normalizedOtp,
-      })
+      const result = await onRequestVerificationCode(verificationPayload)
 
       if (!result?.ok) {
         if (result?.fieldErrors) {
@@ -1931,66 +1803,53 @@ function RegisterScreen({ onRegister, onSendPhoneOtp, onVerifyPhoneOtp }) {
           }))
         }
 
-        setOtpError(result?.error || 'Unable to verify OTP right now. Please try again.')
+        if (result?.retryAfterSeconds) {
+          setResendCountdown(result.retryAfterSeconds)
+        }
+
+        setVerificationError(result?.error || 'Unable to resend the verification code right now.')
         return
       }
 
-      setVerifiedPhone(result.phone || normalizedPhone)
-      setPhoneVerificationToken(result.phoneVerificationToken || '')
-      setOtpError('')
-      setOtpSuccess(result?.message || 'Phone number verified successfully.')
-      setOtpSentPhone(result.phone || normalizedPhone)
-      setFieldErrors((prev) => clearFieldError(prev, 'otp'))
+      setVerificationEmail(result.email || verificationPayload.email)
+      setMaskedVerificationEmail(result.maskedEmail || result.email || verificationPayload.email)
+      setVerificationCode('')
+      clearVerificationFieldError()
+      setVerificationSuccess(result?.message || 'We sent a new verification code to your email.')
+      setResendCountdown(result?.retryAfterSeconds || getSecondsUntil(result?.resendAvailableAt))
     } finally {
-      setIsVerifyingOtp(false)
+      setIsSendingVerificationCode(false)
     }
   }
 
-  async function handleSubmit(event) {
+  async function handleVerifyEmail(event) {
     event.preventDefault()
 
-    if (isSubmitting || submitLockRef.current) {
+    if (!verificationEmail || isSendingVerificationCode || isVerifyingEmail) {
       return
     }
 
-    const nextFieldErrors = getRequiredFieldErrors({
-      name: form.name,
-      email: form.email,
-      ...(requiresProgram ? { program: form.program } : {}),
-      ...(showDepartmentField ? { department: form.department } : {}),
-      enrollment: form.enrollment,
-      phone: form.phone,
-      role: form.role,
-      ...(isStudentRole ? { semester: form.semester } : {}),
-      password: form.password,
-    })
+    const normalizedVerificationCode = String(verificationCode || '').trim()
 
-    if (Object.keys(nextFieldErrors).length) {
-      setFieldErrors(nextFieldErrors)
-      setError('')
-      return
-    }
-
-    if (!phoneIsVerified) {
+    if (!normalizedVerificationCode) {
       setFieldErrors((prev) => ({
         ...prev,
-        phone: 'Please verify your phone number before creating your account.',
+        verificationCode: 'Please enter the verification code sent to your email.',
       }))
-      setOtpError('Please verify your phone number before creating your account.')
-      setError('')
+      setVerificationError('')
       return
     }
 
-    setError('')
-    submitLockRef.current = true
-    setIsSubmitting(true)
+    setIsVerifyingEmail(true)
+    setVerificationError('')
+    clearVerificationFieldError()
 
     try {
-      const result = await onRegister({
-        ...form,
-        phone: normalizedPhone,
-        phoneVerificationToken,
+      const result = await onVerifyEmailCode({
+        email: verificationEmail,
+        verificationCode: normalizedVerificationCode,
       })
+
       if (!result?.ok) {
         if (result?.fieldErrors) {
           setFieldErrors((prev) => ({
@@ -1999,22 +1858,41 @@ function RegisterScreen({ onRegister, onSendPhoneOtp, onVerifyPhoneOtp }) {
           }))
         }
 
-        setError(result?.error || 'Unable to create your account. Please review the form and try again.')
+        setVerificationError(result?.error || 'Unable to verify your email right now.')
         return
       }
 
-      navigate('/app/dashboard', { replace: true })
-    } catch {
-      setError('Unable to create your account right now. Please try again.')
+      setVerificationSuccess(result?.message || 'Account created successfully.')
+      navigate('/login', {
+        replace: true,
+        state: {
+          authNotice: 'Registration successful! Please sign in with your credentials.',
+        }
+      })
     } finally {
-      submitLockRef.current = false
-      setIsSubmitting(false)
+      setIsVerifyingEmail(false)
     }
+  }
+
+  function handleChangeEmail() {
+    if (isSendingVerificationCode || isVerifyingEmail) {
+      return
+    }
+
+    resetVerificationState()
+  }
+
+  function handleCloseVerificationModal() {
+    if (isSendingVerificationCode || isVerifyingEmail) {
+      return
+    }
+
+    setVerificationOpen(false)
   }
 
   return (
     <AuthShell title="Register">
-      <form className="auth-form register-grid" onSubmit={handleSubmit} noValidate>
+      <form className="auth-form register-grid" onSubmit={handleCreateAccount} noValidate>
         <label>
           <FieldLabel required>Full Name</FieldLabel>
           <input
@@ -2024,7 +1902,7 @@ function RegisterScreen({ onRegister, onSendPhoneOtp, onVerifyPhoneOtp }) {
             autoComplete="name"
             className={fieldErrors.name ? 'field-invalid' : ''}
             aria-invalid={Boolean(fieldErrors.name)}
-            disabled={isSubmitting}
+            disabled={isSendingVerificationCode || isVerifyingEmail}
             required
           />
           {fieldErrors.name ? <p className="field-error">{fieldErrors.name}</p> : null}
@@ -2039,7 +1917,7 @@ function RegisterScreen({ onRegister, onSendPhoneOtp, onVerifyPhoneOtp }) {
             autoComplete="email"
             className={fieldErrors.email ? 'field-invalid' : ''}
             aria-invalid={Boolean(fieldErrors.email)}
-            disabled={isSubmitting}
+            disabled={isSendingVerificationCode || isVerifyingEmail}
             required
           />
           {fieldErrors.email ? <p className="field-error">{fieldErrors.email}</p> : null}
@@ -2051,7 +1929,7 @@ function RegisterScreen({ onRegister, onSendPhoneOtp, onVerifyPhoneOtp }) {
             onChange={handleRoleChange}
             className={fieldErrors.role ? 'field-invalid' : ''}
             aria-invalid={Boolean(fieldErrors.role)}
-            disabled={isSubmitting}
+            disabled={isSendingVerificationCode || isVerifyingEmail}
             required
           >
             <option value="" disabled>
@@ -2073,7 +1951,7 @@ function RegisterScreen({ onRegister, onSendPhoneOtp, onVerifyPhoneOtp }) {
               onChange={handleProgramChange}
               className={fieldErrors.program ? 'field-invalid' : ''}
               aria-invalid={Boolean(fieldErrors.program)}
-              disabled={isSubmitting}
+              disabled={isSendingVerificationCode || isVerifyingEmail}
               required
             >
               <option value="" disabled>
@@ -2096,7 +1974,7 @@ function RegisterScreen({ onRegister, onSendPhoneOtp, onVerifyPhoneOtp }) {
               onChange={(event) => updateFormField('department', event.target.value)}
               className={fieldErrors.department ? 'field-invalid' : ''}
               aria-invalid={Boolean(fieldErrors.department)}
-              disabled={isSubmitting}
+              disabled={isSendingVerificationCode || isVerifyingEmail}
               required={requiresDepartment}
             >
               <option value="" disabled>
@@ -2118,76 +1996,18 @@ function RegisterScreen({ onRegister, onSendPhoneOtp, onVerifyPhoneOtp }) {
         ) : null}
         <label>
           <FieldLabel required>Phone Number</FieldLabel>
-          <div className="inline-input-row">
-            <input
-              type="tel"
-              value={form.phone}
-              onChange={(event) => updateFormField('phone', event.target.value)}
-              placeholder="Enter your phone number"
-              autoComplete="tel"
-              className={fieldErrors.phone ? 'field-invalid' : ''}
-              aria-invalid={Boolean(fieldErrors.phone)}
-              disabled={isSubmitting}
-              required
-            />
-            {phoneIsVerified ? (
-              <strong className="field-inline-badge">Verified</strong>
-            ) : phoneCanRequestOtp ? (
-              <button
-                type="button"
-                className="field-inline-button"
-                onClick={handleSendOtp}
-                disabled={isSubmitting || isSendingOtp || isVerifyingOtp || otpResendCountdown > 0}
-              >
-                {isSendingOtp ? 'Sending...' : otpSentPhone && normalizedPhone === otpSentPhone ? 'Resend OTP' : 'Send OTP'}
-              </button>
-            ) : null}
-          </div>
+          <input
+            type="tel"
+            value={form.phone}
+            onChange={(event) => updateFormField('phone', event.target.value)}
+            placeholder="Enter your phone number"
+            autoComplete="tel"
+            className={fieldErrors.phone ? 'field-invalid' : ''}
+            aria-invalid={Boolean(fieldErrors.phone)}
+            disabled={isSendingVerificationCode || isVerifyingEmail}
+            required
+          />
           {fieldErrors.phone ? <p className="field-error">{fieldErrors.phone}</p> : null}
-          {showOtpPanel ? (
-            <div className="otp-panel">
-              <div className="otp-panel-row">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  value={otpCode}
-                  onChange={(event) => {
-                    setOtpCode(event.target.value.replace(/\D/g, '').slice(0, 8))
-                    setFieldErrors((prev) => clearFieldError(prev, 'otp'))
-                    setOtpError('')
-                  }}
-                  placeholder="Enter OTP"
-                  className={fieldErrors.otp ? 'field-invalid' : ''}
-                  aria-invalid={Boolean(fieldErrors.otp)}
-                  disabled={isSubmitting || isVerifyingOtp}
-                />
-                <button
-                  type="button"
-                  className="field-inline-button"
-                  onClick={handleVerifyOtp}
-                  disabled={isSubmitting || isSendingOtp || isVerifyingOtp}
-                >
-                  {isVerifyingOtp ? 'Verifying...' : 'Verify OTP'}
-                </button>
-              </div>
-              <div className="otp-actions">
-                <button
-                  type="button"
-                  className="auth-inline-link"
-                  onClick={handleSendOtp}
-                  disabled={isSubmitting || isSendingOtp || otpResendCountdown > 0}
-                >
-                  {otpResendCountdown > 0 ? `Resend OTP in ${formatCountdown(otpResendCountdown)}` : 'Resend OTP'}
-                </button>
-                <span className="field-hint">Use the code sent to {normalizedPhone || form.phone}.</span>
-              </div>
-              {fieldErrors.otp ? <p className="field-error">{fieldErrors.otp}</p> : null}
-              {otpError ? <p className="form-error">{otpError}</p> : null}
-              {otpSuccess ? <p className="form-success">{otpSuccess}</p> : null}
-            </div>
-          ) : null}
-          {phoneIsVerified && otpSuccess ? <p className="form-success">{otpSuccess}</p> : null}
         </label>
         <label>
           <FieldLabel required>{roleIdLabel}</FieldLabel>
@@ -2200,7 +2020,7 @@ function RegisterScreen({ onRegister, onSendPhoneOtp, onVerifyPhoneOtp }) {
             autoComplete="off"
             className={fieldErrors.enrollment ? 'field-invalid' : ''}
             aria-invalid={Boolean(fieldErrors.enrollment)}
-            disabled={isSubmitting}
+            disabled={isSendingVerificationCode || isVerifyingEmail}
             required
           />
           {fieldErrors.enrollment ? <p className="field-error">{fieldErrors.enrollment}</p> : null}
@@ -2213,7 +2033,7 @@ function RegisterScreen({ onRegister, onSendPhoneOtp, onVerifyPhoneOtp }) {
               onChange={(event) => updateFormField('semester', event.target.value)}
               className={fieldErrors.semester ? 'field-invalid' : ''}
               aria-invalid={Boolean(fieldErrors.semester)}
-              disabled={isSubmitting}
+              disabled={isSendingVerificationCode || isVerifyingEmail}
               required
             >
               <option value="" disabled>
@@ -2238,16 +2058,28 @@ function RegisterScreen({ onRegister, onSendPhoneOtp, onVerifyPhoneOtp }) {
             autoComplete="new-password"
             className={fieldErrors.password ? 'field-invalid' : ''}
             aria-invalid={Boolean(fieldErrors.password)}
-            disabled={isSubmitting}
+            disabled={isSendingVerificationCode || isVerifyingEmail}
             required
           />
           {fieldErrors.password ? <p className="field-error">{fieldErrors.password}</p> : null}
         </label>
         {error ? <p className="form-error full-span" aria-live="polite">{error}</p> : null}
-        {isSubmitting ? <p className="field-hint full-span" aria-live="polite">Creating account...</p> : null}
+        {verificationPayload ? (
+          <p className="form-success full-span" aria-live="polite">
+            Verification is pending for {maskedVerificationEmail || verificationEmail}. Open the email modal to complete setup.
+          </p>
+        ) : null}
+        {isSendingVerificationCode ? (
+          <p className="field-hint full-span" aria-live="polite">Sending verification code...</p>
+        ) : null}
         <div className="full-span">
-          <ActionButton icon={UserPlus2} type="submit" disabled={isSubmitting} aria-busy={isSubmitting}>
-            {isSubmitting ? 'Creating account...' : 'Create Account'}
+          <ActionButton
+            icon={UserPlus2}
+            type="submit"
+            disabled={isSendingVerificationCode || isVerifyingEmail}
+            aria-busy={isSendingVerificationCode}
+          >
+            {isSendingVerificationCode ? 'Sending Code...' : 'Create Account'}
           </ActionButton>
         </div>
       </form>
@@ -2257,6 +2089,75 @@ function RegisterScreen({ onRegister, onSendPhoneOtp, onVerifyPhoneOtp }) {
           Login
         </Link>
       </p>
+      <ModalForm
+        open={verificationOpen}
+        title="Verify Your Email"
+        subtitle="We sent a verification code to your email."
+        onClose={handleCloseVerificationModal}
+      >
+        <form className="modal-form" onSubmit={handleVerifyEmail} noValidate>
+          <p className="field-hint">
+            Enter the code sent to <strong>{maskedVerificationEmail || verificationEmail}</strong>.
+          </p>
+          <label>
+            <FieldLabel required>Verification Code</FieldLabel>
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={verificationCode}
+              onChange={(event) => {
+                setVerificationCode(event.target.value.replace(/\D/g, '').slice(0, 8))
+                clearVerificationFieldError()
+                setVerificationError('')
+              }}
+              placeholder="Enter verification code"
+              className={fieldErrors.verificationCode ? 'field-invalid' : ''}
+              aria-invalid={Boolean(fieldErrors.verificationCode)}
+              disabled={isVerifyingEmail}
+              required
+            />
+            {fieldErrors.verificationCode ? <p className="field-error">{fieldErrors.verificationCode}</p> : null}
+          </label>
+          <div className="verification-modal-links">
+            <button
+              type="button"
+              className="auth-inline-link"
+              onClick={handleChangeEmail}
+              disabled={isSendingVerificationCode || isVerifyingEmail}
+            >
+              Change Email
+            </button>
+            <button
+              type="button"
+              className="auth-inline-link"
+              onClick={handleResendVerificationCode}
+              disabled={isSendingVerificationCode || isVerifyingEmail || resendCountdown > 0}
+            >
+              {resendCountdown > 0 ? `Resend OTP in ${formatCountdown(resendCountdown)}` : 'Resend OTP'}
+            </button>
+          </div>
+          {verificationError ? <p className="form-error">{verificationError}</p> : null}
+          {verificationSuccess ? <p className="form-success">{verificationSuccess}</p> : null}
+          <div className="modal-actions">
+            <ActionButton
+              tone="secondary"
+              type="button"
+              onClick={handleCloseVerificationModal}
+              disabled={isSendingVerificationCode || isVerifyingEmail}
+            >
+              Back to Form
+            </ActionButton>
+            <ActionButton
+              type="submit"
+              icon={ShieldCheck}
+              disabled={isSendingVerificationCode || isVerifyingEmail}
+            >
+              {isVerifyingEmail ? 'Verifying...' : 'Verify'}
+            </ActionButton>
+          </div>
+        </form>
+      </ModalForm>
     </AuthShell>
   )
 }

@@ -76,13 +76,6 @@ const userSchema = new mongoose.Schema(
       trim: true,
       lowercase: true
     },
-    firebaseUid: {
-      type: String,
-      trim: true,
-      unique: true,
-      sparse: true,
-      default: undefined
-    },
     password: {
       type: String,
       required: true,
@@ -193,6 +186,14 @@ const userSchema = new mongoose.Schema(
         message: 'Please provide a valid phone number'
       }
     },
+    emailVerified: {
+      type: Boolean,
+      default: true
+    },
+    emailVerifiedAt: {
+      type: Date,
+      default: null
+    },
     profileImage: {
       type: String,
       default: null
@@ -242,10 +243,6 @@ userSchema.pre('validate', function syncLegacyFields(next) {
     this.phone = normalizePhoneNumber(this.phone, {
       defaultCountryCode: env.defaultPhoneCountryCode
     });
-  }
-
-  if (this.firebaseUid) {
-    this.firebaseUid = String(this.firebaseUid).trim();
   }
 
   if (this.program) {

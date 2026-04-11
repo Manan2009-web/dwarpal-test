@@ -9,12 +9,23 @@ const {
 } = require('../utils/webauthnState');
 const authService = require('../services/authService');
 
-const register = asyncHandler(async (req, res) => {
-  const result = await authService.registerUser(req.body, req, getRequestMeta(req));
+const sendRegistrationVerificationCode = asyncHandler(async (req, res) => {
+  const result = await authService.sendRegistrationVerificationCode(req.body, getRequestMeta(req));
+
+  return sendSuccess(res, {
+    statusCode: 202,
+    message: result.message,
+    data: result
+  });
+});
+
+const verifyRegistrationEmail = asyncHandler(async (req, res) => {
+  const result = await authService.verifyRegistrationEmail(req.body, req, getRequestMeta(req));
+  setAuthCookie(res, result.token);
 
   return sendSuccess(res, {
     statusCode: 201,
-    message: 'Account created successfully',
+    message: result.message,
     data: result
   });
 });
@@ -24,24 +35,6 @@ const checkRegistrationAvailability = asyncHandler(async (req, res) => {
 
   return sendSuccess(res, {
     message: 'Registration details are available.',
-    data: result
-  });
-});
-
-const sendRegistrationOtp = asyncHandler(async (req, res) => {
-  const result = await authService.sendRegistrationOtp(req.body, getRequestMeta(req));
-
-  return sendSuccess(res, {
-    message: result.message,
-    data: result
-  });
-});
-
-const verifyRegistrationOtp = asyncHandler(async (req, res) => {
-  const result = await authService.verifyRegistrationOtp(req.body, getRequestMeta(req));
-
-  return sendSuccess(res, {
-    message: result.message,
     data: result
   });
 });
@@ -203,11 +196,10 @@ module.exports = {
   login,
   logout,
   removeWebAuthnDevice,
-  register,
   resetPassword,
-  sendRegistrationOtp,
+  sendRegistrationVerificationCode,
   verify,
-  verifyRegistrationOtp,
+  verifyRegistrationEmail,
   verifyWebAuthnAuthentication,
   verifyWebAuthnRegistration
 };

@@ -110,8 +110,15 @@ const registerValidation = [
     }),
   body('phone')
     .customSanitizer(normalizePhoneValue)
-    .custom((value) => validatePhoneValue(value)),
-  body('firebaseUid').optional({ values: 'falsy' }).trim()
+    .custom((value) => validatePhoneValue(value))
+];
+
+const verifyRegistrationEmailValidation = [
+  body('email').trim().isEmail().withMessage('Valid email is required').normalizeEmail(),
+  body('verificationCode')
+    .trim()
+    .matches(/^\d{4,8}$/)
+    .withMessage('Please enter the verification code sent to your email.')
 ];
 
 const loginValidation = [
@@ -170,43 +177,6 @@ const registrationAvailabilityValidation = [
     .customSanitizer((value) => String(value || '').trim().toUpperCase())
 ];
 
-const sendPhoneOtpValidation = [
-  body('phone')
-    .customSanitizer(normalizePhoneValue)
-    .custom((value) => validatePhoneValue(value)),
-  body('role')
-    .optional({ values: 'falsy' })
-    .trim()
-    .customSanitizer(normalizeRole)
-    .custom((value, { req }) => {
-      if (!String(req.body.role || '').trim()) {
-        return true;
-      }
-
-      if (!value) {
-        throw new Error(`Role must be one of: ${PUBLIC_REGISTRATION_ROLES.join(', ')}`);
-      }
-
-      return true;
-    }),
-  body('email').optional({ values: 'falsy' }).trim().isEmail().withMessage('Valid email is required').normalizeEmail(),
-  body('enrollmentNo').optional({ values: 'falsy' }).trim(),
-  body('employeeId')
-    .optional({ values: 'falsy' })
-    .trim()
-    .customSanitizer((value) => String(value || '').trim().toUpperCase())
-];
-
-const verifyPhoneOtpValidation = [
-  body('phone')
-    .customSanitizer(normalizePhoneValue)
-    .custom((value) => validatePhoneValue(value)),
-  body('otp')
-    .trim()
-    .matches(/^\d{4,8}$/)
-    .withMessage('Please enter the OTP sent to your phone.')
-];
-
 const webAuthnRegistrationOptionsValidation = [
   body('deviceName')
     .optional({ values: 'falsy' })
@@ -256,8 +226,7 @@ module.exports = {
   registrationAvailabilityValidation,
   registerValidation,
   resetPasswordValidation,
-  sendPhoneOtpValidation,
-  verifyPhoneOtpValidation,
+  verifyRegistrationEmailValidation,
   webAuthnAuthenticationOptionsValidation,
   webAuthnAuthenticationVerifyValidation,
   webAuthnRegistrationOptionsValidation,

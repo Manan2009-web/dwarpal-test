@@ -1,5 +1,72 @@
+const nodemailer = require('nodemailer');
 const env = require('../config/env');
 const AppError = require('../utils/appError');
+
+let smtpTransporter = null;
+
+function resolveEmailDeliveryMode() {
+  const configuredMode = String(env.emailDeliveryMode || 'auto')
+    .trim()
+    .toLowerCase();
+
+  // Force console mode if explicitly configured
+  if (configuredMode === 'console') {
+    return 'console';
+  }
+
+  // Force Resend if explicitly configured
+  if (configuredMode === 'resend') {
+    if (!env.resendApiKey || !env.emailFrom) {
+      throw new AppError(
+        'Email delivery is configured for Resend, but RESEND_API_KEY or EMAIL_FROM is missing.',
+        503
+      );
+    }
+    return 'resend';
+  }
+
+  // Auto mode: try SMTP first, then Resend, then console for dev
+  if (env.smtpHost && env.smtpUser && env.smtpPass) {
+    return 'smtp';
+  }
+
+  if (env.resendApiKey && env.emailFrom) {
+    return 'resend';
+  }
+
+  // Fallback to console only in development
+  if (!env.isProduction) {
+    return 'console';
+  }
+
+  throw new AppError(
+    'Email delivery is not configured. Configure SMTP (recommended) or Resend API with EMAIL_FROM before using email verification or password reset.',
+    503
+  );
+}
+
+function getEmailFromAddress() {
+  const configuredFrom = String(env.emailFrom || '').trim();
+  return configuredFrom || 'DwarPal <noreply@dwarpal.local>';
+}
+
+function getSmtpTransporter() {
+  if (smtpTransporter) {
+    return smtpTransporter;
+  }
+
+  smtpTransporter = nodemailer.createTransport({
+    host: env.smtpHost,
+    port: env.smtpPort,
+    secure: env.smtpSecure,
+    auth: {
+      user: env.smtpUser,
+      pass: env.smtpPass
+    }
+  });
+
+  return smtpTransporter;
+}
 
 async function parseJsonResponse(response) {
   try {
@@ -9,13 +76,51 @@ async function parseJsonResponse(response) {
   }
 }
 
-function ensureEmailServiceConfigured() {
-  if (!env.resendApiKey || !env.emailFrom) {
-    throw new AppError(
-      'Password reset email delivery is not configured. Add RESEND_API_KEY and EMAIL_FROM before using forgot password.',
-      503
-    );
-  }
+function buildEmailLayout({ eyebrow, title, intro, body, footer }) {
+  return `
+    <div style="font-family: 'Segoe UI', Arial, sans-serif; color: #173449; line-height: 1.6; background: #f4f7f1; padding: 24px;">
+      <div style="max-width: 580px; margin: 0 auto; background: rgba(255, 255, 255, 0.98); border-radius: 24px; padding: 28px; border: 1px solid rgba(23, 52, 73, 0.12); box-shadow: 0 20px 45px rgba(23, 52, 73, 0.08);">
+        <p style="margin: 0; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: #5d7183; font-weight: 700;">${eyebrow}</p>
+        <h1 style="margin: 10px 0 12px; font-size: 28px; line-height: 1.2; color: #173449;">${title}</h1>
+        <p style="margin: 0 0 18px; color: #4f6373;">${intro}</p>
+        ${body}
+        <p style="margin: 20px 0 0; color: #5d7183; font-size: 14px;">${footer}</p>
+      </div>
+    </div>
+  `;
+}
+
+function buildRegistrationVerificationEmail({ fullName, verificationCode, expiresInMinutes }) {
+  const greetingName = String(fullName || '').trim() || 'there';
+  const minutesLabel = Math.max(1, Number(expiresInMinutes) || 10);
+  const code = String(verificationCode || '').trim();
+
+  return {
+    subject: 'Verify your DwarPal email',
+    text: [
+      `Hello ${greetingName},`,
+      '',
+      'Welcome to DwarPal.',
+      `Use this verification code within ${minutesLabel} minutes to finish creating your account:`,
+      '',
+      code,
+      '',
+      'If you did not request this code, you can ignore this email.'
+    ].join('\n'),
+    html: buildEmailLayout({
+      eyebrow: 'DwarPal Verification',
+      title: 'Verify your email',
+      intro: `Hello ${greetingName}, use the verification code below to finish creating your DwarPal account.`,
+      body: `
+        <div style="margin: 22px 0; padding: 18px; border-radius: 20px; background: linear-gradient(135deg, rgba(31, 79, 139, 0.1), rgba(47, 156, 98, 0.12)); border: 1px solid rgba(31, 79, 139, 0.14); text-align: center;">
+          <p style="margin: 0 0 8px; font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: #5d7183; font-weight: 700;">Verification Code</p>
+          <p style="margin: 0; font-size: 32px; letter-spacing: 0.28em; font-weight: 700; color: #173449;">${code}</p>
+        </div>
+        <p style="margin: 0; color: #4f6373;">This code expires in ${minutesLabel} minutes.</p>
+      `,
+      footer: 'If you did not request this code, no further action is required.'
+    })
+  };
 }
 
 function buildPasswordResetEmail({ fullName, resetUrl, expiresInMinutes }) {
@@ -34,34 +139,54 @@ function buildPasswordResetEmail({ fullName, resetUrl, expiresInMinutes }) {
       '',
       'If you did not request this reset, you can ignore this email.'
     ].join('\n'),
-    html: `
-      <div style="font-family: Arial, sans-serif; color: #0f172a; line-height: 1.6;">
-        <p>Hello ${greetingName},</p>
-        <p>We received a request to reset your DwarPal password.</p>
-        <p>
+    html: buildEmailLayout({
+      eyebrow: 'DwarPal Security',
+      title: 'Reset your password',
+      intro: `Hello ${greetingName}, we received a request to reset your DwarPal password.`,
+      body: `
+        <p style="margin: 0 0 18px;">
           <a
             href="${safeResetUrl}"
-            style="display: inline-block; padding: 12px 18px; border-radius: 12px; background: #1f4f8b; color: #ffffff; text-decoration: none; font-weight: 600;"
+            style="display: inline-block; padding: 12px 18px; border-radius: 14px; background: linear-gradient(135deg, #1f4f8b, #2f7f98); color: #ffffff; text-decoration: none; font-weight: 700;"
           >
             Reset Password
           </a>
         </p>
-        <p>This link will expire in ${minutesLabel} minutes.</p>
-        <p>If you did not request this reset, you can safely ignore this email.</p>
-      </div>
-    `
+        <p style="margin: 0; color: #4f6373;">This link expires in ${minutesLabel} minutes.</p>
+      `,
+      footer: 'If you did not request this reset, you can safely ignore this email.'
+    })
   };
 }
 
-async function sendPasswordResetEmail({ to, fullName, resetUrl, expiresInMinutes }) {
-  ensureEmailServiceConfigured();
+async function sendViaSmtp({ to, subject, text, html }) {
+  const transporter = getSmtpTransporter();
+  
+  try {
+    const result = await transporter.sendMail({
+      from: getEmailFromAddress(),
+      to: String(to || '').trim(),
+      subject,
+      text,
+      html
+    });
 
-  const email = buildPasswordResetEmail({
-    fullName,
-    resetUrl,
-    expiresInMinutes
-  });
+    return {
+      mode: 'smtp',
+      providerResponse: {
+        messageId: result.messageId,
+        response: result.response
+      }
+    };
+  } catch (error) {
+    throw new AppError(
+      error.message || 'Unable to send the email right now. Please try again later.',
+      502
+    );
+  }
+}
 
+async function sendViaResend({ to, subject, text, html }) {
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -69,11 +194,11 @@ async function sendPasswordResetEmail({ to, fullName, resetUrl, expiresInMinutes
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      from: env.emailFrom,
+      from: getEmailFromAddress(),
       to: [String(to || '').trim()],
-      subject: email.subject,
-      text: email.text,
-      html: email.html
+      subject,
+      text,
+      html
     })
   });
 
@@ -81,14 +206,81 @@ async function sendPasswordResetEmail({ to, fullName, resetUrl, expiresInMinutes
 
   if (!response.ok) {
     throw new AppError(
-      payload?.message || payload?.error || 'Unable to send the password reset email right now. Please try again later.',
+      payload?.message || payload?.error || 'Unable to send the email right now. Please try again later.',
       502
     );
   }
 
-  return payload;
+  return {
+    mode: 'resend',
+    providerResponse: payload
+  };
+}
+
+async function sendViaConsole({ to, subject, text }) {
+  const preview = {
+    mode: 'console',
+    to: String(to || '').trim(),
+    from: getEmailFromAddress(),
+    subject,
+    text
+  };
+
+  console.info('[DwarPal email preview]', preview);
+
+  return {
+    mode: 'console',
+    providerResponse: {
+      id: `console-${Date.now()}`
+    }
+  };
+}
+
+async function sendEmail({ to, subject, text, html }) {
+  const mode = resolveEmailDeliveryMode();
+
+  if (mode === 'smtp') {
+    return sendViaSmtp({ to, subject, text, html });
+  }
+
+  if (mode === 'resend') {
+    return sendViaResend({ to, subject, text, html });
+  }
+
+  return sendViaConsole({ to, subject, text });
+}
+
+async function sendRegistrationVerificationEmail({ to, fullName, verificationCode, expiresInMinutes }) {
+  const email = buildRegistrationVerificationEmail({
+    fullName,
+    verificationCode,
+    expiresInMinutes
+  });
+
+  return sendEmail({
+    to,
+    subject: email.subject,
+    text: email.text,
+    html: email.html
+  });
+}
+
+async function sendPasswordResetEmail({ to, fullName, resetUrl, expiresInMinutes }) {
+  const email = buildPasswordResetEmail({
+    fullName,
+    resetUrl,
+    expiresInMinutes
+  });
+
+  return sendEmail({
+    to,
+    subject: email.subject,
+    text: email.text,
+    html: email.html
+  });
 }
 
 module.exports = {
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  sendRegistrationVerificationEmail
 };

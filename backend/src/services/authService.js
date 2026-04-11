@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const {
   generateAuthenticationOptions,
   generateRegistrationOptions,
@@ -6,15 +7,13 @@ const {
   verifyRegistrationResponse
 } = require('@simplewebauthn/server');
 const env = require('../config/env');
+const PendingRegistration = require('../models/PendingRegistration');
 const User = require('../models/User');
-const PhoneVerificationSession = require('../models/PhoneVerificationSession');
 const AppError = require('../utils/appError');
 const pickUser = require('../utils/pickUser');
 const { createAccessToken } = require('../utils/token');
 const { getClientFingerprint } = require('../utils/request');
-const { getFirebaseAdminAuth, isFirebaseAdminConfigured } = require('../config/firebaseAdmin');
-const { sendPasswordResetEmail } = require('./emailService');
-const { sendPhoneVerificationOtp, verifyPhoneVerificationOtp } = require('./smsService');
+const { sendPasswordResetEmail, sendRegistrationVerificationEmail } = require('./emailService');
 const { logAction } = require('./auditService');
 const {
   consumeRateLimit,
@@ -43,9 +42,9 @@ const LOGIN_FAILURE_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_FAILURE_SOURCE_LIMIT = 5;
 const LOGIN_FAILURE_IDENTITY_LIMIT = 20;
 const LOGIN_FAILURE_BLOCK_MS = 15 * 60 * 1000;
-const REGISTRATION_PHONE_VERIFICATION_PURPOSE = 'registration';
-const PHONE_OTP_CODE_TTL_MS = env.phoneOtpCodeExpiresMinutes * 60 * 1000;
-const PHONE_VERIFICATION_TOKEN_TTL_MS = env.phoneOtpVerificationTokenTtlMinutes * 60 * 1000;
+const REGISTRATION_OTP_EXPIRES_MS = env.registrationOtpExpiresMinutes * 60 * 1000;
+const REGISTRATION_OTP_RESEND_COOLDOWN_MS = env.registrationOtpResendCooldownSeconds * 1000;
+const REGISTRATION_PENDING_EXPIRES_MS = env.registrationPendingExpiresMinutes * 60 * 1000;
 const PASSWORD_RESET_TOKEN_TTL_MS = env.passwordResetTokenExpiresMinutes * 60 * 1000;
 
 const DUPLICATE_REGISTRATION_MESSAGES = Object.freeze({
@@ -93,6 +92,23 @@ function hashToken(token) {
   return crypto.createHash('sha256').update(String(token || '')).digest('hex');
 }
 
+function generateVerificationCode() {
+  return crypto.randomInt(0, 1000000).toString().padStart(6, '0');
+}
+
+function maskEmailAddress(email) {
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const [localPart = '', domain = ''] = normalizedEmail.split('@');
+
+  if (!localPart || !domain) {
+    return normalizedEmail;
+  }
+
+  const visibleLocal = localPart.slice(0, Math.min(2, localPart.length));
+  const maskedLocal = `${visibleLocal}${'*'.repeat(Math.max(localPart.length - visibleLocal.length, 1))}`;
+  return `${maskedLocal}@${domain}`;
+}
+
 function buildFieldError(field, message) {
   return {
     field,
@@ -123,9 +139,7 @@ function normalizeRegistrationPayload(payload = {}) {
     enrollmentNo: normalizedEnrollment,
     employeeId: normalizedEmployeeId,
     phone: normalizedPhone,
-    password: payload.password,
-    firebaseUid: String(payload.firebaseUid || '').trim(),
-    phoneVerificationToken: String(payload.phoneVerificationToken || '').trim()
+    password: payload.password
   };
 }
 
@@ -209,63 +223,185 @@ function buildPasswordResetUrl(resetToken, email) {
   return resetUrl.toString();
 }
 
-async function syncFirebasePassword(user, newPassword) {
-  const firebaseAdminAuth = getFirebaseAdminAuth();
+async function hashPasswordValue(password) {
+  return bcrypt.hash(String(password || ''), env.bcryptSaltRounds);
+}
 
-  if (!firebaseAdminAuth) {
-    throw new AppError(
-      'Firebase Admin is not configured. Add service account credentials before using password reset.',
-      503
-    );
+function buildPendingRegistrationDocument(normalizedPayload, passwordHash, verificationCodeHash, now = new Date()) {
+  const normalizedRole = normalizedPayload.role;
+  const isStudent = normalizedRole === 'student';
+  const requiresProgram = ['student', 'hod'].includes(normalizedRole);
+  const requiresDepartment = normalizedRole !== 'security';
+  const verificationCodeExpiresAt = new Date(now.getTime() + REGISTRATION_OTP_EXPIRES_MS);
+  const resendAvailableAt = new Date(now.getTime() + REGISTRATION_OTP_RESEND_COOLDOWN_MS);
+  const deleteAt = new Date(now.getTime() + REGISTRATION_PENDING_EXPIRES_MS);
+
+  return {
+    fullName: normalizedPayload.fullName,
+    email: normalizedPayload.email,
+    passwordHash,
+    role: normalizedRole,
+    program: requiresProgram ? normalizedPayload.program : null,
+    department: requiresDepartment ? normalizedPayload.department : null,
+    semester: isStudent ? Number(normalizedPayload.semester) : null,
+    enrollmentNo: isStudent ? normalizedPayload.enrollmentNo : null,
+    employeeId: isStudent ? null : normalizedPayload.employeeId,
+    phone: normalizedPayload.phone,
+    verificationCodeHash,
+    verificationCodeExpiresAt,
+    resendAvailableAt,
+    verificationAttempts: 0,
+    lastSentAt: now,
+    deleteAt
+  };
+}
+
+function buildRegistrationVerificationRateLimitError(retryAfterSeconds) {
+  const message =
+    retryAfterSeconds > 0
+      ? `Please wait ${Math.max(1, retryAfterSeconds)} seconds before requesting another verification code.`
+      : 'Please wait before requesting another verification code.';
+
+  const error = new AppError(message, 429, [
+    {
+      field: 'email',
+      message
+    }
+  ]);
+
+  error.retryAfterSeconds = retryAfterSeconds;
+  error.code = 'AUTH_REGISTER_VERIFICATION_CODE_COOLDOWN';
+
+  return error;
+}
+
+async function createOrRefreshPendingRegistration(payload, requestMeta) {
+  const normalizedPayload = normalizeRegistrationPayload(payload);
+  const normalizedRole = normalizedPayload.role;
+  const normalizedPhone = normalizedPayload.phone;
+
+  if (!PUBLIC_REGISTRATION_ROLES.includes(normalizedRole)) {
+    throw new AppError('Only supported roles can register through this endpoint', 403);
   }
+
+  if (!normalizedPhone) {
+    throw createFieldErrorResponse('phone', 'Please enter a valid phone number.');
+  }
+
+  await assertRegistrationAvailability(normalizedPayload);
+
+  const existingPendingRegistration = await PendingRegistration.findOne({
+    email: normalizedPayload.email
+  }).select('+passwordHash +verificationCodeHash');
+
+  if (
+    existingPendingRegistration?.resendAvailableAt instanceof Date &&
+    existingPendingRegistration.resendAvailableAt.getTime() > Date.now() &&
+    !existingPendingRegistration.completedAt
+  ) {
+    const retryAfterSeconds = Math.ceil(
+      (existingPendingRegistration.resendAvailableAt.getTime() - Date.now()) / 1000
+    );
+    throw buildRegistrationVerificationRateLimitError(retryAfterSeconds);
+  }
+
+  const verificationCode = generateVerificationCode();
+  const passwordHash = await hashPasswordValue(normalizedPayload.password);
+  const now = new Date();
+  const pendingRegistrationPayload = buildPendingRegistrationDocument(
+    normalizedPayload,
+    passwordHash,
+    hashToken(verificationCode),
+    now
+  );
+
+  let pendingRegistration = null;
 
   try {
-    if (user.firebaseUid) {
-      try {
-        const firebaseUser = await firebaseAdminAuth.updateUser(user.firebaseUid, {
-          password: newPassword
-        });
-
-        return {
-          uid: firebaseUser.uid
-        };
-      } catch (error) {
-        if (error?.code !== 'auth/user-not-found') {
-          throw error;
+    pendingRegistration = await PendingRegistration.findOneAndUpdate(
+      { email: normalizedPayload.email },
+      {
+        $set: pendingRegistrationPayload,
+        $inc: {
+          sendCount: 1
+        },
+        $unset: {
+          completedAt: 1,
+          userId: 1
         }
+      },
+      {
+        new: true,
+        upsert: true,
+        runValidators: true,
+        setDefaultsOnInsert: true
       }
-    }
-
-    try {
-      const existingFirebaseUser = await firebaseAdminAuth.getUserByEmail(user.email);
-      const updatedFirebaseUser = await firebaseAdminAuth.updateUser(existingFirebaseUser.uid, {
-        password: newPassword
-      });
-
-      return {
-        uid: updatedFirebaseUser.uid
-      };
-    } catch (error) {
-      if (error?.code !== 'auth/user-not-found') {
-        throw error;
-      }
-    }
-
-    const createdFirebaseUser = await firebaseAdminAuth.createUser({
-      email: user.email,
-      password: newPassword,
-      displayName: user.fullName || undefined
-    });
-
-    return {
-      uid: createdFirebaseUser.uid
-    };
-  } catch (error) {
-    throw new AppError(
-      error?.message || 'Unable to synchronize the new password with Firebase. Please try the reset link again.',
-      502
     );
+
+    await sendRegistrationVerificationEmail({
+      to: normalizedPayload.email,
+      fullName: normalizedPayload.fullName,
+      verificationCode,
+      expiresInMinutes: env.registrationOtpExpiresMinutes
+    });
+  } catch (error) {
+    await PendingRegistration.deleteOne({ email: normalizedPayload.email });
+    throw error;
   }
+
+  await logAction({
+    actorId: null,
+    resourceType: 'auth',
+    resourceId: pendingRegistration._id,
+    action: 'request_registration_verification_code',
+    message: 'Registration verification code sent',
+    metadata: {
+      email: normalizedPayload.email,
+      role: normalizedPayload.role
+    },
+    requestMeta
+  });
+
+  return {
+    message: 'We sent a verification code to your email.',
+    email: normalizedPayload.email,
+    maskedEmail: maskEmailAddress(normalizedPayload.email),
+    resendAvailableAt: pendingRegistration.resendAvailableAt?.toISOString?.() || null,
+    retryAfterSeconds: Math.max(1, env.registrationOtpResendCooldownSeconds),
+    expiresAt: pendingRegistration.verificationCodeExpiresAt?.toISOString?.() || null
+  };
+}
+
+async function resolveCompletedRegistration(pendingRegistration, req) {
+  if (!pendingRegistration?.userId) {
+    throw new AppError('This registration session has expired. Please create your account again.', 400, [
+      {
+        field: 'verificationCode',
+        message: 'This registration session has expired. Please create your account again.'
+      }
+    ]);
+  }
+
+  const user = await User.findById(pendingRegistration.userId).select('+password');
+
+  if (!user) {
+    throw new AppError('This registration session has expired. Please create your account again.', 400, [
+      {
+        field: 'verificationCode',
+        message: 'This registration session has expired. Please create your account again.'
+      }
+    ]);
+  }
+
+  return {
+    message: 'Account created successfully.',
+    token: createSessionToken(user, 'password'),
+    user: pickUser(user, req),
+    verification: {
+      email: user.email,
+      verifiedAt: pendingRegistration.completedAt?.toISOString?.() || user.emailVerifiedAt?.toISOString?.() || null
+    }
+  };
 }
 
 async function findUserByIdentifier(identifier) {
@@ -446,213 +582,134 @@ async function checkRegistrationAvailability(payload) {
   };
 }
 
-async function sendRegistrationOtp(payload, requestMeta) {
-  const normalizedPayload = normalizeRegistrationPayload(payload);
-  const now = Date.now();
+async function sendRegistrationVerificationCode(payload, requestMeta) {
+  return createOrRefreshPendingRegistration(payload, requestMeta);
+}
 
-  if (!normalizedPayload.phone) {
-    throw createFieldErrorResponse('phone', 'Please enter a valid phone number.');
+async function verifyRegistrationEmail(payload, req, requestMeta) {
+  const normalizedEmail = String(payload.email || '').trim().toLowerCase();
+  const verificationCode = String(payload.verificationCode || '').trim();
+
+  const pendingRegistration = await PendingRegistration.findOne({
+    email: normalizedEmail
+  }).select('+passwordHash +verificationCodeHash');
+
+  if (!pendingRegistration) {
+    throw new AppError('Your verification session expired. Please create your account again.', 400, [
+      {
+        field: 'verificationCode',
+        message: 'Your verification session expired. Please create your account again.'
+      }
+    ]);
   }
 
-  await assertRegistrationAvailability(normalizedPayload);
+  if (!pendingRegistration.verificationCodeHash || !pendingRegistration.passwordHash) {
+    if (pendingRegistration.completedAt) {
+      const completedCodeHash = hashToken(verificationCode);
 
-  const existingSession = await PhoneVerificationSession.findOne({
-    phone: normalizedPayload.phone,
-    purpose: REGISTRATION_PHONE_VERIFICATION_PURPOSE
-  }).select('+verificationTokenHash +verificationTokenExpiresAt');
-
-  const cooldownMs = env.phoneOtpResendCooldownSeconds * 1000;
-  const retryAfterSeconds =
-    existingSession?.lastSentAt instanceof Date
-      ? Math.ceil((existingSession.lastSentAt.getTime() + cooldownMs - now) / 1000)
-      : 0;
-
-  if (retryAfterSeconds > 0) {
-    const message = `Please wait ${retryAfterSeconds} seconds before requesting another OTP.`;
-    throw createRateLimitError({
-      message,
-      retryAfterSeconds,
-      code: 'AUTH_PHONE_OTP_COOLDOWN',
-      errors: [buildFieldError('phone', message)],
-      rateLimit: {
-        scope: 'auth:phone-otp:cooldown',
-        resetAt: new Date(now + retryAfterSeconds * 1000).toISOString()
+      if (completedCodeHash === pendingRegistration.verificationCodeHash) {
+        return resolveCompletedRegistration(pendingRegistration, req);
       }
+    }
+
+    throw new AppError('Your verification session expired. Please request a new code.', 400, [
+      {
+        field: 'verificationCode',
+        message: 'Your verification session expired. Please request a new code.'
+      }
+    ]);
+  }
+
+  if (
+    !(pendingRegistration.verificationCodeExpiresAt instanceof Date) ||
+    pendingRegistration.verificationCodeExpiresAt.getTime() <= Date.now()
+  ) {
+    throw new AppError('The verification code expired. Please request a new code.', 400, [
+      {
+        field: 'verificationCode',
+        message: 'The verification code expired. Please request a new code.'
+      }
+    ]);
+  }
+
+  if (pendingRegistration.verificationAttempts >= env.registrationOtpMaxAttempts) {
+    throw new AppError('Too many incorrect verification attempts. Please request a new code.', 429, [
+      {
+        field: 'verificationCode',
+        message: 'Too many incorrect verification attempts. Please request a new code.'
+      }
+    ]);
+  }
+
+  const verificationCodeHash = hashToken(verificationCode);
+
+  if (verificationCodeHash !== pendingRegistration.verificationCodeHash) {
+    pendingRegistration.verificationAttempts += 1;
+    await pendingRegistration.save({ validateModifiedOnly: true });
+
+    throw new AppError('The verification code is incorrect. Please try again.', 400, [
+      {
+        field: 'verificationCode',
+        message: 'The verification code is incorrect. Please try again.'
+      }
+    ]);
+  }
+
+  const userPayload = {
+    fullName: pendingRegistration.fullName,
+    email: pendingRegistration.email,
+    password: pendingRegistration.passwordHash,
+    role: pendingRegistration.role,
+    program: pendingRegistration.program,
+    department: pendingRegistration.department,
+    semester: pendingRegistration.semester,
+    enrollmentNo: pendingRegistration.enrollmentNo,
+    employeeId: pendingRegistration.employeeId,
+    phone: pendingRegistration.phone
+  };
+
+  await assertRegistrationAvailability(userPayload);
+
+  let user = null;
+  let createUserError = null;
+
+  try {
+    user = await User.create({
+      fullName: pendingRegistration.fullName,
+      email: pendingRegistration.email,
+      password: pendingRegistration.passwordHash,
+      role: pendingRegistration.role,
+      program: pendingRegistration.program || undefined,
+      department: pendingRegistration.department || undefined,
+      semester: pendingRegistration.role === 'student' ? Number(pendingRegistration.semester) : undefined,
+      enrollmentNo: pendingRegistration.role === 'student' ? pendingRegistration.enrollmentNo : undefined,
+      employeeId: pendingRegistration.role === 'student' ? undefined : pendingRegistration.employeeId,
+      phone: pendingRegistration.phone,
+      emailVerified: true,
+      emailVerifiedAt: new Date()
     });
-  }
+  } catch (error) {
+    createUserError = error;
 
-  const otpDelivery = await sendPhoneVerificationOtp(normalizedPayload.phone);
-  const resendCount = existingSession?.resendCount ? existingSession.resendCount + 1 : 0;
-  const lastSentAt = new Date(now);
-  const expiresAt = new Date(now + PHONE_OTP_CODE_TTL_MS);
-
-  await PhoneVerificationSession.findOneAndUpdate(
-    {
-      phone: normalizedPayload.phone,
-      purpose: REGISTRATION_PHONE_VERIFICATION_PURPOSE
-    },
-    {
-      $set: {
-        phone: normalizedPayload.phone,
-        purpose: REGISTRATION_PHONE_VERIFICATION_PURPOSE,
-        provider: 'twilio-verify',
-        providerSid: String(otpDelivery?.sid || existingSession?.providerSid || '').trim(),
-        status: 'pending',
-        resendCount,
-        lastSentAt,
-        verifiedAt: null,
-        consumedAt: null,
-        expiresAt,
-        verificationTokenHash: null,
-        verificationTokenExpiresAt: null
-      }
-    },
-    {
-      upsert: true,
-      new: true,
-      setDefaultsOnInsert: true
+    if (error?.code === 11000) {
+      user = await User.findOne({ email: pendingRegistration.email }).select('+password');
+    } else {
+      throw error;
     }
-  );
-
-  await logAction({
-    resourceType: 'auth',
-    action: 'send_registration_phone_otp',
-    message: 'Registration phone OTP sent',
-    metadata: {
-      phone: normalizedPayload.phone
-    },
-    requestMeta
-  });
-
-  return {
-    message: 'OTP sent successfully.',
-    phone: normalizedPayload.phone,
-    resendAvailableAt: new Date(now + cooldownMs).toISOString(),
-    expiresAt: expiresAt.toISOString()
-  };
-}
-
-async function verifyRegistrationOtp(payload, requestMeta) {
-  const normalizedPhone = normalizePhoneNumber(payload.phone, {
-    defaultCountryCode: env.defaultPhoneCountryCode
-  });
-
-  if (!normalizedPhone) {
-    throw createFieldErrorResponse('phone', 'Please enter a valid phone number.');
   }
 
-  await assertRegistrationAvailability({ phone: normalizedPhone });
-
-  const session = await PhoneVerificationSession.findOne({
-    phone: normalizedPhone,
-    purpose: REGISTRATION_PHONE_VERIFICATION_PURPOSE
-  }).select('+verificationTokenHash +verificationTokenExpiresAt');
-
-  if (!session) {
-    throw createFieldErrorResponse('otp', 'Please request a new OTP before verifying this phone number.');
-  }
-
-  if (session.expiresAt && session.expiresAt.getTime() <= Date.now()) {
-    session.status = 'expired';
-    await session.save();
-    throw createFieldErrorResponse('otp', 'OTP has expired. Please request a new OTP.');
-  }
-
-  const verificationResult = await verifyPhoneVerificationOtp(normalizedPhone, payload.otp);
-  const verificationStatus = String(verificationResult?.status || '').trim().toLowerCase();
-  const isApproved = verificationResult?.valid === true || verificationStatus === 'approved';
-
-  if (!isApproved) {
-    if (verificationStatus === 'expired' || verificationStatus === 'canceled') {
-      session.status = 'expired';
-      await session.save();
-      throw createFieldErrorResponse('otp', 'OTP has expired. Please request a new OTP.');
+  if (!user) {
+    if (createUserError) {
+      throw createUserError;
     }
 
-    throw createFieldErrorResponse('otp', 'The OTP you entered is invalid. Please try again.');
+    throw new AppError('Unable to complete account creation right now. Please try again.', 500);
   }
 
-  const phoneVerificationToken = crypto.randomBytes(32).toString('hex');
-
-  session.status = 'verified';
-  session.providerSid = String(verificationResult?.sid || session.providerSid || '').trim();
-  session.verifiedAt = new Date();
-  session.consumedAt = null;
-  session.verificationTokenHash = hashToken(phoneVerificationToken);
-  session.verificationTokenExpiresAt = new Date(Date.now() + PHONE_VERIFICATION_TOKEN_TTL_MS);
-  session.expiresAt = session.verificationTokenExpiresAt;
-  await session.save();
-
-  await logAction({
-    resourceType: 'auth',
-    action: 'verify_registration_phone_otp',
-    message: 'Registration phone OTP verified',
-    metadata: {
-      phone: normalizedPhone
-    },
-    requestMeta
-  });
-
-  return {
-    message: 'Phone number verified successfully.',
-    phone: normalizedPhone,
-    phoneVerificationToken,
-    verifiedUntil: session.verificationTokenExpiresAt.toISOString()
-  };
-}
-
-async function registerUser(payload, req, requestMeta) {
-  const normalizedPayload = normalizeRegistrationPayload(payload);
-  const normalizedRole = normalizedPayload.role;
-  const normalizedEmail = normalizedPayload.email;
-  const normalizedEnrollment = normalizedPayload.enrollmentNo;
-  const normalizedEmployeeId = normalizedPayload.employeeId;
-  const normalizedPhone = normalizedPayload.phone;
-
-  if (!PUBLIC_REGISTRATION_ROLES.includes(normalizedRole)) {
-    throw new AppError('Only supported roles can register through this endpoint', 403);
-  }
-
-  await assertRegistrationAvailability(normalizedPayload);
-
-  if (!normalizedPhone) {
-    throw createFieldErrorResponse('phone', 'Please enter a valid phone number.');
-  }
-
-  if (!normalizedPayload.phoneVerificationToken) {
-    throw createFieldErrorResponse('phone', 'Please verify your phone number before creating your account.');
-  }
-
-  const verificationSession = await PhoneVerificationSession.findOne({
-    phone: normalizedPhone,
-    purpose: REGISTRATION_PHONE_VERIFICATION_PURPOSE,
-    status: 'verified',
-    verificationTokenHash: hashToken(normalizedPayload.phoneVerificationToken),
-    verificationTokenExpiresAt: { $gt: new Date() },
-    consumedAt: null
-  }).select('+verificationTokenHash +verificationTokenExpiresAt');
-
-  if (!verificationSession) {
-    throw createFieldErrorResponse('phone', 'Phone verification is missing or expired. Please verify your number again.');
-  }
-
-  const user = await User.create({
-    fullName: normalizedPayload.fullName,
-    email: normalizedEmail,
-    firebaseUid: normalizedPayload.firebaseUid || undefined,
-    password: normalizedPayload.password,
-    role: normalizedRole,
-    program: ['student', 'hod'].includes(normalizedRole) ? normalizedPayload.program : undefined,
-    department: normalizedPayload.department,
-    semester: normalizedRole === 'student' ? Number(normalizedPayload.semester) : undefined,
-    enrollmentNo: normalizedRole === 'student' ? normalizedEnrollment : undefined,
-    employeeId: normalizedRole !== 'student' ? normalizedEmployeeId : undefined,
-    phone: normalizedPhone
-  });
-
-  verificationSession.status = 'consumed';
-  verificationSession.consumedAt = new Date();
-  await verificationSession.save();
+  pendingRegistration.passwordHash = null;
+  pendingRegistration.completedAt = new Date();
+  pendingRegistration.userId = user._id;
+  await pendingRegistration.save({ validateModifiedOnly: true });
 
   await logAction({
     actorId: user._id,
@@ -662,13 +719,21 @@ async function registerUser(payload, req, requestMeta) {
     message: `${user.role} account registered`,
     metadata: {
       role: user.role,
-      email: user.email
+      email: user.email,
+      phone: user.phone,
+      emailVerifiedAt: user.emailVerifiedAt?.toISOString?.() || null
     },
     requestMeta
   });
 
   return {
-    user: pickUser(user, req)
+    message: 'Account created successfully.',
+    token: createSessionToken(user, 'password'),
+    user: pickUser(user, req),
+    verification: {
+      email: user.email,
+      verifiedAt: user.emailVerifiedAt?.toISOString?.() || null
+    }
   };
 }
 
@@ -686,6 +751,15 @@ async function loginUser(payload, req, requestMeta) {
 
   if (!user.isActive) {
     throw new AppError('Your account is inactive. Please contact administration.', 403);
+  }
+
+  if (user.emailVerified === false) {
+    throw new AppError('Please verify your email before logging in.', 403, [
+      {
+        field: 'identifier',
+        message: 'Please verify your email before logging in.'
+      }
+    ]);
   }
 
   const passwordMatches = await user.comparePassword(payload.password);
@@ -1047,13 +1121,6 @@ async function changePassword(userId, payload, requestMeta) {
 async function forgotPassword(payload, requestMeta) {
   const normalizedEmail = String(payload.email || '').trim().toLowerCase();
 
-  if (!isFirebaseAdminConfigured()) {
-    throw new AppError(
-      'Firebase Admin is not configured. Add service account credentials before using forgot password.',
-      503
-    );
-  }
-
   const user = await User.findOne({ email: normalizedEmail }).select(
     '+passwordResetToken +passwordResetExpiresAt'
   );
@@ -1124,21 +1191,6 @@ async function resetPassword(payload, requestMeta) {
   user.password = payload.newPassword;
   await user.save();
 
-  let firebaseSyncResult = null;
-
-  try {
-    firebaseSyncResult = await syncFirebasePassword(user, payload.newPassword);
-  } catch (error) {
-    throw new AppError(
-      `${error.message} Your reset link is still active, so please try the same link again after fixing the Firebase configuration.`,
-      error.statusCode || 502
-    );
-  }
-
-  if (firebaseSyncResult?.uid && user.firebaseUid !== firebaseSyncResult.uid) {
-    user.firebaseUid = firebaseSyncResult.uid;
-  }
-
   user.passwordResetToken = null;
   user.passwordResetExpiresAt = null;
   await user.save({ validateModifiedOnly: true });
@@ -1168,11 +1220,10 @@ module.exports = {
   getWebAuthnRegistrationOptions,
   loginUser,
   removeWebAuthnDevice,
-  registerUser,
   resetPassword,
-  sendRegistrationOtp,
+  sendRegistrationVerificationCode,
   verifyAuthState,
-  verifyRegistrationOtp,
+  verifyRegistrationEmail,
   verifyWebAuthnAuthentication,
   verifyWebAuthnRegistration
 };

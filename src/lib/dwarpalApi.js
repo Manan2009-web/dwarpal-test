@@ -331,10 +331,6 @@ function buildRegistrationIdentityPayload(payload = {}) {
             employeeId: cleanedId.toUpperCase(),
           }
         : {}),
-    ...(payload.firebaseUid ? { firebaseUid: String(payload.firebaseUid).trim() } : {}),
-    ...(payload.phoneVerificationToken
-      ? { phoneVerificationToken: String(payload.phoneVerificationToken).trim() }
-      : {})
   }
 }
 
@@ -427,6 +423,8 @@ function toUiUser(user, session = null) {
     semester: user.semester || null,
     profileImageUrl: user.profileImageUrl || user.profileImage || null,
     isActive: user.isActive ?? true,
+    emailVerified: user.emailVerified !== false,
+    emailVerifiedAt: user.emailVerifiedAt || null,
     hasBiometricCredentials: Boolean(user.hasBiometricCredentials),
     lastLoginAt: user.lastLoginAt || null,
     sessionAuthMethod: session?.authMethod || null,
@@ -1049,39 +1047,8 @@ export async function checkRegistrationAvailability(payload) {
   }
 }
 
-export async function sendRegistrationOtp(payload) {
-  const response = await apiRequest('/auth/phone-otp/send', {
-    method: 'POST',
-    body: buildRegistrationIdentityPayload(payload),
-  })
-
-  return {
-    message: response?.message || 'OTP sent successfully.',
-    phone: response?.data?.phone || normalizePhoneNumberInput(payload?.phone),
-    resendAvailableAt: response?.data?.resendAvailableAt || null,
-    expiresAt: response?.data?.expiresAt || null,
-  }
-}
-
-export async function verifyRegistrationOtp(payload) {
-  const response = await apiRequest('/auth/phone-otp/verify', {
-    method: 'POST',
-    body: {
-      phone: normalizePhoneNumberInput(payload?.phone),
-      otp: String(payload?.otp || '').trim(),
-    },
-  })
-
-  return {
-    message: response?.message || 'Phone number verified successfully.',
-    phone: response?.data?.phone || normalizePhoneNumberInput(payload?.phone),
-    phoneVerificationToken: response?.data?.phoneVerificationToken || '',
-    verifiedUntil: response?.data?.verifiedUntil || null,
-  }
-}
-
-export async function registerUser(payload) {
-  const response = await apiRequest('/auth/register', {
+export async function sendRegistrationVerificationCode(payload) {
+  const response = await apiRequest('/auth/register/send-verification-code', {
     method: 'POST',
     body: {
       ...buildRegistrationIdentityPayload(payload),
@@ -1090,8 +1057,32 @@ export async function registerUser(payload) {
   })
 
   return {
-    message: response?.message || '',
-    user: toUiUser(response?.data?.user),
+    message: response?.message || 'We sent a verification code to your email.',
+    email: response?.data?.email || '',
+    maskedEmail: response?.data?.maskedEmail || '',
+    resendAvailableAt: response?.data?.resendAvailableAt || null,
+    retryAfterSeconds: Number(response?.data?.retryAfterSeconds || 0),
+    expiresAt: response?.data?.expiresAt || null,
+  }
+}
+
+export async function verifyRegistrationEmail(payload) {
+  const response = await apiRequest('/auth/register/verify-email', {
+    method: 'POST',
+    body: {
+      email: String(payload.email || '').trim().toLowerCase(),
+      verificationCode: String(payload.verificationCode || payload.code || '').trim(),
+    },
+  })
+
+  if (response?.data?.token) {
+    storeAuthToken(response.data.token)
+  }
+
+  return {
+    message: response?.message || 'Account created successfully.',
+    user: toUiUser(response?.data?.user, { authMethod: 'password' }),
+    verification: response?.data?.verification || null,
   }
 }
 
