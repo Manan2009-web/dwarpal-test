@@ -75,6 +75,7 @@ import {
   resetPassword as resetPasswordWithApi,
   sendRegistrationVerificationCode,
   submitRequest,
+  updateCurrentUserProfile,
   updateRequestStatus,
   verifyRegistrationEmail,
   verifyBiometricAuthentication,
@@ -170,6 +171,14 @@ function getActionToastMeta(request, action) {
       tone: 'info',
       title: `${requestLabel} forwarded`,
       message: `${requestLabel} was forwarded for the next review step.`,
+    }
+  }
+
+  if (action === 'sendToCoordinator') {
+    return {
+      tone: 'info',
+      title: `${requestLabel} sent to coordinator`,
+      message: `${requestLabel} was sent to the class coordinator for semester review.`,
     }
   }
 
@@ -389,6 +398,7 @@ function App() {
   )
   const [notificationPromptOpen, setNotificationPromptOpen] = useState(false)
   const refreshRequestRef = useRef(0)
+  const refreshInFlightRef = useRef(false)
   const lastRefreshErrorToastAtRef = useRef(0)
 
   const resetWorkspace = useCallback(() => {
@@ -536,7 +546,18 @@ function App() {
           return {
             ...errorDetails,
             fieldErrors: {},
-            message: 'Unable to reach the DwarPal backend. Please start the backend server and try again.',
+            message: import.meta.env.DEV
+              ? 'Unable to reach the DwarPal backend. Please start the backend server and try again.'
+              : 'Unable to reach the DwarPal backend right now. Please check your connection and try again.',
+          }
+        }
+
+        if (error.status === 408) {
+          return {
+            ...errorDetails,
+            fieldErrors: {},
+            message:
+              'DwarPal backend took too long to respond. If this is the first request, the server may be waking up. Please retry in a few seconds.',
           }
         }
 
@@ -619,8 +640,14 @@ function App() {
   )
 
   const refreshAppData = useCallback(
-    async (signal) => {
+    async (signal, { force = false } = {}) => {
       if (!currentUser?.role) return
+
+      if (!force && refreshInFlightRef.current) {
+        return
+      }
+
+      refreshInFlightRef.current = true
 
       try {
         await loadWorkspace(currentUser.role, signal)
@@ -642,6 +669,8 @@ function App() {
             })
           }
         }
+      } finally {
+        refreshInFlightRef.current = false
       }
     },
     [currentUser?.role, loadWorkspace, resolveApiError, toast],
@@ -990,6 +1019,58 @@ function App() {
     setCurrentUser((previousUser) => (previousUser ? { ...previousUser, ...updates } : previousUser))
   }
 
+  async function saveCurrentUserProfile(
+    profileUpdates,
+    {
+      successTitle = 'Profile updated',
+      successMessage = 'Your profile changes were saved successfully.',
+      errorTitle = 'Profile update failed',
+      fallbackErrorMessage = 'Unable to save your profile changes right now.',
+    } = {},
+  ) {
+    if (!currentUser?.id) {
+      return {
+        ok: false,
+        error: 'Please sign in again to update your profile.',
+      }
+    }
+
+    try {
+      const updatedUser = await updateCurrentUserProfile(profileUpdates)
+
+      if (updatedUser) {
+        setCurrentUser(updatedUser)
+      }
+
+      if (successTitle || successMessage) {
+        toast.success({
+          title: successTitle,
+          message: successMessage,
+        })
+      }
+
+      return {
+        ok: true,
+        user: updatedUser || currentUser,
+      }
+    } catch (error) {
+      const errorDetails = resolveApiError(error, {
+        fallbackMessage: fallbackErrorMessage,
+      })
+
+      toast.error({
+        title: errorTitle,
+        message: errorDetails.message,
+      })
+
+      return {
+        ok: false,
+        error: errorDetails.message,
+        fieldErrors: errorDetails.fieldErrors,
+      }
+    }
+  }
+
   async function addGatepass(form) {
     if (!currentUser) {
       return { ok: false, error: 'Please sign in again to submit your request.' }
@@ -1009,7 +1090,7 @@ function App() {
             }
 
       await submitRequest(requestPayload)
-      await refreshAppData()
+      await refreshAppData(undefined, { force: true })
       toast.success({
         title: currentUser.role === 'faculty' ? 'Leave request created' : 'Gatepass created',
         message:
@@ -1038,7 +1119,7 @@ function App() {
   async function updateGatepass(request, action, requestBody = null) {
     try {
       await updateRequestStatus(request, action, requestBody)
-      await refreshAppData()
+      await refreshAppData(undefined, { force: true })
       const toastMeta = getActionToastMeta(request, action)
       toast[toastMeta.tone]?.({
         title: toastMeta.title,
@@ -1105,6 +1186,7 @@ function App() {
                   onLogout={logout}
                   onAddGatepass={addGatepass}
                   onCurrentUserPatch={patchCurrentUser}
+                  onUpdateCurrentUserProfile={saveCurrentUserProfile}
                   onGatepassAction={updateGatepass}
                   onRefreshData={refreshAppData}
                   cookieConsent={cookieConsent}
@@ -2573,11 +2655,294 @@ function BiometricSettingsPanel({ currentUser, onCurrentUserPatch }) {
   )
 }
 
+function createCoordinatorAssignmentForm(currentUser) {
+  const assignment = currentUser?.coordinatorAssignment || {}
+
+  return {
+    isCoordinator: Boolean(assignment.isCoordinator),
+    program: normalizeProgram(assignment.program),
+    department:
+      normalizeDepartment(assignment.department) || assignment.department || '',
+    semester: assignment.semester ? String(assignment.semester) : '',
+  }
+}
+
+function GatepassAvailabilityPanel({
+  currentUser,
+  onUpdateCurrentUserProfile,
+  locationLabel = 'profile',
+  compact = false,
+}) {
+  const [isSaving, setIsSaving] = useState(false)
+  const approvalEnabled = currentUser?.gatepassApprovalEnabled !== false
+  const roleLabel = currentUser?.role === 'principal' ? 'Principal' : 'HOD'
+
+  async function handleToggleAvailability() {
+    if (!onUpdateCurrentUserProfile || isSaving) {
+      return
+    }
+
+    const nextValue = !approvalEnabled
+    setIsSaving(true)
+
+    try {
+      await onUpdateCurrentUserProfile(
+        {
+          gatepassApprovalEnabled: nextValue,
+        },
+        {
+          successTitle: nextValue ? `${roleLabel} review enabled` : `${roleLabel} marked busy`,
+          successMessage: nextValue
+            ? `New student gatepasses will route to ${roleLabel} first.`
+            : `New student gatepasses will bypass ${roleLabel} and route to the next reviewer.`,
+          errorTitle: 'Unable to update reviewer availability',
+          fallbackErrorMessage: 'DwarPal could not update reviewer availability right now.',
+        },
+      )
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <section className={`profile-subcard availability-card${compact ? ' compact' : ''}`}>
+      <div className="availability-card-header">
+        <div>
+          <h3>{`${roleLabel} Gatepass Availability`}</h3>
+          <p>
+            {approvalEnabled
+              ? `Student gatepasses currently wait for ${roleLabel} review first.`
+              : `Student gatepasses currently bypass ${roleLabel} and move to the next level.`}
+          </p>
+        </div>
+        <span className={`status-badge ${approvalEnabled ? 'approved' : 'pending'}`}>
+          {approvalEnabled ? 'Available' : 'Busy / On leave'}
+        </span>
+      </div>
+      <div className="availability-card-actions">
+        <button
+          type="button"
+          className={`availability-toggle ${approvalEnabled ? 'enabled' : 'disabled'}`}
+          onClick={handleToggleAvailability}
+          disabled={isSaving}
+          aria-pressed={approvalEnabled}
+          aria-label={`${roleLabel} availability switch`}
+        >
+          <span className="availability-toggle-track">
+            <span className="availability-toggle-thumb" />
+          </span>
+          <span>{isSaving ? 'Updating...' : approvalEnabled ? 'Switch OFF' : 'Switch ON'}</span>
+        </button>
+        <p className="field-hint">
+          {locationLabel === 'dashboard'
+            ? 'Use this switch directly from the dashboard when you become unavailable.'
+            : 'This setting controls automatic gatepass routing for student requests.'}
+        </p>
+      </div>
+    </section>
+  )
+}
+
+function CoordinatorAssignmentPanel({ currentUser, onUpdateCurrentUserProfile }) {
+  const [form, setForm] = useState(() => createCoordinatorAssignmentForm(currentUser))
+  const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    setForm(createCoordinatorAssignmentForm(currentUser))
+    setError('')
+  }, [
+    currentUser?.id,
+    currentUser?.coordinatorAssignment?.isCoordinator,
+    currentUser?.coordinatorAssignment?.program,
+    currentUser?.coordinatorAssignment?.department,
+    currentUser?.coordinatorAssignment?.semester,
+  ])
+
+  function updateForm(field, value) {
+    setForm((previousForm) => ({ ...previousForm, [field]: value }))
+    setError('')
+  }
+
+  async function handleSave(event) {
+    event.preventDefault()
+
+    if (!onUpdateCurrentUserProfile || isSaving) {
+      return
+    }
+
+    const isCoordinator = Boolean(form.isCoordinator)
+    const program = normalizeProgram(form.program)
+    const department = normalizeDepartment(form.department)
+    const semester = Number(form.semester)
+
+    if (isCoordinator && !program) {
+      setError('Select a program for coordinator assignment.')
+      return
+    }
+
+    if (isCoordinator && !department) {
+      setError('Select a department for coordinator assignment.')
+      return
+    }
+
+    if (isCoordinator && !SEMESTER_OPTIONS.includes(semester)) {
+      setError('Select a valid semester for coordinator assignment.')
+      return
+    }
+
+    setIsSaving(true)
+    setError('')
+
+    try {
+      const result = await onUpdateCurrentUserProfile(
+        {
+          coordinatorAssignment: {
+            isCoordinator,
+            program: isCoordinator ? program : null,
+            department: isCoordinator ? department : null,
+            semester: isCoordinator ? semester : null,
+          },
+        },
+        {
+          successTitle: isCoordinator ? 'Coordinator assignment saved' : 'Coordinator role removed',
+          successMessage: isCoordinator
+            ? `Coordinator routing is now set for ${program} ${department} Semester ${semester}.`
+            : 'Coordinator assignment has been cleared for this account.',
+          errorTitle: 'Unable to update coordinator assignment',
+          fallbackErrorMessage: 'DwarPal could not save coordinator assignment right now.',
+        },
+      )
+
+      if (!result?.ok) {
+        setError(result?.error || 'Unable to save coordinator assignment.')
+      }
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <section className="profile-subcard coordinator-card">
+      <div className="coordinator-card-header">
+        <div>
+          <h3>Coordinator Assignment</h3>
+          <p>Assign semester-specific coordinator routing inside the faculty workflow.</p>
+        </div>
+        <span className={`status-badge ${form.isCoordinator ? 'approved' : 'pending'}`}>
+          {form.isCoordinator ? 'Coordinator enabled' : 'Coordinator disabled'}
+        </span>
+      </div>
+      <form className="coordinator-form" onSubmit={handleSave}>
+        <label className="coordinator-checkbox">
+          <input
+            type="checkbox"
+            checked={form.isCoordinator}
+            onChange={(event) => updateForm('isCoordinator', event.target.checked)}
+            disabled={isSaving}
+          />
+          <span>Enable coordinator role for this account</span>
+        </label>
+
+        {form.isCoordinator ? (
+          <div className="coordinator-form-grid">
+            <label>
+              <FieldLabel required>Program</FieldLabel>
+              <SelectField
+                value={form.program}
+                onChange={(event) => updateForm('program', event.target.value)}
+                disabled={isSaving}
+                required
+              >
+                <option value="" disabled>
+                  Select program
+                </option>
+                {PROGRAM_OPTIONS.map((program) => (
+                  <option key={program} value={program}>
+                    {program}
+                  </option>
+                ))}
+              </SelectField>
+            </label>
+            <label>
+              <FieldLabel required>Department</FieldLabel>
+              <SelectField
+                value={form.department}
+                onChange={(event) => updateForm('department', event.target.value)}
+                disabled={isSaving}
+                required
+              >
+                <option value="" disabled>
+                  Select department
+                </option>
+                {ROUTING_DEPARTMENTS.map((department) => (
+                  <option key={department} value={department}>
+                    {department}
+                  </option>
+                ))}
+              </SelectField>
+            </label>
+            <label>
+              <FieldLabel required>Semester</FieldLabel>
+              <SelectField
+                value={form.semester}
+                onChange={(event) => updateForm('semester', event.target.value)}
+                disabled={isSaving}
+                required
+              >
+                <option value="" disabled>
+                  Select semester
+                </option>
+                {SEMESTER_OPTIONS.map((semester) => (
+                  <option key={semester} value={semester}>
+                    Semester {semester}
+                  </option>
+                ))}
+              </SelectField>
+            </label>
+          </div>
+        ) : null}
+
+        {error ? <p className="form-error">{error}</p> : null}
+
+        <div className="coordinator-form-actions">
+          <ActionButton type="submit" tone="secondary" disabled={isSaving}>
+            {isSaving ? 'Saving assignment...' : 'Save Coordinator Settings'}
+          </ActionButton>
+        </div>
+      </form>
+    </section>
+  )
+}
+
+function SupportPanel({ currentUser }) {
+  return (
+    <section className="profile-subcard support-card">
+      <div className="support-card-header">
+        <div>
+          <h3>Help & Support</h3>
+          <p>Need help with approvals, QR verification, or account issues? Reach the DwarPal support desk.</p>
+        </div>
+      </div>
+      <div className="support-card-grid">
+        <IdentityField label="Support Email" value="support@dwarpal.edu" />
+        <IdentityField label="Support Phone" value="+91-98765-43210" />
+        <IdentityField label="Support Hours" value="Mon-Sat, 9:00 AM to 6:00 PM" />
+        <IdentityField label="Your Role Queue" value={ROLE_META[currentUser.role].title} />
+      </div>
+      <p className="field-hint">
+        Include your gatepass ID and a short issue description for faster resolution.
+      </p>
+    </section>
+  )
+}
+
 function AppShell({
   currentUser,
   summary,
   gatepasses,
   onCurrentUserPatch,
+  onUpdateCurrentUserProfile,
   onLogout,
   onAddGatepass,
   onGatepassAction,
@@ -2624,6 +2989,10 @@ function AppShell({
 
     // Dashboard auto-refresh: pull the latest backend queue every 10 seconds.
     const intervalId = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return
+      }
+
       onRefreshData()
     }, DASHBOARD_REFRESH_MS)
 
@@ -2855,6 +3224,7 @@ function AppShell({
               currentUser={currentUser}
               stats={stats}
               gatepasses={filteredGatepasses}
+              onUpdateCurrentUserProfile={onUpdateCurrentUserProfile}
               searchTerm={searchTerm}
               onSearchTermChange={setSearchTerm}
               statusFilter={statusFilter}
@@ -2878,7 +3248,21 @@ function AppShell({
                     onManageNotifications={onOpenNotificationPrompt}
                   />
                 </FeatureBoundary>
+                {currentUser.role === 'principal' || currentUser.role === 'hod' ? (
+                  <GatepassAvailabilityPanel
+                    currentUser={currentUser}
+                    onUpdateCurrentUserProfile={onUpdateCurrentUserProfile}
+                    locationLabel="profile"
+                  />
+                ) : null}
+                {['faculty', 'hod'].includes(currentUser.role) ? (
+                  <CoordinatorAssignmentPanel
+                    currentUser={currentUser}
+                    onUpdateCurrentUserProfile={onUpdateCurrentUserProfile}
+                  />
+                ) : null}
                 <BiometricSettingsPanel currentUser={currentUser} onCurrentUserPatch={onCurrentUserPatch} />
+                <SupportPanel currentUser={currentUser} />
               </>
             </ProfileCard>
           ) : null}
@@ -3050,6 +3434,7 @@ function DashboardPage({
   currentUser,
   stats,
   gatepasses,
+  onUpdateCurrentUserProfile,
   searchTerm,
   onSearchTermChange,
   statusFilter,
@@ -3116,6 +3501,15 @@ function DashboardPage({
         ))}
       </section>
 
+      {currentUser.role === 'principal' || currentUser.role === 'hod' ? (
+        <GatepassAvailabilityPanel
+          currentUser={currentUser}
+          onUpdateCurrentUserProfile={onUpdateCurrentUserProfile}
+          locationLabel="dashboard"
+          compact
+        />
+      ) : null}
+
       {currentUser.role === 'security' ? (
         <SecurityVerificationPanel
           onVerifyById={verifyGatepassById}
@@ -3137,7 +3531,7 @@ function DashboardPage({
 
         <div className="section-heading">
           <div>
-            <h3>{getListTitle(currentUser.role)}</h3>
+            <h3>{getListTitle(currentUser)}</h3>
           </div>
         </div>
 
@@ -3475,12 +3869,32 @@ function getRoleScopedGatepasses(currentUser, gatepasses) {
 function getRoleStats(currentUser, summary, gatepasses) {
   const summaryStats = summary?.stats || {}
 
-  if (currentUser.role === 'student' || currentUser.role === 'faculty') {
+  if (currentUser.role === 'student') {
     return {
       total: summaryStats.totalRequests ?? summaryStats.totalPasses ?? gatepasses.length,
       approved: summaryStats.approved ?? gatepasses.filter((item) => item.status === 'Approved').length,
       rejected: summaryStats.rejected ?? gatepasses.filter((item) => item.status === 'Rejected').length,
       pending: summaryStats.pending ?? gatepasses.filter((item) => item.status === 'Pending').length,
+    }
+  }
+
+  if (currentUser.role === 'faculty') {
+    const coordinatorEnabled =
+      summaryStats.coordinatorEnabled === true ||
+      Boolean(currentUser.coordinatorAssignment?.isCoordinator)
+    const coordinatorPending =
+      summaryStats.coordinatorPending ??
+      gatepasses.filter((item) => item.stage === 'coordinator' && item.status === 'Pending').length
+    const coordinatorApproved = summaryStats.coordinatorApproved ?? 0
+    const coordinatorRejected = summaryStats.coordinatorRejected ?? 0
+
+    return {
+      total: summaryStats.totalRequests ?? summaryStats.totalPasses ?? gatepasses.length,
+      approved: (summaryStats.approved ?? 0) + coordinatorApproved,
+      rejected: (summaryStats.rejected ?? 0) + coordinatorRejected,
+      pending: (summaryStats.pending ?? 0) + coordinatorPending,
+      coordinatorEnabled,
+      coordinatorPending,
     }
   }
 
@@ -3526,6 +3940,15 @@ function getRoleStats(currentUser, summary, gatepasses) {
 
 function getSummaryCards(role, stats) {
   if (role === 'faculty') {
+    if (stats.coordinatorEnabled) {
+      return [
+        { label: 'Faculty Requests', value: stats.total, icon: QrCode },
+        { label: 'Coordinator Queue', value: stats.coordinatorPending, icon: Clock3, tone: 'warning' },
+        { label: 'Approved', value: stats.approved, icon: CheckCircle2, tone: 'success' },
+        { label: 'Rejected', value: stats.rejected, icon: XCircle, tone: 'danger' },
+      ]
+    }
+
     return [
       { label: 'Total Requests', value: stats.total, icon: QrCode },
       { label: 'Approved', value: stats.approved, icon: CheckCircle2, tone: 'success' },
@@ -3627,7 +4050,22 @@ function getAvailableActions(role, gatepass, onGatepassAction) {
     ]
   }
 
-  if ((role === 'hod' || role === 'cao') && gatepass.status === 'Pending') {
+  if (role === 'hod' && gatepass.status === 'Pending' && gatepass.stage === 'hod') {
+    return [
+      { label: 'Approve', tone: 'success', onClick: handleAction('approve') },
+      { label: 'Reject', tone: 'danger', onClick: handleAction('reject') },
+      { label: 'Send to Coordinator', tone: 'secondary', onClick: handleAction('sendToCoordinator') },
+    ]
+  }
+
+  if (role === 'faculty' && gatepass.status === 'Pending' && gatepass.stage === 'coordinator') {
+    return [
+      { label: 'Approve', tone: 'success', onClick: handleAction('approve') },
+      { label: 'Reject', tone: 'danger', onClick: handleAction('reject') },
+    ]
+  }
+
+  if (role === 'cao' && gatepass.status === 'Pending') {
     return [
       { label: 'Approve', tone: 'success', onClick: handleAction('approve') },
       { label: 'Reject', tone: 'danger', onClick: handleAction('reject') },
@@ -3673,12 +4111,16 @@ function getPageSubtitle(user, page) {
   return 'Review assigned requests.'
 }
 
-function getListTitle(role) {
-  if (role === 'faculty') return 'Leave application history'
-  if (role === 'principal') return 'Principal review queue'
-  if (role === 'hod') return 'HOD review queue'
-  if (role === 'cao') return 'CAO review queue'
-  if (role === 'security') return 'Security verification queue'
+function getListTitle(user) {
+  if (user?.role === 'faculty') {
+    return user?.coordinatorAssignment?.isCoordinator
+      ? 'Faculty and coordinator review queue'
+      : 'Leave application history'
+  }
+  if (user?.role === 'principal') return 'Principal review queue'
+  if (user?.role === 'hod') return 'HOD review queue'
+  if (user?.role === 'cao') return 'CAO review queue'
+  if (user?.role === 'security') return 'Security verification queue'
   return 'Gatepass history'
 }
 

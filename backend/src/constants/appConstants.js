@@ -85,9 +85,12 @@ function normalizeDepartment(value) {
 const STUDENT_GATEPASS_STATUSES = Object.freeze([
   'pending_principal',
   'forwarded_to_hod',
+  'forwarded_to_coordinator',
   'approved_by_hod',
+  'approved_by_coordinator',
   'rejected_by_principal',
   'rejected_by_hod',
+  'rejected_by_coordinator',
   'approved_final',
   'checked_out_by_security',
   'completed'
@@ -114,12 +117,14 @@ const GATEPASS_STATUSES = Object.freeze([
 const APPROVED_GATEPASS_STATUSES = Object.freeze([
   'approved_final',
   'approved_by_hod',
+  'approved_by_coordinator',
   'approved_by_cao'
 ]);
 
 const PENDING_GATEPASS_STATUSES = Object.freeze([
   'pending_principal',
   'forwarded_to_hod',
+  'forwarded_to_coordinator',
   'pending_cao'
 ]);
 
@@ -140,6 +145,7 @@ const ACTION_STATUSES = Object.freeze([
 const APPROVAL_LEVELS = Object.freeze([
   'principal',
   'hod',
+  'coordinator',
   'cao',
   'security',
   'completed',
@@ -154,6 +160,7 @@ const TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const NOTIFICATION_TYPES = Object.freeze([
   'gatepass_submitted',
   'gatepass_forwarded',
+  'gatepass_escalated',
   'gatepass_approved',
   'gatepass_cancelled',
   'gatepass_ready_for_security',
@@ -170,6 +177,7 @@ const NOTIFICATION_TYPES = Object.freeze([
   'faculty_leave_returned',
   'faculty_leave_status',
   'hod_action',
+  'coordinator_action',
   'security_verified',
   'system'
 ]);

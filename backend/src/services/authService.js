@@ -280,6 +280,11 @@ async function createOrRefreshPendingRegistration(payload, requestMeta) {
   const normalizedRole = normalizedPayload.role;
   const normalizedPhone = normalizedPayload.phone;
 
+  console.info('[auth-service] createOrRefreshPendingRegistration route entered', {
+    email: normalizedPayload.email,
+    role: normalizedRole
+  });
+
   if (!PUBLIC_REGISTRATION_ROLES.includes(normalizedRole)) {
     throw new AppError('Only supported roles can register through this endpoint', 403);
   }
@@ -338,13 +343,25 @@ async function createOrRefreshPendingRegistration(payload, requestMeta) {
       }
     );
 
+    console.info('[auth-service] sendRegistrationVerificationEmail before sendMail', {
+      email: normalizedPayload.email,
+      pendingRegistrationId: pendingRegistration?._id?.toString?.() || null
+    });
+
     await sendRegistrationVerificationEmail({
       to: normalizedPayload.email,
       fullName: normalizedPayload.fullName,
       verificationCode,
       expiresInMinutes: env.registrationOtpExpiresMinutes
     });
+    console.info('[auth-service] sendRegistrationVerificationEmail after sendMail', {
+      email: normalizedPayload.email
+    });
   } catch (error) {
+    console.error('[auth-service] sendRegistrationVerificationEmail failed', {
+      email: normalizedPayload.email,
+      error: error?.stack || error?.message || error
+    });
     await PendingRegistration.deleteOne({ email: normalizedPayload.email });
     throw error;
   }

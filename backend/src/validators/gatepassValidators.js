@@ -138,7 +138,7 @@ function buildRoleActionValidation(allowedActions) {
 }
 
 const principalRoleActionValidation = buildRoleActionValidation(['approve', 'reject', 'forward']);
-const hodRoleActionValidation = buildRoleActionValidation(['approve', 'reject']);
+const hodRoleActionValidation = buildRoleActionValidation(['approve', 'reject', 'forward_to_coordinator']);
 const caoRoleActionValidation = buildRoleActionValidation(['approve', 'reject']);
 
 const verifyTokenValidation = [

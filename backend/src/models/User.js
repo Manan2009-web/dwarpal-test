@@ -60,6 +60,33 @@ const webAuthnCredentialSchema = new mongoose.Schema(
   }
 );
 
+const coordinatorAssignmentSchema = new mongoose.Schema(
+  {
+    isCoordinator: {
+      type: Boolean,
+      default: false
+    },
+    program: {
+      type: String,
+      enum: STUDENT_PROGRAMS,
+      default: null
+    },
+    department: {
+      type: String,
+      enum: ROUTING_DEPARTMENTS,
+      default: null
+    },
+    semester: {
+      type: Number,
+      enum: SEMESTERS,
+      default: null
+    }
+  },
+  {
+    _id: false
+  }
+);
+
 const userSchema = new mongoose.Schema(
   {
     fullName: {
@@ -220,6 +247,14 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false
     },
+    gatepassApprovalEnabled: {
+      type: Boolean,
+      default: true
+    },
+    coordinatorAssignment: {
+      type: coordinatorAssignmentSchema,
+      default: () => ({})
+    },
     webAuthnCredentials: {
       type: [webAuthnCredentialSchema],
       default: []
@@ -284,6 +319,39 @@ userSchema.pre('validate', function syncLegacyFields(next) {
     this.department = this.department ? normalizeDepartment(this.department) || undefined : this.department;
   }
 
+  if (!this.coordinatorAssignment || typeof this.coordinatorAssignment !== 'object') {
+    this.coordinatorAssignment = {
+      isCoordinator: false,
+      program: null,
+      department: null,
+      semester: null
+    };
+  }
+
+  const assignment = this.coordinatorAssignment;
+  assignment.isCoordinator = Boolean(assignment.isCoordinator);
+
+  if (!['faculty', 'hod'].includes(this.role) || !assignment.isCoordinator) {
+    assignment.program = null;
+    assignment.department = null;
+    assignment.semester = null;
+  } else {
+    assignment.program = normalizeProgram(assignment.program) || null;
+    assignment.department = normalizeDepartment(assignment.department) || null;
+    assignment.semester = assignment.semester ? Number(assignment.semester) : null;
+
+    if (!assignment.program || !assignment.department || !SEMESTERS.includes(assignment.semester)) {
+      assignment.isCoordinator = false;
+      assignment.program = null;
+      assignment.department = null;
+      assignment.semester = null;
+    }
+  }
+
+  if (!['principal', 'hod'].includes(this.role)) {
+    this.gatepassApprovalEnabled = true;
+  }
+
   this.hasBiometricCredentials = Array.isArray(this.webAuthnCredentials) && this.webAuthnCredentials.length > 0;
 
   next();
@@ -319,6 +387,15 @@ userSchema.methods.toPublicJSON = function toPublicJSON(req) {
 };
 
 userSchema.index({ role: 1, isActive: 1, program: 1, department: 1 });
+userSchema.index({ role: 1, isActive: 1, gatepassApprovalEnabled: 1 });
+userSchema.index({
+  role: 1,
+  isActive: 1,
+  'coordinatorAssignment.isCoordinator': 1,
+  'coordinatorAssignment.program': 1,
+  'coordinatorAssignment.department': 1,
+  'coordinatorAssignment.semester': 1
+});
 userSchema.index({ role: 1, createdAt: -1 });
 userSchema.index({ updatedAt: -1 });
 userSchema.index({ 'webAuthnCredentials.credentialId': 1 }, { unique: true, sparse: true });

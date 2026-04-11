@@ -29,6 +29,13 @@ function pickUser(user, req) {
       typeof source.hasBiometricCredentials === 'boolean'
         ? source.hasBiometricCredentials
         : Array.isArray(source.webAuthnCredentials) && source.webAuthnCredentials.length > 0,
+    gatepassApprovalEnabled: source.gatepassApprovalEnabled !== false,
+    coordinatorAssignment: {
+      isCoordinator: Boolean(source.coordinatorAssignment?.isCoordinator),
+      program: source.coordinatorAssignment?.program || null,
+      department: source.coordinatorAssignment?.department || null,
+      semester: source.coordinatorAssignment?.semester || null
+    },
     lastLoginAt: source.lastLoginAt || null,
     createdAt: source.createdAt,
     updatedAt: source.updatedAt

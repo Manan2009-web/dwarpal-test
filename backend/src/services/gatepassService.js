@@ -1,5 +1,6 @@
 const Gatepass = require('../models/Gatepass');
 const User = require('../models/User');
+const env = require('../config/env');
 const AppError = require('../utils/appError');
 const { buildPaginationMeta, getPagination, getSortOptions } = require('../utils/pagination');
 const {
@@ -41,6 +42,10 @@ const detailPopulate = [
   {
     path: 'hodAction.actionBy',
     select: 'fullName email role program employeeId department'
+  },
+  {
+    path: 'coordinatorAction.actionBy',
+    select: 'fullName email role employeeId coordinatorAssignment'
   },
   {
     path: 'caoAction.actionBy',
@@ -103,6 +108,8 @@ const listProjection = [
   'principalAction.actedAt',
   'hodAction.status',
   'hodAction.actedAt',
+  'coordinatorAction.status',
+  'coordinatorAction.actedAt',
   'caoAction.status',
   'caoAction.actedAt',
   'securityAction.verifiedAt',
@@ -112,8 +119,22 @@ const listProjection = [
   'updatedAt'
 ].join(' ');
 
-const SECURITY_BLOCKED_PENDING_STATUSES = new Set(['pending_principal', 'forwarded_to_hod', 'pending_cao']);
-const SECURITY_BLOCKED_REJECTED_STATUSES = new Set(['rejected_by_principal', 'rejected_by_hod', 'rejected_by_cao']);
+const SECURITY_BLOCKED_PENDING_STATUSES = new Set([
+  'pending_principal',
+  'forwarded_to_hod',
+  'forwarded_to_coordinator',
+  'pending_cao'
+]);
+const SECURITY_BLOCKED_REJECTED_STATUSES = new Set([
+  'rejected_by_principal',
+  'rejected_by_hod',
+  'rejected_by_coordinator',
+  'rejected_by_cao'
+]);
+const AUTO_ESCALATION_TIMEOUT_MS = Math.max(1, Number(env.gatepassEscalationTimeoutMinutes || 5)) * 60 * 1000;
+const AUTO_ESCALATION_SWEEP_INTERVAL_MS = Math.max(10000, Number(env.gatepassEscalationSweepIntervalMs || 60000));
+let escalationSweepRunning = false;
+let escalationSweepInterval = null;
 
 function applyPopulate(query, populateConfig) {
   populateConfig.forEach((item) => {
@@ -165,6 +186,10 @@ function mapUserSummary(user, fallback = null) {
 
 function resolveGatepassApprovedBy(gatepass) {
   if (gatepass.applicantType === 'student') {
+    if (gatepass.coordinatorAction?.status === 'approved') {
+      return gatepass.coordinatorAction?.actionBy?.fullName || 'Coordinator';
+    }
+
     if (gatepass.hodAction?.status === 'approved') {
       return gatepass.hodAction?.actionBy?.fullName || 'HOD';
     }
@@ -214,7 +239,11 @@ function mapGatepassListItem(gatepass) {
     forwardedToRole: gatepass.forwardedToRole || null,
     approvedBy: resolveGatepassApprovedBy(gatepass),
     approvedAt:
-      gatepass.hodAction?.actedAt || gatepass.principalAction?.actedAt || gatepass.caoAction?.actedAt || null,
+      gatepass.coordinatorAction?.actedAt ||
+      gatepass.hodAction?.actedAt ||
+      gatepass.principalAction?.actedAt ||
+      gatepass.caoAction?.actedAt ||
+      null,
     rejectionReason: gatepass.rejectionReason || '',
     isCancelled: Boolean(gatepass.isCancelled),
     isCompleted: Boolean(gatepass.isCompleted),
@@ -238,6 +267,10 @@ function mapGatepassListItem(gatepass) {
         status: gatepass.hodAction?.status || null,
         actedAt: gatepass.hodAction?.actedAt || null
       },
+      coordinator: {
+        status: gatepass.coordinatorAction?.status || null,
+        actedAt: gatepass.coordinatorAction?.actedAt || null
+      },
       cao: {
         status: gatepass.caoAction?.status || null,
         actedAt: gatepass.caoAction?.actedAt || null
@@ -248,6 +281,7 @@ function mapGatepassListItem(gatepass) {
       checkedOutAt: gatepass.securityAction?.checkedOutAt || null,
       checkedInAt: gatepass.securityAction?.checkedInAt || null
     },
+    routingHistory: Array.isArray(gatepass.routingHistory) ? gatepass.routingHistory : [],
     createdAt: gatepass.createdAt,
     updatedAt: gatepass.updatedAt
   };
@@ -273,12 +307,41 @@ function createApplicantSnapshot(user) {
 function getStudentRoutingSnapshot(source = {}) {
   return {
     program: normalizeProgram(source.program),
-    department: normalizeDepartment(source.department)
+    department: normalizeDepartment(source.department),
+    semester: Number(source.semester) || null
   };
 }
 
 function getStudentRoutingLabel(program, department) {
   return [program, department, 'HOD'].filter(Boolean).join(' ');
+}
+
+function getCoordinatorRoutingLabel(program, department, semester) {
+  return [program, department, `Semester ${semester}`, 'Coordinator'].filter(Boolean).join(' ');
+}
+
+function isGatepassApproverAvailable(user) {
+  if (!user || user.isActive === false) {
+    return false;
+  }
+
+  return user.gatepassApprovalEnabled !== false;
+}
+
+function appendRoutingHistoryEntry(gatepass, entry = {}) {
+  const nextEntry = {
+    fromLevel: entry.fromLevel || gatepass.currentApprovalLevel || 'system',
+    toLevel: entry.toLevel || 'unknown',
+    trigger: entry.trigger || 'manual',
+    note: String(entry.note || '').trim().slice(0, 500),
+    actedBy: entry.actedBy || null,
+    actedByRole: entry.actedByRole || 'system',
+    actedAt: entry.actedAt || new Date()
+  };
+
+  const history = Array.isArray(gatepass.routingHistory) ? gatepass.routingHistory : [];
+  history.push(nextEntry);
+  gatepass.routingHistory = history;
 }
 
 async function resolveStudentHodUser(gatepass, requestedUserId = null) {
@@ -307,7 +370,7 @@ async function resolveStudentHodUser(gatepass, requestedUserId = null) {
     isActive: true,
     ...(requestedUserId ? { _id: requestedUserId } : {})
   })
-    .select('_id fullName email role program department employeeId phone createdAt')
+    .select('_id fullName email role program department employeeId phone createdAt gatepassApprovalEnabled isActive')
     .sort({ createdAt: 1, _id: 1 });
 
   const matchedHod = hodCandidates.find((candidate) => {
@@ -327,6 +390,72 @@ async function resolveStudentHodUser(gatepass, requestedUserId = null) {
   }
 
   return matchedHod;
+}
+
+async function resolveStudentCoordinatorUser(gatepass, requestedUserId = null) {
+  const { program, department, semester } = getStudentRoutingSnapshot(gatepass?.applicantSnapshot || {});
+
+  if (!program || !STUDENT_PROGRAMS.includes(program)) {
+    throw new AppError('Student program is missing on this gatepass and coordinator routing cannot continue.', 422, [
+      {
+        field: 'program',
+        message: 'Student program is required for coordinator routing.'
+      }
+    ]);
+  }
+
+  if (!department || !ROUTING_DEPARTMENTS.includes(department)) {
+    throw new AppError('Student department is missing on this gatepass and coordinator routing cannot continue.', 422, [
+      {
+        field: 'department',
+        message: 'Student department is required for coordinator routing.'
+      }
+    ]);
+  }
+
+  if (!semester) {
+    throw new AppError('Student semester is missing on this gatepass and coordinator routing cannot continue.', 422, [
+      {
+        field: 'semester',
+        message: 'Student semester is required for coordinator routing.'
+      }
+    ]);
+  }
+
+  const coordinatorCandidates = await User.find({
+    role: 'faculty',
+    isActive: true,
+    'coordinatorAssignment.isCoordinator': true,
+    ...(requestedUserId ? { _id: requestedUserId } : {})
+  })
+    .select(
+      '_id fullName email role employeeId phone isActive coordinatorAssignment createdAt'
+    )
+    .sort({ createdAt: 1, _id: 1 });
+
+  const matchedCoordinator = coordinatorCandidates.find((candidate) => {
+    const assignment = candidate.coordinatorAssignment || {};
+    const candidateProgram = normalizeProgram(assignment.program);
+    const candidateDepartment = normalizeDepartment(assignment.department);
+    const candidateSemester = Number(assignment.semester) || null;
+
+    return candidateProgram === program && candidateDepartment === department && candidateSemester === semester;
+  });
+
+  if (!matchedCoordinator) {
+    throw new AppError(
+      `No active ${getCoordinatorRoutingLabel(program, department, semester)} account is available for this student gatepass.`,
+      404,
+      [
+        {
+          field: 'forwardToUserId',
+          message: `No active ${getCoordinatorRoutingLabel(program, department, semester)} account is available.`
+        }
+      ]
+    );
+  }
+
+  return matchedCoordinator;
 }
 
 async function assignApprovedQr(gatepass) {
@@ -441,6 +570,7 @@ function getInitialGatepassState(user) {
       currentApprovalLevel: 'principal',
       principalAction: { status: 'pending' },
       hodAction: { status: 'not_required' },
+      coordinatorAction: { status: 'not_required' },
       caoAction: { status: 'not_required' }
     };
   }
@@ -450,11 +580,22 @@ function getInitialGatepassState(user) {
     currentApprovalLevel: 'cao',
     principalAction: { status: 'not_required' },
     hodAction: { status: 'not_required' },
+    coordinatorAction: { status: 'not_required' },
     caoAction: { status: 'pending' }
   };
 }
 
 async function getActiveUserByRole(role, requestedUserId = null) {
+  const user = await findActiveUserByRole(role, requestedUserId);
+
+  if (!user) {
+    throw new AppError(`No active ${role.toUpperCase()} account is available`, 404);
+  }
+
+  return user;
+}
+
+async function findActiveUserByRole(role, requestedUserId = null) {
   const filter = {
     role,
     isActive: true
@@ -464,13 +605,15 @@ async function getActiveUserByRole(role, requestedUserId = null) {
     filter._id = requestedUserId;
   }
 
-  const user = await User.findOne(filter);
+  return User.findOne(filter).sort({ createdAt: 1, _id: 1 });
+}
 
-  if (!user) {
-    throw new AppError(`No active ${role.toUpperCase()} account is available`, 404);
-  }
-
-  return user;
+function isCoordinatorActor(actor) {
+  return (
+    actor?.role === 'faculty' &&
+    actor?.coordinatorAssignment &&
+    actor.coordinatorAssignment.isCoordinator === true
+  );
 }
 
 async function listActiveUsersByRole(role) {
@@ -510,6 +653,164 @@ async function buildSecurityReadyGatepassNotifications(gatepass, actor) {
       workflow: 'security_verification'
     })
   }));
+}
+
+function buildRoutingForwardType(trigger) {
+  return trigger.startsWith('auto_') ? 'gatepass_escalated' : 'gatepass_forwarded';
+}
+
+async function routeStudentGatepassToHod(gatepass, { actor = null, comment = '', trigger = 'manual_forward' } = {}) {
+  const hodUser = await resolveStudentHodUser(gatepass);
+
+  if (!isGatepassApproverAvailable(hodUser)) {
+    return routeStudentGatepassToCoordinator(gatepass, {
+      actor,
+      comment: comment || 'HOD is unavailable. Auto-forwarded to coordinator.',
+      trigger: trigger.startsWith('auto_') ? trigger : 'auto_unavailable_forward',
+      fromLevel: 'principal'
+    });
+  }
+
+  gatepass.status = 'forwarded_to_hod';
+  gatepass.currentApprovalLevel = 'hod';
+  gatepass.isCancelled = false;
+  gatepass.isCompleted = false;
+  gatepass.forwardedTo = hodUser._id;
+  gatepass.forwardedToRole = 'hod';
+  gatepass.principalAction = {
+    status: 'forwarded',
+    actionBy: actor?._id || null,
+    actedAt: new Date(),
+    comment: comment || ''
+  };
+  gatepass.hodAction = {
+    status: 'pending',
+    actionBy: null,
+    actedAt: null,
+    comment: ''
+  };
+  gatepass.coordinatorAction = {
+    status: 'not_required',
+    actionBy: null,
+    actedAt: null,
+    comment: ''
+  };
+
+  appendRoutingHistoryEntry(gatepass, {
+    fromLevel: 'principal',
+    toLevel: 'hod',
+    trigger,
+    note: comment || 'Forwarded to HOD for department review.',
+    actedBy: actor?._id || null,
+    actedByRole: actor?.role || 'system'
+  });
+
+  return {
+    routedTo: 'hod',
+    recipient: hodUser
+  };
+}
+
+async function routeStudentGatepassToCoordinator(
+  gatepass,
+  { actor = null, comment = '', trigger = 'manual_forward', fromLevel = 'hod' } = {}
+) {
+  const coordinatorUser = await resolveStudentCoordinatorUser(gatepass);
+
+  gatepass.status = 'forwarded_to_coordinator';
+  gatepass.currentApprovalLevel = 'coordinator';
+  gatepass.isCancelled = false;
+  gatepass.isCompleted = false;
+  gatepass.forwardedTo = coordinatorUser._id;
+  gatepass.forwardedToRole = 'coordinator';
+
+  if (fromLevel === 'principal') {
+    gatepass.principalAction = {
+      status: 'forwarded',
+      actionBy: actor?._id || null,
+      actedAt: new Date(),
+      comment: comment || ''
+    };
+
+    gatepass.hodAction = {
+      status: 'forwarded',
+      actionBy: null,
+      actedAt: new Date(),
+      comment: 'Auto-forwarded to coordinator because HOD is unavailable or delayed.'
+    };
+  } else {
+    gatepass.hodAction = {
+      status: 'forwarded',
+      actionBy: actor?._id || null,
+      actedAt: new Date(),
+      comment: comment || ''
+    };
+  }
+
+  gatepass.coordinatorAction = {
+    status: 'pending',
+    actionBy: null,
+    actedAt: null,
+    comment: ''
+  };
+
+  appendRoutingHistoryEntry(gatepass, {
+    fromLevel,
+    toLevel: 'coordinator',
+    trigger,
+    note: comment || 'Forwarded to class coordinator for semester review.',
+    actedBy: actor?._id || null,
+    actedByRole: actor?.role || 'system'
+  });
+
+  return {
+    routedTo: 'coordinator',
+    recipient: coordinatorUser
+  };
+}
+
+function buildForwardNotificationsForStudentGatepass(gatepass, actor, routeResult, trigger) {
+  const isEscalation = trigger.startsWith('auto_');
+  const notificationType = buildRoutingForwardType(trigger);
+  const recipientRoleLabel = routeResult.routedTo === 'coordinator' ? 'Coordinator' : 'HOD';
+  const recipientWorkflowLabel = routeResult.routedTo === 'coordinator' ? 'coordinator_review' : 'hod_review';
+
+  return [
+    {
+      recipient: routeResult.recipient._id,
+      sender: actor?._id || null,
+      gatepass: gatepass._id,
+      type: notificationType,
+      status: 'forwarded',
+      title: isEscalation
+        ? `Gatepass auto-forwarded to ${recipientRoleLabel}`
+        : `Gatepass forwarded for ${recipientRoleLabel} review`,
+      message: isEscalation
+        ? `Gatepass ${gatepass.passNumber} was auto-forwarded to you for review.`
+        : `Gatepass ${gatepass.passNumber} was forwarded to you for review.`,
+      metadata: buildGatepassNotificationMetadata(gatepass, {
+        workflow: recipientWorkflowLabel,
+        escalated: isEscalation
+      })
+    },
+    {
+      recipient: gatepass.createdBy._id || gatepass.createdBy,
+      sender: actor?._id || null,
+      gatepass: gatepass._id,
+      type: notificationType,
+      status: 'forwarded',
+      title: isEscalation
+        ? `Gatepass auto-forwarded to ${recipientRoleLabel}`
+        : `Gatepass forwarded to ${recipientRoleLabel}`,
+      message: isEscalation
+        ? `Your gatepass ${gatepass.passNumber} was auto-forwarded to ${recipientRoleLabel} for review.`
+        : `Your gatepass ${gatepass.passNumber} was forwarded to ${recipientRoleLabel} for review.`,
+      metadata: buildGatepassNotificationMetadata(gatepass, {
+        workflow: 'requester_forwarded',
+        escalated: isEscalation
+      })
+    }
+  ];
 }
 
 function buildSearchFilter(searchTerm) {
@@ -613,7 +914,20 @@ function applyListFilters(filter, query = {}, options = {}) {
 function buildAccessFilter(actor) {
   switch (actor.role) {
     case 'student':
+      return { createdBy: actor._id };
     case 'faculty':
+      if (isCoordinatorActor(actor)) {
+        return {
+          $or: [
+            { createdBy: actor._id },
+            {
+              applicantType: 'student',
+              $or: [{ forwardedTo: actor._id }, { 'coordinatorAction.actionBy': actor._id }]
+            }
+          ]
+        };
+      }
+
       return { createdBy: actor._id };
     case 'principal':
       return { applicantType: 'student' };
@@ -654,8 +968,22 @@ function canUserAccessGatepass(actor, gatepass) {
   const creatorId = toId(gatepass.createdBy);
   const actorId = actor._id.toString();
 
-  if (actor.role === 'student' || actor.role === 'faculty') {
+  if (actor.role === 'student') {
     return creatorId === actorId;
+  }
+
+  if (actor.role === 'faculty') {
+    if (creatorId === actorId) {
+      return true;
+    }
+
+    if (!isCoordinatorActor(actor)) {
+      return false;
+    }
+
+    const forwardedTo = toId(gatepass.forwardedTo);
+    const actedBy = toId(gatepass.coordinatorAction?.actionBy);
+    return gatepass.applicantType === 'student' && (forwardedTo === actorId || actedBy === actorId);
   }
 
   if (actor.role === 'principal') {
@@ -775,24 +1103,22 @@ function buildSecurityDateRange(query = {}) {
 
 async function createGatepass(actor, payload, requestMeta) {
   const initialState = getInitialGatepassState(actor);
-  const reviewerRole = actor.role === 'student' ? 'principal' : 'cao';
-  const reviewer = await getActiveUserByRole(reviewerRole);
   const applicantSnapshot = createApplicantSnapshot(actor);
 
   if (actor.role === 'student') {
-    const { program, department } = getStudentRoutingSnapshot(applicantSnapshot);
+    const { program, department, semester } = getStudentRoutingSnapshot(applicantSnapshot);
 
-    if (!program || !department) {
-      throw new AppError('Student profile is missing program or department required for routing.', 422, [
+    if (!program || !department || !semester) {
+      throw new AppError('Student profile is missing routing fields required for gatepass approvals.', 422, [
         {
-          field: !program ? 'program' : 'department',
-          message: 'Student program and department are required before creating a gatepass.'
+          field: !program ? 'program' : !department ? 'department' : 'semester',
+          message: 'Student program, department, and semester are required before creating a gatepass.'
         }
       ]);
     }
   }
 
-  const gatepass = await Gatepass.create({
+  const gatepass = new Gatepass({
     createdBy: actor._id,
     applicantType: actor.role,
     applicantSnapshot,
@@ -807,36 +1133,105 @@ async function createGatepass(actor, payload, requestMeta) {
     currentApprovalLevel: initialState.currentApprovalLevel,
     isCancelled: false,
     isCompleted: false,
-    forwardedTo: reviewer._id,
-    forwardedToRole: reviewerRole,
+    forwardedTo: null,
+    forwardedToRole: null,
     principalAction: initialState.principalAction,
     hodAction: initialState.hodAction,
+    coordinatorAction: initialState.coordinatorAction,
     caoAction: initialState.caoAction
   });
+
+  let reviewer = null;
+  let reviewerRole = actor.role === 'student' ? 'principal' : 'cao';
+  let isAutoEscalatedSubmission = false;
+
+  if (actor.role === 'student') {
+    const principalReviewer = await findActiveUserByRole('principal');
+
+    if (principalReviewer && isGatepassApproverAvailable(principalReviewer)) {
+      reviewer = principalReviewer;
+      reviewerRole = 'principal';
+      gatepass.status = 'pending_principal';
+      gatepass.currentApprovalLevel = 'principal';
+      gatepass.forwardedTo = principalReviewer._id;
+      gatepass.forwardedToRole = 'principal';
+      gatepass.principalAction = { status: 'pending' };
+      gatepass.hodAction = { status: 'not_required' };
+      gatepass.coordinatorAction = { status: 'not_required' };
+      appendRoutingHistoryEntry(gatepass, {
+        fromLevel: 'system',
+        toLevel: 'principal',
+        trigger: 'initial_assignment',
+        note: 'Submitted to Principal for first-level review.',
+        actedBy: actor._id,
+        actedByRole: actor.role
+      });
+    } else {
+      isAutoEscalatedSubmission = true;
+      const routeResult = await routeStudentGatepassToHod(gatepass, {
+        actor: null,
+        comment: 'Principal is unavailable. Auto-forwarded for uninterrupted student flow.',
+        trigger: 'auto_unavailable_forward'
+      });
+
+      reviewer = routeResult.recipient;
+      reviewerRole = routeResult.routedTo;
+    }
+  } else {
+    reviewer = await getActiveUserByRole('cao');
+    reviewerRole = 'cao';
+    gatepass.forwardedTo = reviewer._id;
+    gatepass.forwardedToRole = 'cao';
+    appendRoutingHistoryEntry(gatepass, {
+      fromLevel: 'system',
+      toLevel: 'cao',
+      trigger: 'initial_assignment',
+      note: 'Submitted to CAO for faculty workflow approval.',
+      actedBy: actor._id,
+      actedByRole: actor.role
+    });
+  }
+
+  await gatepass.save();
 
   await createBulkNotifications([
     {
       recipient: reviewer._id,
       sender: actor._id,
       gatepass: gatepass._id,
-      type: 'gatepass_submitted',
-      status: 'submitted',
-      title: 'New gatepass request submitted',
-      message: `${actor.fullName} submitted gatepass ${gatepass.passNumber} for review.`,
+      type: isAutoEscalatedSubmission ? 'gatepass_escalated' : 'gatepass_submitted',
+      status: isAutoEscalatedSubmission ? 'forwarded' : 'submitted',
+      title: isAutoEscalatedSubmission
+        ? `New gatepass auto-routed to ${reviewerRole === 'coordinator' ? 'Coordinator' : 'HOD'}`
+        : 'New gatepass request submitted',
+      message: isAutoEscalatedSubmission
+        ? `${actor.fullName} submitted gatepass ${gatepass.passNumber}. It was auto-routed to your queue because Principal is unavailable.`
+        : `${actor.fullName} submitted gatepass ${gatepass.passNumber} for review.`,
       metadata: buildGatepassNotificationMetadata(gatepass, {
-        workflow: reviewerRole === 'principal' ? 'principal_review' : 'cao_review'
+        workflow:
+          reviewerRole === 'principal'
+            ? 'principal_review'
+            : reviewerRole === 'hod'
+              ? 'hod_review'
+              : reviewerRole === 'coordinator'
+                ? 'coordinator_review'
+                : 'cao_review',
+        escalated: isAutoEscalatedSubmission
       })
     },
     {
       recipient: actor._id,
       sender: actor._id,
       gatepass: gatepass._id,
-      type: 'gatepass_submitted',
-      status: 'submitted',
-      title: 'Gatepass submitted',
-      message: `Your gatepass ${gatepass.passNumber} was submitted and is awaiting ${reviewerRole.toUpperCase()} review.`,
+      type: isAutoEscalatedSubmission ? 'gatepass_escalated' : 'gatepass_submitted',
+      status: isAutoEscalatedSubmission ? 'forwarded' : 'submitted',
+      title: isAutoEscalatedSubmission ? 'Gatepass auto-routed' : 'Gatepass submitted',
+      message: isAutoEscalatedSubmission
+        ? `Your gatepass ${gatepass.passNumber} was auto-routed to ${reviewerRole === 'coordinator' ? 'Coordinator' : 'HOD'} because Principal is unavailable.`
+        : `Your gatepass ${gatepass.passNumber} was submitted and is awaiting ${reviewerRole.toUpperCase()} review.`,
       metadata: buildGatepassNotificationMetadata(gatepass, {
-        workflow: 'requester_submission'
+        workflow: 'requester_submission',
+        escalated: isAutoEscalatedSubmission
       })
     }
   ]);
@@ -960,6 +1355,10 @@ async function cancelGatepass(gatepassId, actor, payload, requestMeta) {
 }
 
 async function getPendingGatepassesForRole(actor, query = {}) {
+  await processPendingStudentEscalations({
+    maxPerSweep: 20
+  });
+
   const filter = {};
   let allowedStatuses;
 
@@ -970,6 +1369,10 @@ async function getPendingGatepassesForRole(actor, query = {}) {
     filter.applicantType = 'student';
     filter.forwardedTo = actor._id;
     allowedStatuses = ['forwarded_to_hod'];
+  } else if (actor.role === 'faculty' && isCoordinatorActor(actor)) {
+    filter.applicantType = 'student';
+    filter.forwardedTo = actor._id;
+    allowedStatuses = ['forwarded_to_coordinator'];
   } else if (actor.role === 'cao') {
     filter.applicantType = 'faculty';
     allowedStatuses = ['pending_cao'];
@@ -997,63 +1400,67 @@ async function forwardGatepass(gatepassId, actor, payload, requestMeta) {
     throw new AppError('Only pending student gatepasses can be forwarded to HOD', 400);
   }
 
-  const hodUser = await resolveStudentHodUser(gatepass, payload.forwardToUserId);
+  const routeResult = await routeStudentGatepassToHod(gatepass, {
+    actor,
+    comment: payload.comment || 'Forwarded by Principal.',
+    trigger: 'manual_forward'
+  });
 
-  gatepass.status = 'forwarded_to_hod';
-  gatepass.currentApprovalLevel = 'hod';
-  gatepass.isCancelled = false;
-  gatepass.isCompleted = false;
-  gatepass.forwardedTo = hodUser._id;
-  gatepass.forwardedToRole = 'hod';
-  gatepass.principalAction = {
-    status: 'forwarded',
-    actionBy: actor._id,
-    actedAt: new Date(),
-    comment: payload.comment || ''
-  };
-  gatepass.hodAction = {
-    status: 'pending',
-    actionBy: null,
-    actedAt: null,
-    comment: ''
-  };
   await gatepass.save();
 
-  await createBulkNotifications([
-    {
-      recipient: hodUser._id,
-      sender: actor._id,
-      gatepass: gatepass._id,
-      type: 'gatepass_forwarded',
-      status: 'forwarded',
-      title: 'Gatepass forwarded for HOD review',
-      message: `Gatepass ${gatepass.passNumber} has been forwarded to you by Principal for ${hodUser.program} ${hodUser.department} review.`,
-      metadata: buildGatepassNotificationMetadata(gatepass, {
-        workflow: 'hod_review'
-      })
-    },
-    {
-      recipient: gatepass.createdBy._id,
-      sender: actor._id,
-      gatepass: gatepass._id,
-      type: 'gatepass_forwarded',
-      status: 'forwarded',
-      title: 'Gatepass forwarded to HOD',
-      message: `Your gatepass ${gatepass.passNumber} was forwarded to the correct ${gatepass.applicantSnapshot?.program} ${gatepass.applicantSnapshot?.department} HOD for review.`,
-      metadata: buildGatepassNotificationMetadata(gatepass, {
-        workflow: 'requester_forwarded'
-      })
-    }
-  ]);
+  await createBulkNotifications(buildForwardNotificationsForStudentGatepass(gatepass, actor, routeResult, 'manual_forward'));
 
   await logAction({
     actorId: actor._id,
     resourceType: 'gatepass',
     resourceId: gatepass._id,
-    action: 'forward_gatepass',
-    message: `Gatepass ${gatepass.passNumber} forwarded to HOD`,
+    action: routeResult.routedTo === 'coordinator' ? 'forward_gatepass_to_coordinator' : 'forward_gatepass',
+    message:
+      routeResult.routedTo === 'coordinator'
+        ? `Gatepass ${gatepass.passNumber} forwarded to Coordinator`
+        : `Gatepass ${gatepass.passNumber} forwarded to HOD`,
     metadata: {
-      forwardedTo: hodUser._id.toString()
+      forwardedTo: routeResult.recipient._id.toString(),
+      forwardedToRole: routeResult.routedTo
+    },
+    requestMeta
+  });
+
+  return getGatepassByIdOrThrow(gatepass._id);
+}
+
+async function forwardGatepassToCoordinator(gatepassId, actor, payload, requestMeta) {
+  const gatepass = await getAccessibleGatepass(gatepassId, actor);
+
+  if (actor.role !== 'hod') {
+    throw new AppError('Only HOD can forward student gatepasses to coordinator', 403);
+  }
+
+  if (gatepass.applicantType !== 'student' || gatepass.status !== 'forwarded_to_hod') {
+    throw new AppError('Only HOD-pending student gatepasses can be sent to coordinator', 400);
+  }
+
+  const routeResult = await routeStudentGatepassToCoordinator(gatepass, {
+    actor,
+    comment: payload.comment || 'Forwarded by HOD to coordinator.',
+    trigger: 'manual_forward',
+    fromLevel: 'hod'
+  });
+
+  await gatepass.save();
+  await createBulkNotifications(
+    buildForwardNotificationsForStudentGatepass(gatepass, actor, routeResult, 'manual_forward')
+  );
+
+  await logAction({
+    actorId: actor._id,
+    resourceType: 'gatepass',
+    resourceId: gatepass._id,
+    action: 'forward_gatepass_to_coordinator',
+    message: `Gatepass ${gatepass.passNumber} forwarded to Coordinator by HOD`,
+    metadata: {
+      forwardedTo: routeResult.recipient._id.toString(),
+      forwardedToRole: routeResult.routedTo
     },
     requestMeta
   });
@@ -1155,6 +1562,88 @@ async function approveGatepass(gatepassId, actor, payload, requestMeta) {
     );
 
     notifications.push(...(await buildSecurityReadyGatepassNotifications(gatepass, actor)));
+  } else if (actor.role === 'faculty' && isCoordinatorActor(actor)) {
+    if (gatepass.applicantType !== 'student' || gatepass.status !== 'forwarded_to_coordinator') {
+      throw new AppError('Coordinator can only approve forwarded student gatepasses', 400);
+    }
+
+    gatepass.status = 'approved_by_coordinator';
+    gatepass.currentApprovalLevel = 'security';
+    gatepass.isCancelled = false;
+    gatepass.isCompleted = false;
+    gatepass.coordinatorAction = {
+      status: 'approved',
+      actionBy: actor._id,
+      actedAt: new Date(),
+      comment: payload.comment || ''
+    };
+    gatepass.forwardedTo = null;
+    gatepass.forwardedToRole = 'security';
+    await assignApprovedQr(gatepass);
+    appendRoutingHistoryEntry(gatepass, {
+      fromLevel: 'coordinator',
+      toLevel: 'security',
+      trigger: 'approval',
+      note: 'Approved by coordinator and sent to security.',
+      actedBy: actor._id,
+      actedByRole: actor.role
+    });
+    auditMessage = `Gatepass ${gatepass.passNumber} approved by Coordinator`;
+
+    const [principalUser, hodUser] = await Promise.all([
+      findActiveUserByRole('principal'),
+      resolveStudentHodUser(gatepass).catch(() => null)
+    ]);
+
+    notifications.push(
+      {
+        recipient: gatepass.createdBy._id,
+        sender: actor._id,
+        gatepass: gatepass._id,
+        type: 'gatepass_approved',
+        status: 'approved',
+        title: 'Gatepass approved by Coordinator',
+        message: `Your gatepass ${gatepass.passNumber} was approved by Coordinator and is ready for security verification.`,
+        metadata: buildGatepassNotificationMetadata(gatepass, {
+          verificationToken: gatepass.verificationToken,
+          qrVerificationUrl: gatepass.qrVerificationUrl
+        })
+      }
+    );
+
+    if (principalUser) {
+      notifications.push({
+        recipient: principalUser._id,
+        sender: actor._id,
+        gatepass: gatepass._id,
+        type: 'coordinator_action',
+        status: 'approved',
+        title: 'Coordinator completed gatepass review',
+        message: `Coordinator approved gatepass ${gatepass.passNumber}.`,
+        metadata: buildGatepassNotificationMetadata(gatepass, {
+          action: 'approved',
+          workflow: 'principal_visibility'
+        })
+      });
+    }
+
+    if (hodUser) {
+      notifications.push({
+        recipient: hodUser._id,
+        sender: actor._id,
+        gatepass: gatepass._id,
+        type: 'coordinator_action',
+        status: 'approved',
+        title: 'Coordinator completed gatepass review',
+        message: `Coordinator approved gatepass ${gatepass.passNumber}.`,
+        metadata: buildGatepassNotificationMetadata(gatepass, {
+          action: 'approved',
+          workflow: 'hod_visibility'
+        })
+      });
+    }
+
+    notifications.push(...(await buildSecurityReadyGatepassNotifications(gatepass, actor)));
   } else if (actor.role === 'cao') {
     if (gatepass.applicantType !== 'faculty' || gatepass.status !== 'pending_cao') {
       throw new AppError('CAO can only approve pending faculty gatepasses', 400);
@@ -1231,6 +1720,14 @@ async function rejectGatepass(gatepassId, actor, payload, requestMeta) {
       actedAt: new Date(),
       comment: payload.rejectionReason
     };
+    appendRoutingHistoryEntry(gatepass, {
+      fromLevel: 'principal',
+      toLevel: 'cancelled',
+      trigger: 'rejection',
+      note: payload.rejectionReason || 'Rejected by Principal.',
+      actedBy: actor._id,
+      actedByRole: actor.role
+    });
     auditMessage = `Gatepass ${gatepass.passNumber} rejected by Principal`;
   } else if (actor.role === 'hod') {
     if (gatepass.applicantType !== 'student' || gatepass.status !== 'forwarded_to_hod') {
@@ -1246,6 +1743,14 @@ async function rejectGatepass(gatepassId, actor, payload, requestMeta) {
       actedAt: new Date(),
       comment: payload.rejectionReason
     };
+    appendRoutingHistoryEntry(gatepass, {
+      fromLevel: 'hod',
+      toLevel: 'cancelled',
+      trigger: 'rejection',
+      note: payload.rejectionReason || 'Rejected by HOD.',
+      actedBy: actor._id,
+      actedByRole: actor.role
+    });
     notifications.push({
       recipient: principalUser._id,
       sender: actor._id,
@@ -1260,6 +1765,65 @@ async function rejectGatepass(gatepassId, actor, payload, requestMeta) {
       })
     });
     auditMessage = `Gatepass ${gatepass.passNumber} rejected by HOD`;
+  } else if (actor.role === 'faculty' && isCoordinatorActor(actor)) {
+    if (gatepass.applicantType !== 'student' || gatepass.status !== 'forwarded_to_coordinator') {
+      throw new AppError('Coordinator can only reject forwarded student gatepasses', 400);
+    }
+
+    const [principalUser, hodUser] = await Promise.all([
+      findActiveUserByRole('principal'),
+      resolveStudentHodUser(gatepass).catch(() => null)
+    ]);
+
+    gatepass.status = 'rejected_by_coordinator';
+    gatepass.coordinatorAction = {
+      status: 'rejected',
+      actionBy: actor._id,
+      actedAt: new Date(),
+      comment: payload.rejectionReason
+    };
+    appendRoutingHistoryEntry(gatepass, {
+      fromLevel: 'coordinator',
+      toLevel: 'cancelled',
+      trigger: 'rejection',
+      note: payload.rejectionReason || 'Rejected by Coordinator.',
+      actedBy: actor._id,
+      actedByRole: actor.role
+    });
+
+    if (principalUser) {
+      notifications.push({
+        recipient: principalUser._id,
+        sender: actor._id,
+        gatepass: gatepass._id,
+        type: 'coordinator_action',
+        status: 'rejected',
+        title: 'Coordinator completed gatepass review',
+        message: `Coordinator rejected gatepass ${gatepass.passNumber}.`,
+        metadata: buildGatepassNotificationMetadata(gatepass, {
+          action: 'rejected',
+          workflow: 'principal_visibility'
+        })
+      });
+    }
+
+    if (hodUser) {
+      notifications.push({
+        recipient: hodUser._id,
+        sender: actor._id,
+        gatepass: gatepass._id,
+        type: 'coordinator_action',
+        status: 'rejected',
+        title: 'Coordinator completed gatepass review',
+        message: `Coordinator rejected gatepass ${gatepass.passNumber}.`,
+        metadata: buildGatepassNotificationMetadata(gatepass, {
+          action: 'rejected',
+          workflow: 'hod_visibility'
+        })
+      });
+    }
+
+    auditMessage = `Gatepass ${gatepass.passNumber} rejected by Coordinator`;
   } else if (actor.role === 'cao') {
     if (gatepass.applicantType !== 'faculty' || gatepass.status !== 'pending_cao') {
       throw new AppError('CAO can only reject pending faculty gatepasses', 400);
@@ -1287,6 +1851,7 @@ async function rejectGatepass(gatepassId, actor, payload, requestMeta) {
     revokeGatepassQr(gatepass);
   }
   await gatepass.save();
+  const actorApprovalLabel = actor.role === 'faculty' && isCoordinatorActor(actor) ? 'COORDINATOR' : actor.role.toUpperCase();
 
   notifications.unshift({
     recipient: gatepass.createdBy._id,
@@ -1295,7 +1860,7 @@ async function rejectGatepass(gatepassId, actor, payload, requestMeta) {
     type: 'gatepass_rejected',
     status: 'rejected',
     title: 'Gatepass rejected',
-    message: `Your gatepass ${gatepass.passNumber} was rejected by ${actor.role.toUpperCase()}.`,
+    message: `Your gatepass ${gatepass.passNumber} was rejected by ${actorApprovalLabel}.`,
     metadata: buildGatepassNotificationMetadata(gatepass, {
       rejectionReason: payload.rejectionReason
     })
@@ -1317,6 +1882,191 @@ async function rejectGatepass(gatepassId, actor, payload, requestMeta) {
   });
 
   return getGatepassByIdOrThrow(gatepass._id);
+}
+
+async function escalatePendingPrincipalGatepass(gatepass) {
+  const routeResult = await routeStudentGatepassToHod(gatepass, {
+    actor: null,
+    comment: `Auto-forwarded after ${Math.max(1, Number(env.gatepassEscalationTimeoutMinutes || 5))} minutes without Principal action.`,
+    trigger: 'auto_timeout_forward'
+  });
+
+  await gatepass.save();
+  await createBulkNotifications(
+    buildForwardNotificationsForStudentGatepass(gatepass, null, routeResult, 'auto_timeout_forward')
+  );
+
+  await logAction({
+    actorId: null,
+    resourceType: 'gatepass',
+    resourceId: gatepass._id,
+    action: routeResult.routedTo === 'coordinator' ? 'auto_forward_to_coordinator' : 'auto_forward_to_hod',
+    message:
+      routeResult.routedTo === 'coordinator'
+        ? `Gatepass ${gatepass.passNumber} auto-forwarded to Coordinator`
+        : `Gatepass ${gatepass.passNumber} auto-forwarded to HOD`,
+    metadata: {
+      forwardedTo: routeResult.recipient._id.toString(),
+      forwardedToRole: routeResult.routedTo,
+      reason: 'principal_timeout'
+    },
+    requestMeta: {}
+  });
+
+  return routeResult;
+}
+
+async function escalatePendingHodGatepass(gatepass, reason = 'hod_timeout') {
+  const notificationTrigger = reason === 'hod_unavailable' ? 'auto_unavailable_forward' : 'auto_timeout_forward';
+  const routeResult = await routeStudentGatepassToCoordinator(gatepass, {
+    actor: null,
+    comment:
+      reason === 'hod_unavailable'
+        ? 'Auto-forwarded because HOD is unavailable.'
+        : `Auto-forwarded after ${Math.max(1, Number(env.gatepassEscalationTimeoutMinutes || 5))} minutes without HOD action.`,
+    trigger: notificationTrigger,
+    fromLevel: 'hod'
+  });
+
+  await gatepass.save();
+  await createBulkNotifications(
+    buildForwardNotificationsForStudentGatepass(gatepass, null, routeResult, notificationTrigger)
+  );
+
+  await logAction({
+    actorId: null,
+    resourceType: 'gatepass',
+    resourceId: gatepass._id,
+    action: 'auto_forward_to_coordinator',
+    message: `Gatepass ${gatepass.passNumber} auto-forwarded to Coordinator`,
+    metadata: {
+      forwardedTo: routeResult.recipient._id.toString(),
+      forwardedToRole: routeResult.routedTo,
+      reason
+    },
+    requestMeta: {}
+  });
+
+  return routeResult;
+}
+
+async function processPendingStudentEscalations({ maxPerSweep = 50 } = {}) {
+  if (escalationSweepRunning) {
+    return {
+      processed: 0,
+      forwardedToHod: 0,
+      forwardedToCoordinator: 0
+    };
+  }
+
+  escalationSweepRunning = true;
+
+  const stats = {
+    processed: 0,
+    forwardedToHod: 0,
+    forwardedToCoordinator: 0
+  };
+
+  try {
+    const cutoff = new Date(Date.now() - AUTO_ESCALATION_TIMEOUT_MS);
+    const safeLimit = Math.max(1, Number(maxPerSweep) || 50);
+
+    const [principalPending, hodPending] = await Promise.all([
+      Gatepass.find({
+        applicantType: 'student',
+        status: 'pending_principal',
+        updatedAt: { $lte: cutoff }
+      })
+        .sort({ updatedAt: 1, _id: 1 })
+        .limit(safeLimit)
+        .populate('createdBy', '_id fullName'),
+      Gatepass.find({
+        applicantType: 'student',
+        status: 'forwarded_to_hod'
+      })
+        .sort({ updatedAt: 1, _id: 1 })
+        .limit(safeLimit)
+        .populate('createdBy', '_id fullName')
+        .populate('forwardedTo', '_id isActive gatepassApprovalEnabled')
+    ]);
+
+    for (const gatepass of principalPending) {
+      try {
+        const routeResult = await escalatePendingPrincipalGatepass(gatepass);
+        stats.processed += 1;
+        if (routeResult.routedTo === 'hod') {
+          stats.forwardedToHod += 1;
+        } else {
+          stats.forwardedToCoordinator += 1;
+        }
+      } catch (error) {
+        console.error('[gatepass-escalation] Failed to auto-forward Principal pending gatepass', {
+          gatepassId: gatepass?._id?.toString?.() || null,
+          passNumber: gatepass?.passNumber || null,
+          error: error?.stack || error?.message || error
+        });
+      }
+    }
+
+    for (const gatepass of hodPending) {
+      if (stats.processed >= safeLimit) {
+        break;
+      }
+
+      const isTimedOut = gatepass.updatedAt instanceof Date && gatepass.updatedAt.getTime() <= cutoff.getTime();
+      const isHodUnavailable = !isGatepassApproverAvailable(gatepass.forwardedTo);
+
+      if (!isTimedOut && !isHodUnavailable) {
+        continue;
+      }
+
+      try {
+        await escalatePendingHodGatepass(gatepass, isHodUnavailable ? 'hod_unavailable' : 'hod_timeout');
+        stats.processed += 1;
+        stats.forwardedToCoordinator += 1;
+      } catch (error) {
+        console.error('[gatepass-escalation] Failed to auto-forward HOD pending gatepass', {
+          gatepassId: gatepass?._id?.toString?.() || null,
+          passNumber: gatepass?.passNumber || null,
+          reason: isHodUnavailable ? 'hod_unavailable' : 'hod_timeout',
+          error: error?.stack || error?.message || error
+        });
+      }
+    }
+
+    return stats;
+  } finally {
+    escalationSweepRunning = false;
+  }
+}
+
+function startGatepassEscalationScheduler() {
+  if (escalationSweepInterval) {
+    return;
+  }
+
+  escalationSweepInterval = setInterval(() => {
+    processPendingStudentEscalations().catch((error) => {
+      console.error('[gatepass-escalation] Scheduler run failed', error);
+    });
+  }, AUTO_ESCALATION_SWEEP_INTERVAL_MS);
+
+  if (typeof escalationSweepInterval.unref === 'function') {
+    escalationSweepInterval.unref();
+  }
+
+  console.info(
+    `[gatepass-escalation] Scheduler started (interval=${AUTO_ESCALATION_SWEEP_INTERVAL_MS}ms, timeout=${AUTO_ESCALATION_TIMEOUT_MS}ms)`
+  );
+}
+
+function stopGatepassEscalationScheduler() {
+  if (!escalationSweepInterval) {
+    return;
+  }
+
+  clearInterval(escalationSweepInterval);
+  escalationSweepInterval = null;
 }
 
 async function verifyGatepassByToken(token, actor) {
@@ -1475,6 +2225,10 @@ async function checkInGatepass(gatepassId, actor, payload, requestMeta) {
 }
 
 async function getGatepassHistory(actor, query = {}) {
+  if (['principal', 'hod'].includes(actor.role) || isCoordinatorActor(actor)) {
+    await processPendingStudentEscalations({ maxPerSweep: 20 });
+  }
+
   return listGatepasses(buildHistoryFilter(actor, query), query);
 }
 
@@ -1494,13 +2248,17 @@ module.exports = {
   createGatepass,
   ensureApprovedGatepassQr,
   forwardGatepass,
+  forwardGatepassToCoordinator,
   getGatepassDetails,
   getGatepassHistory,
   getMyGatepasses,
   getPendingGatepassesForRole,
   getSecurityReadyGatepasses,
   mapGatepassListItem,
+  processPendingStudentEscalations,
   rejectGatepass,
+  startGatepassEscalationScheduler,
+  stopGatepassEscalationScheduler,
   updateGatepass,
   verifyGatepassById,
   verifyGatepassByToken

@@ -3,11 +3,56 @@ const env = require('../config/env');
 const AppError = require('../utils/appError');
 
 let smtpTransporter = null;
+const EMAIL_FROM_FALLBACK = 'DwarPal <noreply@dwarpal.local>';
+
+function toTrimmedString(value) {
+  return String(value || '').trim();
+}
+
+function withTimeout(promise, timeoutMs, timeoutMessage) {
+  const safeTimeoutMs = Number(timeoutMs) > 0 ? Number(timeoutMs) : 0;
+
+  if (!safeTimeoutMs) {
+    return promise;
+  }
+
+  let timeoutId = null;
+
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new AppError(timeoutMessage, 504));
+      }, safeTimeoutMs);
+    })
+  ]).finally(() => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  });
+}
+
+function isEmailLike(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toTrimmedString(value));
+}
+
+function assertRecipientAddress(to) {
+  const recipientAddress = toTrimmedString(to).toLowerCase();
+
+  if (!isEmailLike(recipientAddress)) {
+    throw new AppError('A valid recipient email address is required before sending mail.', 422, [
+      {
+        field: 'email',
+        message: 'Please provide a valid email address.'
+      }
+    ]);
+  }
+
+  return recipientAddress;
+}
 
 function resolveEmailDeliveryMode() {
-  const configuredMode = String(env.emailDeliveryMode || 'auto')
-    .trim()
-    .toLowerCase();
+  const configuredMode = toTrimmedString(env.emailDeliveryMode || 'auto').toLowerCase();
 
   // Force console mode if explicitly configured
   if (configuredMode === 'console') {
@@ -27,6 +72,12 @@ function resolveEmailDeliveryMode() {
 
   // Auto mode: try SMTP first, then Resend, then console for dev
   if (env.smtpHost && env.smtpUser && env.smtpPass) {
+    if (!env.emailFrom) {
+      throw new AppError(
+        'SMTP email delivery requires EMAIL_FROM to be configured.',
+        503
+      );
+    }
     return 'smtp';
   }
 
@@ -46,8 +97,17 @@ function resolveEmailDeliveryMode() {
 }
 
 function getEmailFromAddress() {
-  const configuredFrom = String(env.emailFrom || '').trim();
-  return configuredFrom || 'DwarPal <noreply@dwarpal.local>';
+  const configuredFrom = toTrimmedString(env.emailFrom || '');
+
+  if (configuredFrom) {
+    return configuredFrom;
+  }
+
+  if (env.isProduction) {
+    throw new AppError('EMAIL_FROM is required for email delivery in production.', 503);
+  }
+
+  return EMAIL_FROM_FALLBACK;
 }
 
 function getSmtpTransporter() {
@@ -59,6 +119,9 @@ function getSmtpTransporter() {
     host: env.smtpHost,
     port: env.smtpPort,
     secure: env.smtpSecure,
+    connectionTimeout: env.smtpConnectionTimeoutMs,
+    greetingTimeout: env.smtpGreetingTimeoutMs,
+    socketTimeout: env.smtpSocketTimeoutMs,
     auth: {
       user: env.smtpUser,
       pass: env.smtpPass
@@ -160,15 +223,30 @@ function buildPasswordResetEmail({ fullName, resetUrl, expiresInMinutes }) {
 }
 
 async function sendViaSmtp({ to, subject, text, html }) {
+  const recipientAddress = assertRecipientAddress(to);
   const transporter = getSmtpTransporter();
-  
+
   try {
-    const result = await transporter.sendMail({
-      from: getEmailFromAddress(),
-      to: String(to || '').trim(),
-      subject,
-      text,
-      html
+    console.info('[email] sendViaSmtp before sendMail', {
+      to: recipientAddress,
+      subject
+    });
+
+    const result = await withTimeout(
+      transporter.sendMail({
+        from: getEmailFromAddress(),
+        to: recipientAddress,
+        subject,
+        text,
+        html
+      }),
+      env.emailSendTimeoutMs,
+      `Email delivery timed out after ${Math.ceil(env.emailSendTimeoutMs / 1000)} seconds. Please try again.`
+    );
+
+    console.info('[email] sendViaSmtp after sendMail', {
+      to: recipientAddress,
+      messageId: result?.messageId || null
     });
 
     return {
@@ -179,48 +257,94 @@ async function sendViaSmtp({ to, subject, text, html }) {
       }
     };
   } catch (error) {
+    console.error('[email] sendViaSmtp error', {
+      to: recipientAddress,
+      error: error?.stack || error?.message || error
+    });
+
     throw new AppError(
       error.message || 'Unable to send the email right now. Please try again later.',
-      502
+      error.statusCode || 502
     );
   }
 }
 
 async function sendViaResend({ to, subject, text, html }) {
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${env.resendApiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      from: getEmailFromAddress(),
-      to: [String(to || '').trim()],
-      subject,
-      text,
-      html
-    })
-  });
+  const recipientAddress = assertRecipientAddress(to);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort(new Error('Resend request timed out.'));
+  }, env.resendRequestTimeoutMs);
 
-  const payload = await parseJsonResponse(response);
+  try {
+    console.info('[email] sendViaResend before request', {
+      to: recipientAddress,
+      subject
+    });
 
-  if (!response.ok) {
-    throw new AppError(
-      payload?.message || payload?.error || 'Unable to send the email right now. Please try again later.',
-      502
-    );
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.resendApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: getEmailFromAddress(),
+        to: [recipientAddress],
+        subject,
+        text,
+        html
+      }),
+      signal: controller.signal
+    });
+
+    const payload = await parseJsonResponse(response);
+
+    if (!response.ok) {
+      throw new AppError(
+        payload?.message || payload?.error || 'Unable to send the email right now. Please try again later.',
+        502
+      );
+    }
+
+    console.info('[email] sendViaResend after request', {
+      to: recipientAddress,
+      providerMessageId: payload?.id || null
+    });
+
+    return {
+      mode: 'resend',
+      providerResponse: payload
+    };
+  } catch (error) {
+    console.error('[email] sendViaResend error', {
+      to: recipientAddress,
+      error: error?.stack || error?.message || error
+    });
+
+    if (error?.name === 'AbortError') {
+      throw new AppError(
+        `Email delivery timed out after ${Math.ceil(env.resendRequestTimeoutMs / 1000)} seconds. Please try again.`,
+        504
+      );
+    }
+
+    if (error instanceof AppError) {
+      throw error;
+    }
+
+    throw new AppError(error?.message || 'Unable to send the email right now. Please try again later.', 502);
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  return {
-    mode: 'resend',
-    providerResponse: payload
-  };
 }
 
 async function sendViaConsole({ to, subject, text }) {
+  const recipientAddress = assertRecipientAddress(to);
+
   const preview = {
     mode: 'console',
-    to: String(to || '').trim(),
+    to: recipientAddress,
     from: getEmailFromAddress(),
     subject,
     text
@@ -238,6 +362,12 @@ async function sendViaConsole({ to, subject, text }) {
 
 async function sendEmail({ to, subject, text, html }) {
   const mode = resolveEmailDeliveryMode();
+
+  console.info('[email] sendEmail route entered', {
+    mode,
+    to: toTrimmedString(to).toLowerCase(),
+    subject
+  });
 
   if (mode === 'smtp') {
     return sendViaSmtp({ to, subject, text, html });

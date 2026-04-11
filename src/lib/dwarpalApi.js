@@ -1,15 +1,64 @@
 import { normalizeDepartment, normalizeProgram, normalizeRole } from '../mockData'
 
 function getDefaultApiBaseUrl() {
+  const productionBaseUrl = String(import.meta.env.VITE_PRODUCTION_API_BASE_URL || '').trim()
+
+  if (!import.meta.env.DEV && productionBaseUrl) {
+    return productionBaseUrl
+  }
+
   return import.meta.env.DEV ? 'http://localhost:5000/api' : '/api'
 }
 
+function isPrivateIpv4Host(hostname = '') {
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true
+
+  const match = hostname.match(/^172\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/)
+  if (!match) return false
+
+  const secondOctet = Number(match[1])
+  return secondOctet >= 16 && secondOctet <= 31
+}
+
+function pointsToLocalOrPrivateHost(value) {
+  if (!value || value.startsWith('/')) {
+    return false
+  }
+
+  try {
+    const parsedUrl = new URL(value)
+    const hostname = String(parsedUrl.hostname || '').trim().toLowerCase()
+    return (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '::1' ||
+      hostname.endsWith('.local') ||
+      isPrivateIpv4Host(hostname)
+    )
+  } catch {
+    return false
+  }
+}
 
 function normalizeApiBaseUrl(value) {
   const normalizedValue = String(value || '').trim()
 
   if (!normalizedValue || normalizedValue.toLowerCase() === 'auto') {
     return getDefaultApiBaseUrl()
+  }
+
+  if (!import.meta.env.DEV && pointsToLocalOrPrivateHost(normalizedValue)) {
+    const fallbackBaseUrl = getDefaultApiBaseUrl()
+
+    if (import.meta.env.DEV) {
+      console.warn('DwarPal API base URL pointed to a local/private host in production. Falling back.', {
+        configuredValue: normalizedValue,
+        fallbackBaseUrl,
+      })
+    }
+
+    return fallbackBaseUrl
   }
 
   if (normalizedValue.startsWith('/')) {
@@ -24,10 +73,30 @@ const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL || ge
 export const AUTH_TOKEN_KEY = 'dwarpal-auth-token'
 export const BIOMETRIC_DEVICE_KEY = 'dwarpal-biometric-device-id'
 const DEFAULT_PHONE_COUNTRY_CODE = '+91'
+const DEFAULT_API_TIMEOUT_MS = Number(import.meta.env.VITE_API_REQUEST_TIMEOUT_MS) || 15000
+const DEFAULT_AUTH_TIMEOUT_MS = Number(import.meta.env.VITE_AUTH_REQUEST_TIMEOUT_MS) || 25000
+const DEFAULT_BACKEND_WARMUP_TIMEOUT_MS = Number(import.meta.env.VITE_BACKEND_WARMUP_TIMEOUT_MS) || 8000
+const BACKEND_WARMUP_CACHE_MS = 2 * 60 * 1000
+let lastBackendWarmupAt = 0
 
-const APPROVED_GATEPASS_STATUSES = new Set(['approved_final', 'approved_by_hod', 'approved_by_cao'])
-const REJECTED_GATEPASS_STATUSES = new Set(['rejected_by_principal', 'rejected_by_hod', 'rejected_by_cao'])
-const PENDING_GATEPASS_STATUSES = new Set(['pending_principal', 'forwarded_to_hod', 'pending_cao'])
+const APPROVED_GATEPASS_STATUSES = new Set([
+  'approved_final',
+  'approved_by_hod',
+  'approved_by_coordinator',
+  'approved_by_cao',
+])
+const REJECTED_GATEPASS_STATUSES = new Set([
+  'rejected_by_principal',
+  'rejected_by_hod',
+  'rejected_by_coordinator',
+  'rejected_by_cao',
+])
+const PENDING_GATEPASS_STATUSES = new Set([
+  'pending_principal',
+  'forwarded_to_hod',
+  'forwarded_to_coordinator',
+  'pending_cao',
+])
 const GENERIC_API_MESSAGES = new Set(['Validation error', 'Please review the highlighted fields.', 'Request failed.'])
 const DEFAULT_AUTH_SESSION_TIMEOUT_MS = 5000
 
@@ -233,6 +302,10 @@ function getDefaultErrorMessage(status, path) {
     return 'Too many requests. Please wait a moment and try again.'
   }
 
+  if (status === 408) {
+    return 'The request timed out. The backend may still be waking up. Please try again.'
+  }
+
   return 'Request failed.'
 }
 
@@ -337,7 +410,8 @@ function buildRegistrationIdentityPayload(payload = {}) {
 export async function apiRequest(path, { method = 'GET', body, headers, signal, timeoutMs } = {}) {
   const requestHeaders = buildHeaders(headers)
   const requestUrl = `${API_BASE_URL}${path}`
-  const requestController = createRequestSignal(signal, timeoutMs)
+  const resolvedTimeoutMs = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_API_TIMEOUT_MS
+  const requestController = createRequestSignal(signal, resolvedTimeoutMs)
   const requestInit = {
     method,
     headers: requestHeaders,
@@ -360,7 +434,7 @@ export async function apiRequest(path, { method = 'GET', body, headers, signal, 
     response = await fetch(requestUrl, requestInit)
   } catch (error) {
     if (requestController.didTimeout()) {
-      const seconds = Math.ceil(timeoutMs / 1000)
+      const seconds = Math.ceil(resolvedTimeoutMs / 1000)
       throw new ApiError(
         `The DwarPal backend did not respond within ${seconds} seconds.`,
         408,
@@ -405,6 +479,22 @@ export async function apiRequest(path, { method = 'GET', body, headers, signal, 
   return payload
 }
 
+export async function warmBackendForAuth({ signal, force = false, timeoutMs = DEFAULT_BACKEND_WARMUP_TIMEOUT_MS } = {}) {
+  const now = Date.now()
+
+  if (!force && now - lastBackendWarmupAt < BACKEND_WARMUP_CACHE_MS) {
+    return true
+  }
+
+  try {
+    await apiRequest('/health', { signal, timeoutMs })
+    lastBackendWarmupAt = Date.now()
+    return true
+  } catch {
+    return false
+  }
+}
+
 function toUiUser(user, session = null) {
   if (!user) return null
 
@@ -426,6 +516,13 @@ function toUiUser(user, session = null) {
     emailVerified: user.emailVerified !== false,
     emailVerifiedAt: user.emailVerifiedAt || null,
     hasBiometricCredentials: Boolean(user.hasBiometricCredentials),
+    gatepassApprovalEnabled: user.gatepassApprovalEnabled !== false,
+    coordinatorAssignment: {
+      isCoordinator: Boolean(user.coordinatorAssignment?.isCoordinator),
+      program: normalizeProgram(user.coordinatorAssignment?.program),
+      department: normalizeDepartment(user.coordinatorAssignment?.department) || user.coordinatorAssignment?.department || null,
+      semester: user.coordinatorAssignment?.semester || null,
+    },
     lastLoginAt: user.lastLoginAt || null,
     sessionAuthMethod: session?.authMethod || null,
     sessionExpiresAt: session?.expiresAt || null,
@@ -511,6 +608,24 @@ function buildStudentTimeline(gatepass) {
     return timeline
   }
 
+  if (gatepass.status === 'forwarded_to_coordinator') {
+    timeline.push(
+      {
+        label: 'Forwarded by Principal/HOD',
+        note: 'Escalated to Coordinator for semester review',
+        at:
+          gatepass.actions?.coordinator?.actedAt ||
+          gatepass.actions?.hod?.actedAt ||
+          gatepass.actions?.principal?.actedAt ||
+          gatepass.updatedAt,
+        tone: 'done',
+      },
+      { label: 'Coordinator Review', note: 'Pending approval', at: null, tone: 'current' },
+      { label: 'Security Exit', note: 'Will unlock after approval', at: null, tone: 'upcoming' },
+    )
+    return timeline
+  }
+
   if (gatepass.status === 'approved_final') {
     timeline.push(
       {
@@ -536,6 +651,25 @@ function buildStudentTimeline(gatepass) {
         label: 'HOD Approved',
         note: 'Request approved and sent to Security desk',
         at: gatepass.actions?.hod?.actedAt || gatepass.updatedAt,
+        tone: 'done',
+      },
+      { label: 'Security Exit', note: 'Ready for OUT verification', at: null, tone: 'current' },
+    )
+    return timeline
+  }
+
+  if (gatepass.status === 'approved_by_coordinator') {
+    timeline.push(
+      {
+        label: 'Escalated for Coordinator Review',
+        note: 'Principal/HOD escalated this request',
+        at: gatepass.actions?.principal?.actedAt || gatepass.actions?.hod?.actedAt || gatepass.updatedAt,
+        tone: 'done',
+      },
+      {
+        label: 'Coordinator Approved',
+        note: 'Request approved and sent to Security desk',
+        at: gatepass.actions?.coordinator?.actedAt || gatepass.updatedAt,
         tone: 'done',
       },
       { label: 'Security Exit', note: 'Ready for OUT verification', at: null, tone: 'current' },
@@ -571,6 +705,24 @@ function buildStudentTimeline(gatepass) {
     return timeline
   }
 
+  if (gatepass.status === 'rejected_by_coordinator') {
+    timeline.push(
+      {
+        label: 'Escalated for Coordinator Review',
+        note: 'Principal/HOD escalated this request',
+        at: gatepass.actions?.principal?.actedAt || gatepass.actions?.hod?.actedAt || gatepass.updatedAt,
+        tone: 'done',
+      },
+      {
+        label: 'Rejected by Coordinator',
+        note: gatepass.rejectionReason || 'Request closed',
+        at: gatepass.actions?.coordinator?.actedAt || gatepass.updatedAt,
+        tone: 'danger',
+      },
+    )
+    return timeline
+  }
+
   if (gatepass.actions?.hod?.status === 'approved') {
     timeline.push(
       {
@@ -583,6 +735,15 @@ function buildStudentTimeline(gatepass) {
         label: 'HOD Approved',
         note: 'Request approved and sent to Security desk',
         at: gatepass.actions?.hod?.actedAt || gatepass.updatedAt,
+        tone: 'done',
+      },
+    )
+  } else if (gatepass.actions?.coordinator?.status === 'approved') {
+    timeline.push(
+      {
+        label: 'Coordinator Approved',
+        note: 'Request approved and sent to Security desk',
+        at: gatepass.actions?.coordinator?.actedAt || gatepass.updatedAt,
         tone: 'done',
       },
     )
@@ -768,6 +929,10 @@ export function toUiGatepass(gatepass) {
         status: gatepass.hodAction?.status || null,
         actedAt: gatepass.hodAction?.actedAt || null,
       },
+      coordinator: {
+        status: gatepass.coordinatorAction?.status || null,
+        actedAt: gatepass.coordinatorAction?.actedAt || null,
+      },
       cao: {
         status: gatepass.caoAction?.status || null,
         actedAt: gatepass.caoAction?.actedAt || null,
@@ -778,6 +943,7 @@ export function toUiGatepass(gatepass) {
       checkedOutAt: gatepass.securityAction?.checkedOutAt || null,
       checkedInAt: gatepass.securityAction?.checkedInAt || null,
     },
+    routingHistory: Array.isArray(gatepass.routingHistory) ? gatepass.routingHistory : [],
     timeline: [],
   }
 
@@ -1020,8 +1186,11 @@ export async function verifySession({ signal, timeoutMs = DEFAULT_AUTH_SESSION_T
 }
 
 export async function loginUser(identifier, password) {
+  await warmBackendForAuth()
+
   const payload = await apiRequest('/auth/login', {
     method: 'POST',
+    timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
     body: {
       identifier,
       password,
@@ -1048,8 +1217,11 @@ export async function checkRegistrationAvailability(payload) {
 }
 
 export async function sendRegistrationVerificationCode(payload) {
+  await warmBackendForAuth()
+
   const response = await apiRequest('/auth/register/send-verification-code', {
     method: 'POST',
+    timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
     body: {
       ...buildRegistrationIdentityPayload(payload),
       password: payload.password,
@@ -1067,8 +1239,11 @@ export async function sendRegistrationVerificationCode(payload) {
 }
 
 export async function verifyRegistrationEmail(payload) {
+  await warmBackendForAuth()
+
   const response = await apiRequest('/auth/register/verify-email', {
     method: 'POST',
+    timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
     body: {
       email: String(payload.email || '').trim().toLowerCase(),
       verificationCode: String(payload.verificationCode || payload.code || '').trim(),
@@ -1087,8 +1262,11 @@ export async function verifyRegistrationEmail(payload) {
 }
 
 export async function requestPasswordReset(email) {
+  await warmBackendForAuth()
+
   const response = await apiRequest('/auth/forgot-password', {
     method: 'POST',
+    timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
     body: {
       email: String(email || '').trim().toLowerCase(),
     },
@@ -1119,6 +1297,15 @@ export async function logoutUser() {
   } finally {
     clearStoredAuthToken()
   }
+}
+
+export async function updateCurrentUserProfile(profileUpdates = {}) {
+  const response = await apiRequest('/users/profile', {
+    method: 'PATCH',
+    body: profileUpdates,
+  })
+
+  return toUiUser(response?.data)
 }
 
 export async function getBiometricDevices() {
@@ -1223,8 +1410,22 @@ async function fetchWorkspaceRequests(role, signal) {
   }
 
   if (normalizedRole === 'faculty') {
-    const payload = await apiRequest('/faculty-leaves/my?sortBy=updatedAt&order=desc&page=1&limit=50', { signal })
-    return Array.isArray(payload.data) ? payload.data.map(toUiFacultyLeaveRequest) : []
+    const [facultyPayload, coordinatorPayload] = await Promise.all([
+      apiRequest('/faculty-leaves/my?sortBy=updatedAt&order=desc&page=1&limit=50', { signal }),
+      apiRequest('/gatepasses/pending/coordinator?sortBy=updatedAt&order=desc&page=1&limit=50', { signal }).catch(
+        (error) => {
+          if (error instanceof ApiError && (error.status === 400 || error.status === 403)) {
+            return { data: [] }
+          }
+          throw error
+        },
+      ),
+    ])
+
+    return sortRequestsByLatestActivity([
+      ...(Array.isArray(facultyPayload.data) ? facultyPayload.data.map(toUiFacultyLeaveRequest) : []),
+      ...(Array.isArray(coordinatorPayload.data) ? coordinatorPayload.data.map(toUiGatepass) : []),
+    ])
   }
 
   if (normalizedRole === 'principal') {
@@ -1263,8 +1464,10 @@ async function fetchWorkspaceRequests(role, signal) {
     ])
 
     return sortRequestsByLatestActivity([
-      ...(Array.isArray(studentPayload.data) ? studentPayload.data.map(toUiGatepass) : []),
-      ...(Array.isArray(facultyPayload.data) ? facultyPayload.data.map(toUiFacultyLeaveRequest) : []),
+      ...(Array.isArray(studentPayload.data) ? studentPayload.data.map(toUiGatepass).filter((item) => item.status !== 'Approved') : []),
+      ...(Array.isArray(facultyPayload.data)
+        ? facultyPayload.data.map(toUiFacultyLeaveRequest).filter((item) => item.status !== 'Approved')
+        : []),
     ])
   }
 
@@ -1429,6 +1632,10 @@ function getDefaultActionBody(action) {
     return { comment: 'Forwarded from dashboard.' }
   }
 
+  if (action === 'sendToCoordinator') {
+    return { comment: 'Forwarded to coordinator from dashboard.' }
+  }
+
   return {}
 }
 
@@ -1461,6 +1668,7 @@ export async function updateRequestStatus(request, action, body = null) {
     approve: `/gatepasses/${request.recordId}/approve`,
     reject: `/gatepasses/${request.recordId}/reject`,
     forward: `/gatepasses/${request.recordId}/forward`,
+    sendToCoordinator: `/gatepasses/${request.recordId}/forward-to-coordinator`,
     markOut: `/gatepasses/${request.recordId}/check-out`,
     markIn: `/gatepasses/${request.recordId}/check-in`,
   }

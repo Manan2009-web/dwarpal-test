@@ -180,5 +180,15 @@ module.exports = {
   smtpPort: Number(process.env.SMTP_PORT) || 587,
   smtpSecure: process.env.SMTP_SECURE === 'true',
   smtpUser: String(process.env.SMTP_USER || '').trim(),
-  smtpPass: String(process.env.SMTP_PASS || '').trim()
+  smtpPass: String(process.env.SMTP_PASS || '').trim(),
+  smtpConnectionTimeoutMs: Number(process.env.SMTP_CONNECTION_TIMEOUT_MS) || 10000,
+  smtpGreetingTimeoutMs: Number(process.env.SMTP_GREETING_TIMEOUT_MS) || 10000,
+  smtpSocketTimeoutMs: Number(process.env.SMTP_SOCKET_TIMEOUT_MS) || 15000,
+  emailSendTimeoutMs: Number(process.env.EMAIL_SEND_TIMEOUT_MS) || 20000,
+  resendRequestTimeoutMs: Number(process.env.RESEND_REQUEST_TIMEOUT_MS) || 15000,
+  httpRequestTimeoutMs: Number(process.env.HTTP_REQUEST_TIMEOUT_MS) || 30000,
+  httpHeadersTimeoutMs: Number(process.env.HTTP_HEADERS_TIMEOUT_MS) || 35000,
+  httpKeepAliveTimeoutMs: Number(process.env.HTTP_KEEP_ALIVE_TIMEOUT_MS) || 5000,
+  gatepassEscalationTimeoutMinutes: Number(process.env.GATEPASS_ESCALATION_TIMEOUT_MINUTES) || 5,
+  gatepassEscalationSweepIntervalMs: Number(process.env.GATEPASS_ESCALATION_SWEEP_INTERVAL_MS) || 60000
 };

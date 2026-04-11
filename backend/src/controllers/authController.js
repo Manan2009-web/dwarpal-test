@@ -9,25 +9,70 @@ const {
 } = require('../utils/webauthnState');
 const authService = require('../services/authService');
 
-const sendRegistrationVerificationCode = asyncHandler(async (req, res) => {
-  const result = await authService.sendRegistrationVerificationCode(req.body, getRequestMeta(req));
+function maskEmail(email) {
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const [localPart = '', domain = ''] = normalizedEmail.split('@');
 
-  return sendSuccess(res, {
-    statusCode: 202,
-    message: result.message,
-    data: result
+  if (!localPart || !domain) {
+    return normalizedEmail;
+  }
+
+  const visiblePart = localPart.slice(0, Math.min(2, localPart.length));
+  return `${visiblePart}${'*'.repeat(Math.max(localPart.length - visiblePart.length, 1))}@${domain}`;
+}
+
+const sendRegistrationVerificationCode = asyncHandler(async (req, res) => {
+  console.info('[auth] POST /auth/register/send-verification-code route entered', {
+    email: maskEmail(req.body?.email),
+    role: req.body?.role
   });
+
+  try {
+    const result = await authService.sendRegistrationVerificationCode(req.body, getRequestMeta(req));
+
+    console.info('[auth] POST /auth/register/send-verification-code route completed', {
+      email: maskEmail(result?.email)
+    });
+
+    return sendSuccess(res, {
+      statusCode: 202,
+      message: result.message,
+      data: result
+    });
+  } catch (error) {
+    console.error('[auth] POST /auth/register/send-verification-code route failed', {
+      email: maskEmail(req.body?.email),
+      error: error?.stack || error?.message || error
+    });
+    throw error;
+  }
 });
 
 const verifyRegistrationEmail = asyncHandler(async (req, res) => {
-  const result = await authService.verifyRegistrationEmail(req.body, req, getRequestMeta(req));
-  setAuthCookie(res, result.token);
-
-  return sendSuccess(res, {
-    statusCode: 201,
-    message: result.message,
-    data: result
+  console.info('[auth] POST /auth/register/verify-email route entered', {
+    email: maskEmail(req.body?.email)
   });
+
+  try {
+    const result = await authService.verifyRegistrationEmail(req.body, req, getRequestMeta(req));
+    setAuthCookie(res, result.token);
+
+    console.info('[auth] POST /auth/register/verify-email route completed', {
+      email: maskEmail(result?.verification?.email || req.body?.email)
+    });
+
+    return sendSuccess(res, {
+      statusCode: 201,
+      message: result.message,
+      data: result
+    });
+  } catch (error) {
+    console.error('[auth] POST /auth/register/verify-email route failed', {
+      email: maskEmail(req.body?.email),
+      error: error?.stack || error?.message || error
+    });
+    throw error;
+  }
 });
 
 const checkRegistrationAvailability = asyncHandler(async (req, res) => {

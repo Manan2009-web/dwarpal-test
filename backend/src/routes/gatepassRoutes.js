@@ -33,6 +33,7 @@ router.get('/my', authorize('student', 'faculty'), basePaginationQueryValidation
 router.get('/history', basePaginationQueryValidation, validateRequest, gatepassController.getGatepassHistory);
 router.get('/pending/principal', authorize('principal'), basePaginationQueryValidation, validateRequest, gatepassController.getPendingForPrincipal);
 router.get('/pending/hod', authorize('hod'), basePaginationQueryValidation, validateRequest, gatepassController.getPendingForHod);
+router.get('/pending/coordinator', authorize('faculty'), basePaginationQueryValidation, validateRequest, gatepassController.getPendingForCoordinator);
 router.get('/pending/cao', authorize('cao'), basePaginationQueryValidation, validateRequest, gatepassController.getPendingForCao);
 router.get('/pending/security', authorize('security'), securityPendingQueryValidation, validateRequest, gatepassController.getPendingForSecurity);
 router.get('/security/ready', authorize('security'), securityPendingQueryValidation, validateRequest, gatepassController.getSecurityReadyGatepasses);
@@ -48,12 +49,14 @@ router.patch('/:id/principal-action', authorize('principal'), principalRoleActio
 router.patch('/:id/hod-action', authorize('hod'), hodRoleActionValidation, validateRequest, gatepassController.handleHodAction);
 router.patch('/:id/cao-action', authorize('cao'), caoRoleActionValidation, validateRequest, gatepassController.handleCaoAction);
 router.patch('/:id/forward-to-hod', authorize('principal'), forwardGatepassValidation, validateRequest, gatepassController.forwardGatepass);
+router.patch('/:id/forward-to-coordinator', authorize('hod'), forwardGatepassValidation, validateRequest, gatepassController.forwardGatepassToCoordinator);
 router.patch('/:id/forward', authorize('principal'), forwardGatepassValidation, validateRequest, gatepassController.forwardGatepass);
-router.patch('/:id/approve', authorize('principal', 'hod', 'cao'), approveGatepassValidation, validateRequest, gatepassController.approveGatepass);
-router.patch('/:id/reject', authorize('principal', 'hod', 'cao'), rejectGatepassValidation, validateRequest, gatepassController.rejectGatepass);
+router.patch('/:id/approve', authorize('principal', 'hod', 'cao', 'faculty'), approveGatepassValidation, validateRequest, gatepassController.approveGatepass);
+router.patch('/:id/reject', authorize('principal', 'hod', 'cao', 'faculty'), rejectGatepassValidation, validateRequest, gatepassController.rejectGatepass);
 router.post('/:id/forward', authorize('principal'), forwardGatepassValidation, validateRequest, gatepassController.forwardGatepass);
-router.post('/:id/approve', authorize('principal', 'hod', 'cao'), approveGatepassValidation, validateRequest, gatepassController.approveGatepass);
-router.post('/:id/reject', authorize('principal', 'hod', 'cao'), rejectGatepassValidation, validateRequest, gatepassController.rejectGatepass);
+router.post('/:id/forward-to-coordinator', authorize('hod'), forwardGatepassValidation, validateRequest, gatepassController.forwardGatepassToCoordinator);
+router.post('/:id/approve', authorize('principal', 'hod', 'cao', 'faculty'), approveGatepassValidation, validateRequest, gatepassController.approveGatepass);
+router.post('/:id/reject', authorize('principal', 'hod', 'cao', 'faculty'), rejectGatepassValidation, validateRequest, gatepassController.rejectGatepass);
 router.post('/:id/check-out', authorize('security'), securityActionValidation, validateRequest, gatepassController.checkOutGatepass);
 router.post('/:id/check-in', authorize('security'), securityActionValidation, validateRequest, gatepassController.checkInGatepass);
 router.patch('/:id/cancel', authorize('student', 'faculty'), cancelGatepassValidation, validateRequest, gatepassController.cancelGatepass);

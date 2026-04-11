@@ -46,8 +46,18 @@ const facultyPopulate = [
   { path: 'securityAction.checkedInBy', select: 'fullName email role department employeeId phone' }
 ];
 
-const SECURITY_BLOCKED_PENDING_STATUSES = new Set(['pending_principal', 'forwarded_to_hod', 'pending_cao']);
-const SECURITY_BLOCKED_REJECTED_STATUSES = new Set(['rejected_by_principal', 'rejected_by_hod', 'rejected_by_cao']);
+const SECURITY_BLOCKED_PENDING_STATUSES = new Set([
+  'pending_principal',
+  'forwarded_to_hod',
+  'forwarded_to_coordinator',
+  'pending_cao'
+]);
+const SECURITY_BLOCKED_REJECTED_STATUSES = new Set([
+  'rejected_by_principal',
+  'rejected_by_hod',
+  'rejected_by_coordinator',
+  'rejected_by_cao'
+]);
 
 function applyPopulate(query, populateConfig) {
   populateConfig.forEach((item) => {

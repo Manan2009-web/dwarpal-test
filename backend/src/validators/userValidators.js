@@ -64,7 +64,68 @@ const updateProfileValidation = [
       throw new Error('Semester must be between 1 and 8');
     }
     return true;
-  })
+  }),
+  body('gatepassApprovalEnabled')
+    .optional()
+    .isBoolean()
+    .withMessage('gatepassApprovalEnabled must be true or false'),
+  body('coordinatorAssignment')
+    .optional()
+    .isObject()
+    .withMessage('coordinatorAssignment must be an object'),
+  body('coordinatorAssignment.isCoordinator')
+    .optional()
+    .isBoolean()
+    .withMessage('coordinatorAssignment.isCoordinator must be true or false'),
+  body('coordinatorAssignment.program')
+    .optional({ values: 'falsy' })
+    .customSanitizer(normalizeProgram)
+    .custom((value, { req }) => {
+      const isCoordinator = req.body?.coordinatorAssignment?.isCoordinator === true;
+
+      if (!isCoordinator) {
+        return true;
+      }
+
+      if (!value || !STUDENT_PROGRAMS.includes(value)) {
+        throw new Error(`Coordinator program must be one of: ${STUDENT_PROGRAMS.join(', ')}`);
+      }
+
+      return true;
+    }),
+  body('coordinatorAssignment.department')
+    .optional({ values: 'falsy' })
+    .customSanitizer((value) => normalizeDepartment(value) || String(value || '').trim())
+    .custom((value, { req }) => {
+      const isCoordinator = req.body?.coordinatorAssignment?.isCoordinator === true;
+      const normalizedDepartment = String(value || '').trim();
+
+      if (!isCoordinator) {
+        return true;
+      }
+
+      if (!normalizedDepartment || !ROUTING_DEPARTMENTS.includes(normalizedDepartment)) {
+        throw new Error(`Coordinator department must be one of: ${ROUTING_DEPARTMENTS.join(', ')}`);
+      }
+
+      return true;
+    }),
+  body('coordinatorAssignment.semester')
+    .optional()
+    .custom((value, { req }) => {
+      const isCoordinator = req.body?.coordinatorAssignment?.isCoordinator === true;
+      const numericSemester = Number(value);
+
+      if (!isCoordinator) {
+        return true;
+      }
+
+      if (!SEMESTERS.includes(numericSemester)) {
+        throw new Error('Coordinator semester must be between 1 and 8');
+      }
+
+      return true;
+    })
 ];
 
 const updateUserStatusValidation = [

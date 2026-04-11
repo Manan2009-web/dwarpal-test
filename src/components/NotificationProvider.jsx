@@ -84,6 +84,61 @@ export function NotificationProvider({ children, currentUser }) {
   const [socketConnected, setSocketConnected] = useState(false)
   const shownToastIdsRef = useRef(new Set())
   const notificationIdsRef = useRef(new Set())
+  const notificationAudioContextRef = useRef(null)
+  const lastSoundAtRef = useRef(0)
+
+  const playNotificationSound = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const now = Date.now()
+
+    if (now - lastSoundAtRef.current < 1200) {
+      return
+    }
+
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext
+
+    if (!AudioContextClass) {
+      return
+    }
+
+    try {
+      if (!notificationAudioContextRef.current) {
+        notificationAudioContextRef.current = new AudioContextClass()
+      }
+
+      const audioContext = notificationAudioContextRef.current
+
+      if (!audioContext) {
+        return
+      }
+
+      if (audioContext.state === 'suspended') {
+        audioContext.resume().catch(() => {})
+      }
+
+      const oscillator = audioContext.createOscillator()
+      const gainNode = audioContext.createGain()
+      const startTime = audioContext.currentTime
+
+      oscillator.type = 'sine'
+      oscillator.frequency.setValueAtTime(880, startTime)
+      gainNode.gain.setValueAtTime(0.0001, startTime)
+      gainNode.gain.exponentialRampToValueAtTime(0.03, startTime + 0.01)
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.18)
+
+      oscillator.connect(gainNode)
+      gainNode.connect(audioContext.destination)
+
+      oscillator.start(startTime)
+      oscillator.stop(startTime + 0.2)
+      lastSoundAtRef.current = now
+    } catch {
+      // Ignore sound failures so visual notifications continue.
+    }
+  }, [])
 
   const showRealtimeToast = useCallback(
     (notification) => {
@@ -97,7 +152,11 @@ export function NotificationProvider({ children, currentUser }) {
 
       shownToastIdsRef.current.add(notification.id)
 
-      if (notification.senderId && notification.senderId === currentUser?.id && notification.recipientId === currentUser?.id) {
+      if (
+        notification.senderId &&
+        notification.senderId === currentUser?.id &&
+        notification.recipientId === currentUser?.id
+      ) {
         return
       }
 
@@ -114,6 +173,10 @@ export function NotificationProvider({ children, currentUser }) {
         dedupeKey: notification.id,
       })
 
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        playNotificationSound()
+      }
+
       if (
         typeof window !== 'undefined' &&
         typeof document !== 'undefined' &&
@@ -122,7 +185,7 @@ export function NotificationProvider({ children, currentUser }) {
         window.Notification.permission === 'granted'
       ) {
         const browserNotification = new window.Notification(notification.title, {
-          body: [notification.message, notification.referenceId].filter(Boolean).join(' • '),
+          body: [notification.message, notification.referenceId].filter(Boolean).join(' | '),
           tag: notification.id,
           icon: '/dwarpal-favicon.png',
         })
@@ -138,8 +201,18 @@ export function NotificationProvider({ children, currentUser }) {
         }
       }
     },
-    [currentUser?.id, toast],
+    [currentUser?.id, playNotificationSound, toast],
   )
+
+  useEffect(() => {
+    return () => {
+      if (notificationAudioContextRef.current?.close) {
+        notificationAudioContextRef.current.close().catch(() => {})
+      }
+
+      notificationAudioContextRef.current = null
+    }
+  }, [])
 
   const refreshNotifications = useCallback(
     async ({ signal, silent = false } = {}) => {
@@ -420,3 +493,4 @@ export function useNotifications() {
 
   return context
 }
+

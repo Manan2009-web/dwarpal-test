@@ -19,6 +19,10 @@ async function executeRoleAction(req) {
     return gatepassService.forwardGatepass(req.params.id, req.user, req.body, requestMeta);
   }
 
+  if (action === 'forward_to_coordinator') {
+    return gatepassService.forwardGatepassToCoordinator(req.params.id, req.user, req.body, requestMeta);
+  }
+
   if (action === 'approve') {
     return gatepassService.approveGatepass(req.params.id, req.user, req.body, requestMeta);
   }
@@ -131,6 +135,15 @@ const getPendingForHod = asyncHandler(async (req, res) => {
   });
 });
 
+const getPendingForCoordinator = asyncHandler(async (req, res) => {
+  const result = await gatepassService.getPendingGatepassesForRole(req.user, req.query);
+  return sendSuccess(res, {
+    message: 'Coordinator pending gatepasses fetched successfully',
+    data: result.gatepasses,
+    meta: result.meta
+  });
+});
+
 const getPendingForCao = asyncHandler(async (req, res) => {
   const result = await gatepassService.getPendingGatepassesForRole(req.user, req.query);
   return sendSuccess(res, {
@@ -158,6 +171,19 @@ const forwardGatepass = asyncHandler(async (req, res) => {
   );
   return sendSuccess(res, {
     message: 'Gatepass forwarded successfully',
+    data: gatepass
+  });
+});
+
+const forwardGatepassToCoordinator = asyncHandler(async (req, res) => {
+  const gatepass = await gatepassService.forwardGatepassToCoordinator(
+    req.params.id,
+    req.user,
+    req.body,
+    getRequestMeta(req)
+  );
+  return sendSuccess(res, {
+    message: 'Gatepass forwarded to coordinator successfully',
     data: gatepass
   });
 });
@@ -296,12 +322,14 @@ module.exports = {
   getMyGatepasses,
   getPendingForCao,
   getPendingForHod,
+  getPendingForCoordinator,
   getPendingForPrincipal,
   getPendingForSecurity,
   getSecurityReadyGatepasses,
   handleCaoAction,
   handleHodAction,
   handlePrincipalAction,
+  forwardGatepassToCoordinator,
   rejectGatepass,
   scanGatepassQr,
   updateGatepass,

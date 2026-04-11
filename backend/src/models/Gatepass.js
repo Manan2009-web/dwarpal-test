@@ -115,6 +115,49 @@ const applicantSnapshotSchema = new mongoose.Schema(
   }
 );
 
+const routingHistoryEntrySchema = new mongoose.Schema(
+  {
+    fromLevel: {
+      type: String,
+      trim: true,
+      default: 'system'
+    },
+    toLevel: {
+      type: String,
+      trim: true,
+      required: true
+    },
+    trigger: {
+      type: String,
+      trim: true,
+      default: 'manual'
+    },
+    note: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+      default: ''
+    },
+    actedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null
+    },
+    actedByRole: {
+      type: String,
+      trim: true,
+      default: 'system'
+    },
+    actedAt: {
+      type: Date,
+      default: Date.now
+    }
+  },
+  {
+    _id: false
+  }
+);
+
 const qrPayloadSchema = new mongoose.Schema(
   {
     version: {
@@ -319,7 +362,7 @@ const gatepassSchema = new mongoose.Schema(
     },
     forwardedToRole: {
       type: String,
-      enum: ['principal', 'hod', 'cao', 'security'],
+      enum: ['principal', 'hod', 'coordinator', 'cao', 'security'],
       default: null
     },
     principalAction: {
@@ -329,6 +372,12 @@ const gatepassSchema = new mongoose.Schema(
       })
     },
     hodAction: {
+      type: approvalActionSchema,
+      default: () => ({
+        status: 'not_required'
+      })
+    },
+    coordinatorAction: {
       type: approvalActionSchema,
       default: () => ({
         status: 'not_required'
@@ -413,6 +462,10 @@ const gatepassSchema = new mongoose.Schema(
     qrRevokedAt: {
       type: Date,
       default: null
+    },
+    routingHistory: {
+      type: [routingHistoryEntrySchema],
+      default: []
     }
   },
   {
@@ -450,6 +503,7 @@ gatepassSchema.index({ outDate: 1, status: 1 });
 gatepassSchema.index({ 'applicantSnapshot.department': 1, status: 1, updatedAt: -1 });
 gatepassSchema.index({ 'applicantSnapshot.program': 1, 'applicantSnapshot.department': 1, status: 1, updatedAt: -1 });
 gatepassSchema.index({ 'hodAction.status': 1, updatedAt: -1 });
+gatepassSchema.index({ 'coordinatorAction.status': 1, updatedAt: -1 });
 gatepassSchema.index({ 'caoAction.status': 1, updatedAt: -1 });
 gatepassSchema.index({ 'principalAction.status': 1, updatedAt: -1 });
 

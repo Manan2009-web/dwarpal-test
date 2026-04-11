@@ -5,6 +5,10 @@ const connectDatabase = require('./config/db');
 const Gatepass = require('./models/Gatepass');
 const { ensureRateLimitStorage } = require('./services/authRateLimitService');
 const { seedDefaultAdmins } = require('./services/adminService');
+const {
+  startGatepassEscalationScheduler,
+  stopGatepassEscalationScheduler
+} = require('./services/gatepassService');
 const { closeRealtimeServer, createRealtimeServer } = require('./services/realtimeService');
 
 async function repairVerificationTokens() {
@@ -32,6 +36,7 @@ async function ensureDemoAccounts() {
 
 async function shutdownServer(server, exitCode = 0) {
   try {
+    stopGatepassEscalationScheduler();
     await closeRealtimeServer();
 
     if (server?.listening) {
@@ -65,6 +70,10 @@ async function startServer() {
   await ensureDemoAccounts();
 
   const server = http.createServer(app);
+  server.requestTimeout = env.httpRequestTimeoutMs;
+  server.headersTimeout = env.httpHeadersTimeoutMs;
+  server.keepAliveTimeout = env.httpKeepAliveTimeoutMs;
+  startGatepassEscalationScheduler();
   createRealtimeServer(server);
 
   server.on('error', async (error) => {
@@ -78,9 +87,12 @@ async function startServer() {
   });
 
   server.listen(env.port, "0.0.0.0", () => {
-  console.log(`DwarPal backend running on port ${env.port}`);
-  console.log(`Database mode: ${database.mode}`);
-});
+    console.log(`DwarPal backend running on port ${env.port}`);
+    console.log(`Database mode: ${database.mode}`);
+    console.log(
+      `HTTP timeouts configured (request=${env.httpRequestTimeoutMs}ms, headers=${env.httpHeadersTimeoutMs}ms, keepAlive=${env.httpKeepAliveTimeoutMs}ms)`
+    );
+  });
 
   process.on('unhandledRejection', (error) => {
     console.error('Unhandled rejection:', error);

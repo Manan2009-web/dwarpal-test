@@ -46,6 +46,7 @@ export default function SecurityVerificationPanel({
   const detectorRef = useRef(null)
   const scanBusyRef = useRef(false)
   const lastScanAtRef = useRef(0)
+  const scannerWatchdogRef = useRef(0)
 
   const actionButton = useMemo(() => {
     if (!verificationResult?.valid || !verificationResult?.nextAction) {
@@ -82,6 +83,11 @@ export default function SecurityVerificationPanel({
       animationFrameRef.current = 0
     }
 
+    if (scannerWatchdogRef.current) {
+      window.clearTimeout(scannerWatchdogRef.current)
+      scannerWatchdogRef.current = 0
+    }
+
     streamRef.current?.getTracks?.().forEach((track) => track.stop())
     streamRef.current = null
     if (videoRef.current) {
@@ -89,6 +95,99 @@ export default function SecurityVerificationPanel({
     }
     scanBusyRef.current = false
     setIsScannerActive(false)
+  }
+
+  async function hasVideoInputDevice() {
+    if (!window?.navigator?.mediaDevices?.enumerateDevices) {
+      return true
+    }
+
+    try {
+      const devices = await window.navigator.mediaDevices.enumerateDevices()
+      return devices.some((device) => device.kind === 'videoinput')
+    } catch {
+      return true
+    }
+  }
+
+  async function requestCameraStream() {
+    const constraintCandidates = [
+      {
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      },
+      {
+        video: {
+          facingMode: { ideal: 'environment' },
+        },
+        audio: false,
+      },
+      {
+        video: true,
+        audio: false,
+      },
+    ]
+
+    let lastError = null
+
+    for (const constraints of constraintCandidates) {
+      try {
+        return await window.navigator.mediaDevices.getUserMedia(constraints)
+      } catch (error) {
+        lastError = error
+      }
+    }
+
+    throw lastError || new Error('Unable to initialize camera stream.')
+  }
+
+  function waitForVideoReady(videoElement, timeoutMs = 5000) {
+    return new Promise((resolve, reject) => {
+      if (!videoElement) {
+        reject(new Error('Video preview is not available.'))
+        return
+      }
+
+      if (videoElement.readyState >= 2 && videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
+        resolve()
+        return
+      }
+
+      let timeoutId = 0
+
+      function cleanup() {
+        videoElement.removeEventListener('loadedmetadata', handleLoadedMetadata)
+        videoElement.removeEventListener('error', handleVideoError)
+
+        if (timeoutId) {
+          window.clearTimeout(timeoutId)
+        }
+      }
+
+      function handleLoadedMetadata() {
+        if (videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
+          cleanup()
+          resolve()
+        }
+      }
+
+      function handleVideoError() {
+        cleanup()
+        reject(new Error('Camera preview failed to initialize.'))
+      }
+
+      timeoutId = window.setTimeout(() => {
+        cleanup()
+        reject(new Error('Camera opened but no video feed was received.'))
+      }, timeoutMs)
+
+      videoElement.addEventListener('loadedmetadata', handleLoadedMetadata)
+      videoElement.addEventListener('error', handleVideoError)
+    })
   }
 
   async function applyVerificationResult(result, successFallback) {
@@ -245,36 +344,69 @@ export default function SecurityVerificationPanel({
     setIsPreparingScanner(true)
 
     try {
+      const hasCamera = await hasVideoInputDevice()
+
+      if (!hasCamera) {
+        setCameraPermission('missing')
+        setScannerError('No camera was found on this device. Use manual Gatepass ID verification instead.')
+        toast.warning({
+          title: 'No camera found',
+          message: 'No camera was found on this device. Use manual Gatepass ID verification instead.',
+        })
+        return
+      }
+
       detectorRef.current = detectorRef.current || new window.BarcodeDetector({ formats: ['qr_code'] })
-      const stream = await window.navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: 'environment' },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
-      })
+      const stream = await requestCameraStream()
 
       streamRef.current = stream
       setCameraPermission('granted')
-      setIsScannerActive(true)
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream
+        videoRef.current.setAttribute('playsinline', 'true')
         await videoRef.current.play()
+        await waitForVideoReady(videoRef.current)
       }
 
+      setIsScannerActive(true)
       animationFrameRef.current = window.requestAnimationFrame(scanFrame)
+
+      scannerWatchdogRef.current = window.setTimeout(() => {
+        if (!videoRef.current || videoRef.current.videoWidth > 0) {
+          return
+        }
+
+        stopScanner()
+        setScannerError('Camera opened but the preview stayed black. Please close other camera apps and try again.')
+        toast.warning({
+          title: 'Camera preview issue',
+          message: 'Camera opened but the preview stayed black. Please close other camera apps and try again.',
+        })
+      }, 4500)
     } catch (cameraError) {
       stopScanner()
       const denied = ['NotAllowedError', 'SecurityError'].includes(cameraError?.name)
-      setCameraPermission(denied ? 'denied' : 'error')
+      const noCamera = ['NotFoundError', 'OverconstrainedError'].includes(cameraError?.name)
+      const cameraBusy = ['NotReadableError', 'TrackStartError'].includes(cameraError?.name)
+      setCameraPermission(denied ? 'denied' : noCamera ? 'missing' : 'error')
       const errorMessage = denied
         ? 'Camera access was denied. Allow camera permission and try again.'
-        : 'Unable to start the camera scanner right now.'
+        : noCamera
+          ? 'No usable camera was found. Use manual Gatepass ID verification instead.'
+          : cameraBusy
+            ? 'Camera is busy in another app. Close that app and try again.'
+            : cameraError?.message || 'Scanner initialization failed. Please try again.'
+
       setScannerError(errorMessage)
-      toast[denied ? 'warning' : 'error']({
-        title: denied ? 'Camera permission denied' : 'Camera start failed',
+      toast[denied || noCamera ? 'warning' : 'error']({
+        title: denied
+          ? 'Camera permission denied'
+          : noCamera
+            ? 'No camera available'
+            : cameraBusy
+              ? 'Camera busy'
+              : 'Scanner initialization failed',
         message: errorMessage,
       })
     } finally {
@@ -372,6 +504,9 @@ export default function SecurityVerificationPanel({
             {scannerError ? <p className="form-error">{scannerError}</p> : null}
             {!scannerError && cameraPermission === 'denied' ? (
               <p className="field-help">Camera access is required for QR scanning. Use manual Gatepass ID verification if needed.</p>
+            ) : null}
+            {!scannerError && cameraPermission === 'missing' ? (
+              <p className="field-help">No camera detected. Continue with manual Gatepass ID verification.</p>
             ) : null}
           </div>
         </div>

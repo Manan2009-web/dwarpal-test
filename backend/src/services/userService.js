@@ -47,6 +47,22 @@ async function updateProfile(user, payload, req, requestMeta) {
     currentUser.semester = Number(payload.semester);
   }
 
+  if (['principal', 'hod'].includes(currentUser.role) && typeof payload.gatepassApprovalEnabled === 'boolean') {
+    currentUser.gatepassApprovalEnabled = payload.gatepassApprovalEnabled;
+  }
+
+  if (['faculty', 'hod'].includes(currentUser.role) && payload.coordinatorAssignment) {
+    const assignment = payload.coordinatorAssignment || {};
+    const isCoordinator = assignment.isCoordinator === true;
+
+    currentUser.coordinatorAssignment = {
+      isCoordinator,
+      program: isCoordinator ? assignment.program || null : null,
+      department: isCoordinator ? assignment.department || null : null,
+      semester: isCoordinator ? Number(assignment.semester) || null : null
+    };
+  }
+
   await currentUser.save();
 
   await logAction({
