@@ -3,6 +3,7 @@ const env = require('../config/env');
 const AppError = require('../utils/appError');
 
 let smtpTransporter = null;
+let smtpTransporterCacheKey = '';
 const EMAIL_FROM_FALLBACK = 'DwarPal <noreply@dwarpal.local>';
 
 function toTrimmedString(value) {
@@ -51,8 +52,108 @@ function assertRecipientAddress(to) {
   return recipientAddress;
 }
 
+function normalizeDisplayName(value) {
+  return toTrimmedString(value)
+    .replace(/[<>"]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+function normalizeEmailFromAddress(value) {
+  const rawValue = toTrimmedString(value);
+
+  if (!rawValue) {
+    return '';
+  }
+
+  const bracketMatch = rawValue.match(/^([^<>]*)<([^<>]+)>$/);
+  let displayName = '';
+  let emailAddress = '';
+
+  if (bracketMatch) {
+    displayName = normalizeDisplayName(bracketMatch[1]);
+    emailAddress = toTrimmedString(bracketMatch[2]).toLowerCase();
+  } else {
+    const detectedEmail = rawValue.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+
+    if (detectedEmail?.[0]) {
+      emailAddress = detectedEmail[0].toLowerCase();
+      displayName = normalizeDisplayName(rawValue.replace(detectedEmail[0], ''));
+    } else {
+      emailAddress = rawValue.toLowerCase();
+    }
+  }
+
+  if (!isEmailLike(emailAddress)) {
+    throw new AppError(
+      'EMAIL_FROM must be a valid email address or "Display Name <email@example.com>" format.',
+      503
+    );
+  }
+
+  return displayName ? `${displayName} <${emailAddress}>` : emailAddress;
+}
+
+function readSmtpEnvironment() {
+  return {
+    emailFrom: toTrimmedString(process.env.EMAIL_FROM || env.emailFrom),
+    smtpHost: toTrimmedString(process.env.SMTP_HOST || env.smtpHost),
+    smtpPortRaw: toTrimmedString(process.env.SMTP_PORT || ''),
+    smtpSecureRaw: toTrimmedString(process.env.SMTP_SECURE || ''),
+    smtpUser: toTrimmedString(process.env.SMTP_USER || env.smtpUser),
+    smtpPass: toTrimmedString(process.env.SMTP_PASS || env.smtpPass)
+  };
+}
+
+function normalizeSmtpConfiguration() {
+  const smtpEnv = readSmtpEnvironment();
+  const missingVariables = [];
+
+  if (!smtpEnv.emailFrom) missingVariables.push('EMAIL_FROM');
+  if (!smtpEnv.smtpHost) missingVariables.push('SMTP_HOST');
+  if (!smtpEnv.smtpPortRaw) missingVariables.push('SMTP_PORT');
+  if (!smtpEnv.smtpSecureRaw) missingVariables.push('SMTP_SECURE');
+  if (!smtpEnv.smtpUser) missingVariables.push('SMTP_USER');
+  if (!smtpEnv.smtpPass) missingVariables.push('SMTP_PASS');
+
+  if (missingVariables.length) {
+    throw new AppError(
+      `Missing required SMTP environment variables: ${missingVariables.join(', ')}.`,
+      503
+    );
+  }
+
+  if (!/^(true|false)$/i.test(smtpEnv.smtpSecureRaw)) {
+    throw new AppError('SMTP_SECURE must be either "true" or "false".', 503);
+  }
+
+  const smtpPort = Number(smtpEnv.smtpPortRaw);
+  if (!Number.isInteger(smtpPort) || smtpPort <= 0 || smtpPort > 65535) {
+    throw new AppError('SMTP_PORT must be a valid integer between 1 and 65535.', 503);
+  }
+
+  return {
+    from: normalizeEmailFromAddress(smtpEnv.emailFrom),
+    host: smtpEnv.smtpHost,
+    port: smtpPort,
+    secure: smtpEnv.smtpSecureRaw.toLowerCase() === 'true',
+    user: smtpEnv.smtpUser,
+    pass: smtpEnv.smtpPass
+  };
+}
+
+function hasAnySmtpSetting() {
+  const smtpEnv = readSmtpEnvironment();
+  return Boolean(
+    smtpEnv.smtpHost ||
+      smtpEnv.smtpPortRaw ||
+      smtpEnv.smtpSecureRaw ||
+      smtpEnv.smtpUser ||
+      smtpEnv.smtpPass
+  );
+}
+
 function resolveEmailDeliveryMode() {
-  const configuredMode = toTrimmedString(env.emailDeliveryMode || 'auto').toLowerCase();
+  const configuredMode = toTrimmedString(env.emailProvider || env.emailDeliveryMode || 'auto').toLowerCase();
 
   // Force console mode if explicitly configured
   if (configuredMode === 'console') {
@@ -61,7 +162,7 @@ function resolveEmailDeliveryMode() {
 
   // Force Resend if explicitly configured
   if (configuredMode === 'resend') {
-    if (!env.resendApiKey || !env.emailFrom) {
+    if (!env.resendApiKey || !getEmailFromAddress()) {
       throw new AppError(
         'Email delivery is configured for Resend, but RESEND_API_KEY or EMAIL_FROM is missing.',
         503
@@ -71,17 +172,12 @@ function resolveEmailDeliveryMode() {
   }
 
   // Auto mode: try SMTP first, then Resend, then console for dev
-  if (env.smtpHost && env.smtpUser && env.smtpPass) {
-    if (!env.emailFrom) {
-      throw new AppError(
-        'SMTP email delivery requires EMAIL_FROM to be configured.',
-        503
-      );
-    }
+  if (configuredMode === 'smtp' || hasAnySmtpSetting()) {
+    normalizeSmtpConfiguration();
     return 'smtp';
   }
 
-  if (env.resendApiKey && env.emailFrom) {
+  if (env.resendApiKey && getEmailFromAddress()) {
     return 'resend';
   }
 
@@ -97,10 +193,10 @@ function resolveEmailDeliveryMode() {
 }
 
 function getEmailFromAddress() {
-  const configuredFrom = toTrimmedString(env.emailFrom || '');
+  const configuredFrom = toTrimmedString(process.env.EMAIL_FROM || env.emailFrom || '');
 
   if (configuredFrom) {
-    return configuredFrom;
+    return normalizeEmailFromAddress(configuredFrom);
   }
 
   if (env.isProduction) {
@@ -111,22 +207,31 @@ function getEmailFromAddress() {
 }
 
 function getSmtpTransporter() {
-  if (smtpTransporter) {
+  const smtpConfig = normalizeSmtpConfiguration();
+  const transporterCacheKey = JSON.stringify({
+    host: smtpConfig.host,
+    port: smtpConfig.port,
+    secure: smtpConfig.secure,
+    user: smtpConfig.user
+  });
+
+  if (smtpTransporter && smtpTransporterCacheKey === transporterCacheKey) {
     return smtpTransporter;
   }
 
   smtpTransporter = nodemailer.createTransport({
-    host: env.smtpHost,
-    port: env.smtpPort,
-    secure: env.smtpSecure,
+    host: smtpConfig.host,
+    port: smtpConfig.port,
+    secure: smtpConfig.secure,
     connectionTimeout: env.smtpConnectionTimeoutMs,
     greetingTimeout: env.smtpGreetingTimeoutMs,
     socketTimeout: env.smtpSocketTimeoutMs,
     auth: {
-      user: env.smtpUser,
-      pass: env.smtpPass
+      user: smtpConfig.user,
+      pass: smtpConfig.pass
     }
   });
+  smtpTransporterCacheKey = transporterCacheKey;
 
   return smtpTransporter;
 }

@@ -78,6 +78,9 @@ function isDevelopmentLanOrigin(origin) {
 }
 
 const configuredMongoUri = String(process.env.MONGODB_URI || process.env.MONGO_URI || '').trim();
+const configuredEmailProvider = String(process.env.EMAIL_PROVIDER || process.env.EMAIL_DELIVERY_MODE || 'auto')
+  .trim()
+  .toLowerCase();
 const defaultClientUrl = normalizeUrl(process.env.CLIENT_URL || 'http://localhost:5173');
 const defaultAllowedOrigins = Array.from(
   new Set([
@@ -173,7 +176,8 @@ module.exports = {
   registrationPendingExpiresMinutes: Number(process.env.REGISTRATION_PENDING_EXPIRES_MINUTES) || 30,
   passwordResetTokenExpiresMinutes: Number(process.env.PASSWORD_RESET_TOKEN_EXPIRES_MINUTES) || 15,
   passwordResetUrl: normalizeUrl(process.env.PASSWORD_RESET_URL || ''),
-  emailDeliveryMode: String(process.env.EMAIL_DELIVERY_MODE || 'auto').trim().toLowerCase(),
+  emailProvider: configuredEmailProvider,
+  emailDeliveryMode: configuredEmailProvider,
   resendApiKey: String(process.env.RESEND_API_KEY || '').trim(),
   emailFrom: String(process.env.EMAIL_FROM || '').trim(),
   smtpHost: String(process.env.SMTP_HOST || '').trim(),

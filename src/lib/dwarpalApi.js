@@ -1,13 +1,17 @@
 import { normalizeDepartment, normalizeProgram, normalizeRole } from '../mockData'
 
+const DEFAULT_PRODUCTION_RENDER_API_BASE_URL = 'https://dwarpal-test.onrender.com/api'
+
 function getDefaultApiBaseUrl() {
-  const productionBaseUrl = String(import.meta.env.VITE_PRODUCTION_API_BASE_URL || '').trim()
+  const productionBaseUrl = String(
+    import.meta.env.VITE_PRODUCTION_API_BASE_URL || DEFAULT_PRODUCTION_RENDER_API_BASE_URL,
+  ).trim()
 
   if (!import.meta.env.DEV && productionBaseUrl) {
     return productionBaseUrl
   }
 
-  return import.meta.env.DEV ? 'http://localhost:5000/api' : '/api'
+  return import.meta.env.DEV ? 'http://localhost:5000/api' : productionBaseUrl || '/api'
 }
 
 function isPrivateIpv4Host(hostname = '') {
@@ -68,13 +72,28 @@ function normalizeApiBaseUrl(value) {
   return normalizedValue.replace(/\/+$/, '')
 }
 
-const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL || getDefaultApiBaseUrl())
+function resolveConfiguredApiBaseUrl() {
+  const productionBaseUrl = String(import.meta.env.VITE_PRODUCTION_API_BASE_URL || '').trim()
+  const sharedBaseUrl = String(import.meta.env.VITE_API_BASE_URL || '').trim()
+
+  if (!import.meta.env.DEV && productionBaseUrl) {
+    return productionBaseUrl
+  }
+
+  return sharedBaseUrl || getDefaultApiBaseUrl()
+}
+
+const API_BASE_URL = normalizeApiBaseUrl(resolveConfiguredApiBaseUrl())
 
 export const AUTH_TOKEN_KEY = 'dwarpal-auth-token'
 export const BIOMETRIC_DEVICE_KEY = 'dwarpal-biometric-device-id'
 const DEFAULT_PHONE_COUNTRY_CODE = '+91'
 const DEFAULT_API_TIMEOUT_MS = Number(import.meta.env.VITE_API_REQUEST_TIMEOUT_MS) || 15000
 const DEFAULT_AUTH_TIMEOUT_MS = Number(import.meta.env.VITE_AUTH_REQUEST_TIMEOUT_MS) || 25000
+const DEFAULT_REGISTER_SEND_TIMEOUT_MS =
+  Number(import.meta.env.VITE_REGISTER_SEND_TIMEOUT_MS) || Math.max(DEFAULT_AUTH_TIMEOUT_MS, 35000)
+const DEFAULT_REGISTER_VERIFY_TIMEOUT_MS =
+  Number(import.meta.env.VITE_REGISTER_VERIFY_TIMEOUT_MS) || Math.max(DEFAULT_AUTH_TIMEOUT_MS, 30000)
 const DEFAULT_BACKEND_WARMUP_TIMEOUT_MS = Number(import.meta.env.VITE_BACKEND_WARMUP_TIMEOUT_MS) || 8000
 const BACKEND_WARMUP_CACHE_MS = 2 * 60 * 1000
 let lastBackendWarmupAt = 0
@@ -428,10 +447,12 @@ export async function apiRequest(path, { method = 'GET', body, headers, signal, 
     }
   }
 
-  let response
+  let response = null
+  let payload = null
 
   try {
     response = await fetch(requestUrl, requestInit)
+    payload = await response.json()
   } catch (error) {
     if (requestController.didTimeout()) {
       const seconds = Math.ceil(resolvedTimeoutMs / 1000)
@@ -446,21 +467,21 @@ export async function apiRequest(path, { method = 'GET', body, headers, signal, 
       throw error
     }
 
-    if (import.meta.env.DEV) {
-      console.error('DwarPal API network error', { requestUrl, method, error })
+    if (!response) {
+      if (import.meta.env.DEV) {
+        console.error('DwarPal API network error', { requestUrl, method, error })
+      }
+
+      throw new ApiError(
+        `Unable to reach the DwarPal backend at ${API_BASE_URL}. Please start the backend server and try again.`,
+        0,
+        error,
+      )
     }
 
-    throw new ApiError(`Unable to reach the DwarPal backend at ${API_BASE_URL}. Please start the backend server and try again.`, 0, error)
+    payload = null
   } finally {
     requestController.cleanup()
-  }
-
-  let payload = null
-
-  try {
-    payload = await response.json()
-  } catch {
-    payload = null
   }
 
   if (!response.ok || payload?.success === false) {
@@ -1207,6 +1228,7 @@ export async function loginUser(identifier, password) {
 export async function checkRegistrationAvailability(payload) {
   const response = await apiRequest('/auth/register/check-availability', {
     method: 'POST',
+    timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
     body: buildRegistrationIdentityPayload(payload),
   })
 
@@ -1216,12 +1238,14 @@ export async function checkRegistrationAvailability(payload) {
   }
 }
 
-export async function sendRegistrationVerificationCode(payload) {
-  await warmBackendForAuth()
-
+export async function sendRegistrationVerificationCode(
+  payload,
+  { signal, timeoutMs = DEFAULT_REGISTER_SEND_TIMEOUT_MS } = {},
+) {
   const response = await apiRequest('/auth/register/send-verification-code', {
     method: 'POST',
-    timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
+    signal,
+    timeoutMs,
     body: {
       ...buildRegistrationIdentityPayload(payload),
       password: payload.password,
@@ -1238,12 +1262,14 @@ export async function sendRegistrationVerificationCode(payload) {
   }
 }
 
-export async function verifyRegistrationEmail(payload) {
-  await warmBackendForAuth()
-
+export async function verifyRegistrationEmail(
+  payload,
+  { signal, timeoutMs = DEFAULT_REGISTER_VERIFY_TIMEOUT_MS } = {},
+) {
   const response = await apiRequest('/auth/register/verify-email', {
     method: 'POST',
-    timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
+    signal,
+    timeoutMs,
     body: {
       email: String(payload.email || '').trim().toLowerCase(),
       verificationCode: String(payload.verificationCode || payload.code || '').trim(),
