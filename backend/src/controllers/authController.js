@@ -21,54 +21,48 @@ function maskEmail(email) {
   return `${visiblePart}${'*'.repeat(Math.max(localPart.length - visiblePart.length, 1))}@${domain}`;
 }
 
-const sendRegistrationVerificationCode = asyncHandler(async (req, res) => {
-  console.info('[auth] POST /auth/register/send-verification-code route entered', {
+function maskIdentifier(identifier) {
+  const normalizedIdentifier = String(identifier || '').trim();
+
+  if (!normalizedIdentifier) {
+    return '';
+  }
+
+  if (normalizedIdentifier.includes('@')) {
+    return maskEmail(normalizedIdentifier);
+  }
+
+  if (normalizedIdentifier.length <= 4) {
+    return normalizedIdentifier;
+  }
+
+  return `${normalizedIdentifier.slice(0, 2)}${'*'.repeat(Math.max(normalizedIdentifier.length - 4, 1))}${normalizedIdentifier.slice(-2)}`;
+}
+
+const register = asyncHandler(async (req, res) => {
+  const startedAt = Date.now();
+  console.info('[auth] POST /auth/register route entered', {
     email: maskEmail(req.body?.email),
     role: req.body?.role
   });
 
   try {
-    const result = await authService.sendRegistrationVerificationCode(req.body, getRequestMeta(req));
+    const result = await authService.registerUser(req.body, req, getRequestMeta(req));
 
-    console.info('[auth] POST /auth/register/send-verification-code route completed', {
-      email: maskEmail(result?.email)
+    console.info('[auth] POST /auth/register route completed', {
+      email: maskEmail(result?.email),
+      durationMs: Math.max(Date.now() - startedAt, 0)
     });
 
     return sendSuccess(res, {
-      statusCode: 202,
+      statusCode: result?.statusCode || 201,
       message: result.message,
       data: result
     });
   } catch (error) {
-    console.error('[auth] POST /auth/register/send-verification-code route failed', {
+    console.error('[auth] POST /auth/register route failed', {
       email: maskEmail(req.body?.email),
-      error: error?.stack || error?.message || error
-    });
-    throw error;
-  }
-});
-
-const verifyRegistrationEmail = asyncHandler(async (req, res) => {
-  console.info('[auth] POST /auth/register/verify-email route entered', {
-    email: maskEmail(req.body?.email)
-  });
-
-  try {
-    const result = await authService.verifyRegistrationEmail(req.body, req, getRequestMeta(req));
-    setAuthCookie(res, result.token);
-
-    console.info('[auth] POST /auth/register/verify-email route completed', {
-      email: maskEmail(result?.verification?.email || req.body?.email)
-    });
-
-    return sendSuccess(res, {
-      statusCode: 201,
-      message: result.message,
-      data: result
-    });
-  } catch (error) {
-    console.error('[auth] POST /auth/register/verify-email route failed', {
-      email: maskEmail(req.body?.email),
+      durationMs: Math.max(Date.now() - startedAt, 0),
       error: error?.stack || error?.message || error
     });
     throw error;
@@ -85,13 +79,34 @@ const checkRegistrationAvailability = asyncHandler(async (req, res) => {
 });
 
 const login = asyncHandler(async (req, res) => {
-  const result = await authService.loginUser(req.body, req, getRequestMeta(req));
-  setAuthCookie(res, result.token);
-
-  return sendSuccess(res, {
-    message: 'Login successful',
-    data: result
+  const startedAt = Date.now();
+  const identifier = req.body?.identifier || req.body?.email || req.body?.enrollment || req.body?.employeeId;
+  console.info('[auth] POST /auth/login route entered', {
+    identifier: maskIdentifier(identifier)
   });
+
+  try {
+    const result = await authService.loginUser(req.body, req, getRequestMeta(req));
+    setAuthCookie(res, result.token);
+
+    console.info('[auth] POST /auth/login route completed', {
+      durationMs: Math.max(Date.now() - startedAt, 0),
+      identifier: maskIdentifier(identifier),
+      role: result?.user?.role || ''
+    });
+
+    return sendSuccess(res, {
+      message: 'Login successful',
+      data: result
+    });
+  } catch (error) {
+    console.error('[auth] POST /auth/login route failed', {
+      durationMs: Math.max(Date.now() - startedAt, 0),
+      error: error?.stack || error?.message || error,
+      identifier: maskIdentifier(identifier)
+    });
+    throw error;
+  }
 });
 
 const logout = asyncHandler(async (req, res) => {
@@ -125,24 +140,6 @@ const verify = asyncHandler(async (req, res) => {
 
 const changePassword = asyncHandler(async (req, res) => {
   const result = await authService.changePassword(req.user._id, req.body, getRequestMeta(req));
-
-  return sendSuccess(res, {
-    message: result.message,
-    data: null
-  });
-});
-
-const forgotPassword = asyncHandler(async (req, res) => {
-  const result = await authService.forgotPassword(req.body, getRequestMeta(req));
-
-  return sendSuccess(res, {
-    message: result.message,
-    data: null
-  });
-});
-
-const resetPassword = asyncHandler(async (req, res) => {
-  const result = await authService.resetPassword(req.body, getRequestMeta(req));
 
   return sendSuccess(res, {
     message: result.message,
@@ -233,18 +230,15 @@ const removeWebAuthnDevice = asyncHandler(async (req, res) => {
 module.exports = {
   checkRegistrationAvailability,
   changePassword,
-  forgotPassword,
   getMe,
   getWebAuthnAuthenticationOptions,
   getWebAuthnDevices,
   getWebAuthnRegistrationOptions,
   login,
   logout,
+  register,
   removeWebAuthnDevice,
-  resetPassword,
-  sendRegistrationVerificationCode,
   verify,
-  verifyRegistrationEmail,
   verifyWebAuthnAuthentication,
   verifyWebAuthnRegistration
 };

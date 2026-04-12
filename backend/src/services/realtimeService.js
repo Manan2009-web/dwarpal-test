@@ -10,6 +10,10 @@ function getUserRoom(userId) {
   return `user:${String(userId || '').trim()}`;
 }
 
+function normalizeOrigin(origin) {
+  return String(origin || '').trim().replace(/\/+$/, '');
+}
+
 function getSocketToken(socket) {
   const authToken = socket?.handshake?.auth?.token;
   if (authToken) {
@@ -54,7 +58,12 @@ function createRealtimeServer(server) {
     path: '/socket.io',
     cors: {
       origin(origin, callback) {
-        if (env.isOriginAllowed(origin)) {
+        if (!origin) {
+          callback(null, true);
+          return;
+        }
+
+        if ((Array.isArray(env.allowedOrigins) ? env.allowedOrigins : []).includes(normalizeOrigin(origin))) {
           callback(null, true);
           return;
         }

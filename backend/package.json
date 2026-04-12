@@ -11,6 +11,7 @@
     "dev": "nodemon --config nodemon.json",
     "start": "node src/server.js",
     "seed:admins": "node src/seed/seedAdmins.js",
+    "seed:system": "node src/seed/bootstrapSystemData.js",
     "migrate:gatepass-ids": "node src/seed/migrateGatepassIds.js",
     "check": "node --check src/server.js && node --check src/app.js"
   },

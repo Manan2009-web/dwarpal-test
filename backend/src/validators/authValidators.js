@@ -113,19 +113,9 @@ const registerValidation = [
     .custom((value) => validatePhoneValue(value))
 ];
 
-const verifyRegistrationEmailValidation = [
-  body('email').trim().isEmail().withMessage('Valid email is required').normalizeEmail(),
-  body('verificationCode')
-    .trim()
-    .matches(/^\d{4,8}$/)
-    .withMessage('Please enter the verification code sent to your email.')
-];
-
 const loginValidation = [
   body('identifier')
-    .customSanitizer((value, { req }) =>
-      String(value || req.body.enrollment || req.body.employeeId || req.body.email || '').trim()
-    )
+    .customSanitizer((value, { req }) => String(value || req.body.email || req.body.enrollment || req.body.employeeId || '').trim())
     .notEmpty()
     .withMessage('Email, enrollment number, or employee ID is required'),
   body('password').notEmpty().withMessage('Password is required')
@@ -133,19 +123,6 @@ const loginValidation = [
 
 const changePasswordValidation = [
   body('currentPassword').notEmpty().withMessage('Current password is required'),
-  body('newPassword')
-    .matches(PASSWORD_REGEX)
-    .withMessage(
-      'New password must be at least 8 characters and include uppercase, lowercase, number, and special character'
-    )
-];
-
-const forgotPasswordValidation = [
-  body('email').trim().isEmail().withMessage('Valid email is required').normalizeEmail()
-];
-
-const resetPasswordValidation = [
-  body('token').trim().notEmpty().withMessage('Reset token is required'),
   body('newPassword')
     .matches(PASSWORD_REGEX)
     .withMessage(
@@ -200,7 +177,14 @@ const webAuthnAuthenticationOptionsValidation = [
   body('identifier')
     .customSanitizer((value) => String(value || '').trim())
     .notEmpty()
-    .withMessage('Enrollment number, employee ID, or email is required for biometric login.')
+    .withMessage('Enrollment number or employee ID is required for biometric login.')
+    .custom((value) => {
+      if (String(value || '').includes('@')) {
+        throw new Error('Use your enrollment number or employee ID for biometric login.');
+      }
+
+      return true;
+    })
 ];
 
 const webAuthnAuthenticationVerifyValidation = [
@@ -221,12 +205,9 @@ const biometricDeviceIdParamValidation = [
 module.exports = {
   biometricDeviceIdParamValidation,
   changePasswordValidation,
-  forgotPasswordValidation,
   loginValidation,
   registrationAvailabilityValidation,
   registerValidation,
-  resetPasswordValidation,
-  verifyRegistrationEmailValidation,
   webAuthnAuthenticationOptionsValidation,
   webAuthnAuthenticationVerifyValidation,
   webAuthnRegistrationOptionsValidation,

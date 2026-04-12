@@ -3,7 +3,13 @@ const Gatepass = require('../models/Gatepass');
 const env = require('../config/env');
 const AppError = require('../utils/appError');
 const { buildPaginationMeta, getPagination } = require('../utils/pagination');
-const { DEPARTMENTS, ROLES, normalizeDepartment, normalizeProgram } = require('../constants/appConstants');
+const {
+  DEPARTMENTS,
+  ROLES,
+  SEMESTERS,
+  normalizeDepartment,
+  normalizeProgram
+} = require('../constants/appConstants');
 const { logAction } = require('./auditService');
 
 function getDefaultHodDepartment() {
@@ -20,37 +26,31 @@ function getDefaultHodProgram() {
   return normalizeProgram(env.defaultHodProgram) || 'Degree';
 }
 
-function getDefaultAdminSeedData() {
+function getDefaultCoordinatorSemester() {
+  const normalizedSemester = Number(env.defaultCoordinatorSemester) || 6;
+
+  if (SEMESTERS.includes(normalizedSemester)) {
+    return normalizedSemester;
+  }
+
+  return 6;
+}
+
+function getSystemAccountSeedData() {
   const hodDepartment = getDefaultHodDepartment();
   const hodProgram = getDefaultHodProgram();
+  const coordinatorSemester = getDefaultCoordinatorSemester();
   const defaultDepartment = DEPARTMENTS[0];
 
   return [
-    {
-      role: 'student',
-      fullName: 'Student Demo',
-      email: 'student1@dwarpal.local',
-      enrollmentNo: 'student1',
-      phone: '9999999990',
-      department: defaultDepartment,
-      program: 'Degree',
-      semester: 6
-    },
-    {
-      role: 'faculty',
-      fullName: 'Faculty Demo',
-      email: 'faculty1@dwarpal.local',
-      employeeId: 'FACULTY1',
-      phone: '9999999995',
-      department: defaultDepartment
-    },
     {
       role: 'principal',
       fullName: 'Principal DwarPal',
       email: 'principal@dwarpal.local',
       employeeId: 'PRINCIPAL',
       phone: '9999999991',
-      department: defaultDepartment
+      department: defaultDepartment,
+      gatepassApprovalEnabled: true
     },
     {
       role: 'hod',
@@ -59,7 +59,22 @@ function getDefaultAdminSeedData() {
       employeeId: 'HOD',
       phone: '9999999992',
       program: hodProgram,
-      department: hodDepartment
+      department: hodDepartment,
+      gatepassApprovalEnabled: true
+    },
+    {
+      role: 'faculty',
+      fullName: 'Coordinator DwarPal',
+      email: 'coordinator@dwarpal.local',
+      employeeId: 'COORDINATOR',
+      phone: '9999999995',
+      department: hodDepartment,
+      coordinatorAssignment: {
+        isCoordinator: true,
+        program: hodProgram,
+        department: hodDepartment,
+        semester: coordinatorSemester
+      }
     },
     {
       role: 'cao',
@@ -80,56 +95,155 @@ function getDefaultAdminSeedData() {
   ];
 }
 
-async function seedDefaultAdmins({ actorId = null, requestMeta = {} } = {}) {
-  const seedData = getDefaultAdminSeedData();
+function buildAccountLookupConditions(account) {
+  const lookupConditions = [{ email: account.email }];
+
+  if (account.employeeId) {
+    lookupConditions.push({ employeeId: account.employeeId.toUpperCase() });
+  }
+
+  if (account.enrollmentNo) {
+    lookupConditions.push({ enrollmentNo: account.enrollmentNo });
+  }
+
+  return lookupConditions;
+}
+
+function assignIfMissing(document, field, value) {
+  if (value === undefined) {
+    return false;
+  }
+
+  const currentValue = document[field];
+  const hasCurrentValue =
+    currentValue !== undefined &&
+    currentValue !== null &&
+    !(typeof currentValue === 'string' && !currentValue.trim());
+
+  if (hasCurrentValue) {
+    return false;
+  }
+
+  document[field] = value;
+  return true;
+}
+
+function applySafeSystemAccountDefaults(user, account) {
+  let changed = false;
+
+  if ((user.role || '') !== account.role) {
+    user.role = account.role;
+    changed = true;
+  }
+
+  changed = assignIfMissing(user, 'fullName', account.fullName) || changed;
+  changed = assignIfMissing(user, 'email', account.email) || changed;
+  changed = assignIfMissing(user, 'phone', account.phone) || changed;
+  changed = assignIfMissing(user, 'department', account.department) || changed;
+
+  if (['student', 'hod'].includes(account.role)) {
+    changed = assignIfMissing(user, 'program', account.program) || changed;
+  }
+
+  if (account.role === 'student') {
+    changed = assignIfMissing(user, 'semester', account.semester) || changed;
+    changed = assignIfMissing(user, 'enrollmentNo', account.enrollmentNo) || changed;
+  } else {
+    changed = assignIfMissing(user, 'employeeId', account.employeeId) || changed;
+  }
+
+  if (['principal', 'hod'].includes(account.role) && typeof account.gatepassApprovalEnabled === 'boolean') {
+    if (typeof user.gatepassApprovalEnabled !== 'boolean') {
+      user.gatepassApprovalEnabled = account.gatepassApprovalEnabled;
+      changed = true;
+    }
+  }
+
+  if (account.coordinatorAssignment?.isCoordinator) {
+    const existingAssignment = user.coordinatorAssignment || {};
+    const nextAssignment = {
+      isCoordinator: true,
+      program: existingAssignment.program || account.coordinatorAssignment.program || null,
+      department: existingAssignment.department || account.coordinatorAssignment.department || null,
+      semester: existingAssignment.semester || account.coordinatorAssignment.semester || null
+    };
+
+    const assignmentChanged =
+      existingAssignment.isCoordinator !== nextAssignment.isCoordinator ||
+      existingAssignment.program !== nextAssignment.program ||
+      existingAssignment.department !== nextAssignment.department ||
+      Number(existingAssignment.semester || 0) !== Number(nextAssignment.semester || 0);
+
+    if (assignmentChanged) {
+      user.coordinatorAssignment = nextAssignment;
+      changed = true;
+    }
+  }
+
+  return changed;
+}
+
+async function seedDefaultAdmins({
+  actorId = null,
+  onlyWhenDatabaseEmpty = false,
+  requestMeta = {}
+} = {}) {
+  const seedData = getSystemAccountSeedData();
   const created = [];
   const updated = [];
   const existing = [];
+  const skipped = [];
+
+  if (onlyWhenDatabaseEmpty) {
+    const existingUserCount = await User.countDocuments();
+
+    if (existingUserCount > 0) {
+      return {
+        created,
+        updated,
+        existing,
+        skipped: [
+          {
+            reason: 'database_not_empty',
+            userCount: existingUserCount
+          }
+        ]
+      };
+    }
+  }
 
   for (const account of seedData) {
-    const lookupConditions = [{ email: account.email }];
-
-    if (account.employeeId) {
-      lookupConditions.push({ employeeId: account.employeeId.toUpperCase() });
-    }
-
-    if (account.enrollmentNo) {
-      lookupConditions.push({ enrollmentNo: account.enrollmentNo });
-    }
-
     const foundUser = await User.findOne({
-      $or: lookupConditions
+      $or: buildAccountLookupConditions(account)
     }).select('+password');
 
     if (foundUser) {
-      foundUser.fullName = account.fullName;
-      foundUser.email = account.email;
-      foundUser.role = account.role;
-      foundUser.program = account.program;
-      foundUser.department = account.department;
-      foundUser.phone = account.phone;
-      foundUser.semester = account.semester;
-      foundUser.enrollmentNo = account.enrollmentNo;
-      foundUser.employeeId = account.employeeId;
-      foundUser.password = env.seedAdminPassword;
-      foundUser.markModified('password');
-      foundUser.isActive = true;
-      await foundUser.save();
+      const changed = applySafeSystemAccountDefaults(foundUser, account);
 
-      updated.push({
-        role: foundUser.role,
-        email: foundUser.email,
-        primaryId: foundUser.enrollmentNo || foundUser.employeeId
-      });
+      if (changed) {
+        await foundUser.save();
 
-      await logAction({
-        actorId,
-        resourceType: 'user',
-        resourceId: foundUser._id,
-        action: 'refresh_demo_account',
-        message: `Default ${foundUser.role} demo account refreshed`,
-        requestMeta
-      });
+        updated.push({
+          role: foundUser.role,
+          email: foundUser.email,
+          primaryId: foundUser.enrollmentNo || foundUser.employeeId
+        });
+
+        await logAction({
+          actorId,
+          resourceType: 'user',
+          resourceId: foundUser._id,
+          action: 'repair_system_account',
+          message: `System ${foundUser.role} account repaired with missing defaults`,
+          requestMeta
+        });
+      } else {
+        existing.push({
+          role: foundUser.role,
+          email: foundUser.email,
+          primaryId: foundUser.enrollmentNo || foundUser.employeeId
+        });
+      }
 
       continue;
     }
@@ -147,18 +261,19 @@ async function seedDefaultAdmins({ actorId = null, requestMeta = {} } = {}) {
 
     await logAction({
       actorId,
-      resourceType: 'user',
-      resourceId: createdUser._id,
-      action: 'seed_admin_account',
-      message: `Default ${createdUser.role} demo account created`,
-      requestMeta
-    });
+        resourceType: 'user',
+        resourceId: createdUser._id,
+        action: 'seed_admin_account',
+        message: `System ${createdUser.role} account created`,
+        requestMeta
+      });
   }
 
   return {
     created,
     updated,
-    existing
+    existing,
+    skipped
   };
 }
 
@@ -253,7 +368,7 @@ async function listUsers(query = {}) {
 
   const [users, total] = await Promise.all([
     User.find(filter)
-      .select('-password -passwordResetToken -passwordResetExpiresAt')
+      .select('-password')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit),

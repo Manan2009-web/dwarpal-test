@@ -1,5 +1,3 @@
-const crypto = require('crypto');
-const bcrypt = require('bcryptjs');
 const {
   generateAuthenticationOptions,
   generateRegistrationOptions,
@@ -7,13 +5,11 @@ const {
   verifyRegistrationResponse
 } = require('@simplewebauthn/server');
 const env = require('../config/env');
-const PendingRegistration = require('../models/PendingRegistration');
 const User = require('../models/User');
 const AppError = require('../utils/appError');
 const pickUser = require('../utils/pickUser');
 const { createAccessToken } = require('../utils/token');
 const { getClientFingerprint } = require('../utils/request');
-const { sendPasswordResetEmail, sendRegistrationVerificationEmail } = require('./emailService');
 const { logAction } = require('./auditService');
 const {
   consumeRateLimit,
@@ -42,10 +38,6 @@ const LOGIN_FAILURE_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_FAILURE_SOURCE_LIMIT = 5;
 const LOGIN_FAILURE_IDENTITY_LIMIT = 20;
 const LOGIN_FAILURE_BLOCK_MS = 15 * 60 * 1000;
-const REGISTRATION_OTP_EXPIRES_MS = env.registrationOtpExpiresMinutes * 60 * 1000;
-const REGISTRATION_OTP_RESEND_COOLDOWN_MS = env.registrationOtpResendCooldownSeconds * 1000;
-const REGISTRATION_PENDING_EXPIRES_MS = env.registrationPendingExpiresMinutes * 60 * 1000;
-const PASSWORD_RESET_TOKEN_TTL_MS = env.passwordResetTokenExpiresMinutes * 60 * 1000;
 
 const DUPLICATE_REGISTRATION_MESSAGES = Object.freeze({
   email: 'This email is already registered.',
@@ -77,7 +69,7 @@ function escapeRegex(value) {
 }
 
 function extractLoginIdentifier(payload = {}) {
-  return normalizeIdentifier(payload.identifier || payload.enrollment || payload.employeeId || payload.email);
+  return normalizeIdentifier(payload.identifier || payload.email || payload.enrollment || payload.employeeId);
 }
 
 function normalizeRateLimitIdentifier(identifier) {
@@ -88,25 +80,8 @@ function isHashedPassword(value) {
   return BCRYPT_HASH_REGEX.test(String(value || ''));
 }
 
-function hashToken(token) {
-  return crypto.createHash('sha256').update(String(token || '')).digest('hex');
-}
-
-function generateVerificationCode() {
-  return crypto.randomInt(0, 1000000).toString().padStart(6, '0');
-}
-
-function maskEmailAddress(email) {
-  const normalizedEmail = String(email || '').trim().toLowerCase();
-  const [localPart = '', domain = ''] = normalizedEmail.split('@');
-
-  if (!localPart || !domain) {
-    return normalizedEmail;
-  }
-
-  const visibleLocal = localPart.slice(0, Math.min(2, localPart.length));
-  const maskedLocal = `${visibleLocal}${'*'.repeat(Math.max(localPart.length - visibleLocal.length, 1))}`;
-  return `${maskedLocal}@${domain}`;
+function getElapsedMs(startAt) {
+  return Math.max(Date.now() - Number(startAt || 0), 0);
 }
 
 function buildFieldError(field, message) {
@@ -145,6 +120,7 @@ function normalizeRegistrationPayload(payload = {}) {
 
 async function collectRegistrationConflictErrors(payload = {}) {
   const normalizedPayload = normalizeRegistrationPayload(payload);
+  const ignoredUserId = payload?.ignoreUserId ? String(payload.ignoreUserId) : '';
   const duplicateLookup = [];
 
   if (normalizedPayload.email) {
@@ -167,21 +143,22 @@ async function collectRegistrationConflictErrors(payload = {}) {
     return [];
   }
 
-  const existingUsers = await User.find({ $or: duplicateLookup }).select('email phone enrollmentNo enrollment employeeId').lean();
+  const existingUsers = await User.find({ $or: duplicateLookup }).select('_id email phone enrollmentNo enrollment employeeId').lean();
   const errors = [];
+  const conflictingUsers = existingUsers.filter((user) => String(user?._id || '') !== ignoredUserId);
 
-  if (normalizedPayload.email && existingUsers.some((user) => user.email === normalizedPayload.email)) {
+  if (normalizedPayload.email && conflictingUsers.some((user) => user.email === normalizedPayload.email)) {
     errors.push(buildFieldError('email', DUPLICATE_REGISTRATION_MESSAGES.email));
   }
 
-  if (normalizedPayload.phone && existingUsers.some((user) => user.phone === normalizedPayload.phone)) {
+  if (normalizedPayload.phone && conflictingUsers.some((user) => user.phone === normalizedPayload.phone)) {
     errors.push(buildFieldError('phone', DUPLICATE_REGISTRATION_MESSAGES.phone));
   }
 
   if (
     normalizedPayload.role === 'student' &&
     normalizedPayload.enrollmentNo &&
-    existingUsers.some(
+    conflictingUsers.some(
       (user) =>
         user.enrollmentNo === normalizedPayload.enrollmentNo || user.enrollment === normalizedPayload.enrollmentNo
     )
@@ -193,7 +170,7 @@ async function collectRegistrationConflictErrors(payload = {}) {
     normalizedPayload.role &&
     normalizedPayload.role !== 'student' &&
     normalizedPayload.employeeId &&
-    existingUsers.some((user) => user.employeeId === normalizedPayload.employeeId)
+    conflictingUsers.some((user) => user.employeeId === normalizedPayload.employeeId)
   ) {
     errors.push(buildFieldError('employeeId', DUPLICATE_REGISTRATION_MESSAGES.employeeId));
   }
@@ -201,86 +178,39 @@ async function collectRegistrationConflictErrors(payload = {}) {
   return errors;
 }
 
-async function assertRegistrationAvailability(payload = {}) {
-  const conflictErrors = await collectRegistrationConflictErrors(payload);
+async function assertRegistrationAvailability(payload = {}, options = {}) {
+  const conflictErrors = await collectRegistrationConflictErrors({
+    ...payload,
+    ignoreUserId: options.ignoreUserId || null
+  });
 
   if (conflictErrors.length) {
     throw new AppError(conflictErrors[0].message, 409, conflictErrors);
   }
 }
 
-function getPasswordResetBaseUrl() {
-  const configuredUrl = String(env.passwordResetUrl || '').trim();
-  return configuredUrl || `${env.clientUrl}/reset-password`;
+function applyRegistrationDetailsToUser(user, normalizedPayload) {
+  user.fullName = normalizedPayload.fullName;
+  user.email = normalizedPayload.email;
+  user.password = normalizedPayload.password;
+  user.role = normalizedPayload.role;
+  user.program = ['student', 'hod'].includes(normalizedPayload.role) ? normalizedPayload.program : undefined;
+  user.department = normalizedPayload.role === 'security' ? undefined : normalizedPayload.department;
+  user.semester = normalizedPayload.role === 'student' ? Number(normalizedPayload.semester) : undefined;
+  user.enrollmentNo = normalizedPayload.role === 'student' ? normalizedPayload.enrollmentNo : undefined;
+  user.enrollment = normalizedPayload.role === 'student' ? normalizedPayload.enrollmentNo : undefined;
+  user.employeeId = normalizedPayload.role === 'student' ? undefined : normalizedPayload.employeeId;
+  user.phone = normalizedPayload.phone;
+
+  return user;
 }
 
-function buildPasswordResetUrl(resetToken, email) {
-  const resetUrl = new URL(getPasswordResetBaseUrl(), env.clientUrl || 'http://localhost:5173');
-
-  resetUrl.searchParams.set('token', String(resetToken || '').trim());
-  resetUrl.searchParams.set('email', String(email || '').trim().toLowerCase());
-
-  return resetUrl.toString();
-}
-
-async function hashPasswordValue(password) {
-  return bcrypt.hash(String(password || ''), env.bcryptSaltRounds);
-}
-
-function buildPendingRegistrationDocument(normalizedPayload, passwordHash, verificationCodeHash, now = new Date()) {
-  const normalizedRole = normalizedPayload.role;
-  const isStudent = normalizedRole === 'student';
-  const requiresProgram = ['student', 'hod'].includes(normalizedRole);
-  const requiresDepartment = normalizedRole !== 'security';
-  const verificationCodeExpiresAt = new Date(now.getTime() + REGISTRATION_OTP_EXPIRES_MS);
-  const resendAvailableAt = new Date(now.getTime() + REGISTRATION_OTP_RESEND_COOLDOWN_MS);
-  const deleteAt = new Date(now.getTime() + REGISTRATION_PENDING_EXPIRES_MS);
-
-  return {
-    fullName: normalizedPayload.fullName,
-    email: normalizedPayload.email,
-    passwordHash,
-    role: normalizedRole,
-    program: requiresProgram ? normalizedPayload.program : null,
-    department: requiresDepartment ? normalizedPayload.department : null,
-    semester: isStudent ? Number(normalizedPayload.semester) : null,
-    enrollmentNo: isStudent ? normalizedPayload.enrollmentNo : null,
-    employeeId: isStudent ? null : normalizedPayload.employeeId,
-    phone: normalizedPayload.phone,
-    verificationCodeHash,
-    verificationCodeExpiresAt,
-    resendAvailableAt,
-    verificationAttempts: 0,
-    lastSentAt: now,
-    deleteAt
-  };
-}
-
-function buildRegistrationVerificationRateLimitError(retryAfterSeconds) {
-  const message =
-    retryAfterSeconds > 0
-      ? `Please wait ${Math.max(1, retryAfterSeconds)} seconds before requesting another verification code.`
-      : 'Please wait before requesting another verification code.';
-
-  const error = new AppError(message, 429, [
-    {
-      field: 'email',
-      message
-    }
-  ]);
-
-  error.retryAfterSeconds = retryAfterSeconds;
-  error.code = 'AUTH_REGISTER_VERIFICATION_CODE_COOLDOWN';
-
-  return error;
-}
-
-async function createOrRefreshPendingRegistration(payload, requestMeta) {
+async function registerUser(payload, req, requestMeta) {
+  const requestStartedAt = Date.now();
   const normalizedPayload = normalizeRegistrationPayload(payload);
   const normalizedRole = normalizedPayload.role;
-  const normalizedPhone = normalizedPayload.phone;
 
-  console.info('[auth-service] createOrRefreshPendingRegistration route entered', {
+  console.info('[auth-service] registerUser route entered', {
     email: normalizedPayload.email,
     role: normalizedRole
   });
@@ -289,139 +219,42 @@ async function createOrRefreshPendingRegistration(payload, requestMeta) {
     throw new AppError('Only supported roles can register through this endpoint', 403);
   }
 
-  if (!normalizedPhone) {
+  if (!normalizedPayload.phone) {
     throw createFieldErrorResponse('phone', 'Please enter a valid phone number.');
   }
 
   await assertRegistrationAvailability(normalizedPayload);
 
-  const existingPendingRegistration = await PendingRegistration.findOne({
-    email: normalizedPayload.email
-  }).select('+passwordHash +verificationCodeHash');
-
-  if (
-    existingPendingRegistration?.resendAvailableAt instanceof Date &&
-    existingPendingRegistration.resendAvailableAt.getTime() > Date.now() &&
-    !existingPendingRegistration.completedAt
-  ) {
-    const retryAfterSeconds = Math.ceil(
-      (existingPendingRegistration.resendAvailableAt.getTime() - Date.now()) / 1000
-    );
-    throw buildRegistrationVerificationRateLimitError(retryAfterSeconds);
-  }
-
-  const verificationCode = generateVerificationCode();
-  const passwordHash = await hashPasswordValue(normalizedPayload.password);
-  const now = new Date();
-  const pendingRegistrationPayload = buildPendingRegistrationDocument(
-    normalizedPayload,
-    passwordHash,
-    hashToken(verificationCode),
-    now
-  );
-
-  let pendingRegistration = null;
-
-  try {
-    pendingRegistration = await PendingRegistration.findOneAndUpdate(
-      { email: normalizedPayload.email },
-      {
-        $set: pendingRegistrationPayload,
-        $inc: {
-          sendCount: 1
-        },
-        $unset: {
-          completedAt: 1,
-          userId: 1
-        }
-      },
-      {
-        new: true,
-        upsert: true,
-        runValidators: true,
-        setDefaultsOnInsert: true
-      }
-    );
-
-    console.info('[auth-service] sendRegistrationVerificationEmail before sendMail', {
-      email: normalizedPayload.email,
-      pendingRegistrationId: pendingRegistration?._id?.toString?.() || null
-    });
-
-    await sendRegistrationVerificationEmail({
-      to: normalizedPayload.email,
-      fullName: normalizedPayload.fullName,
-      verificationCode,
-      expiresInMinutes: env.registrationOtpExpiresMinutes
-    });
-    console.info('[auth-service] sendRegistrationVerificationEmail after sendMail', {
-      email: normalizedPayload.email
-    });
-  } catch (error) {
-    console.error('[auth-service] sendRegistrationVerificationEmail failed', {
-      email: normalizedPayload.email,
-      error: error?.stack || error?.message || error
-    });
-    await PendingRegistration.deleteOne({ email: normalizedPayload.email });
-    throw error;
-  }
+  const user = applyRegistrationDetailsToUser(new User(), normalizedPayload);
+  await user.save();
 
   await logAction({
-    actorId: null,
+    actorId: user._id,
     resourceType: 'auth',
-    resourceId: pendingRegistration._id,
-    action: 'request_registration_verification_code',
-    message: 'Registration verification code sent',
+    resourceId: user._id,
+    action: 'register',
+    message: 'Account created successfully',
     metadata: {
-      email: normalizedPayload.email,
-      role: normalizedPayload.role
+      email: user.email,
+      role: user.role
     },
     requestMeta
   });
 
+  console.info('[auth-service] registerUser route completed', {
+    email: user.email,
+    totalMs: getElapsedMs(requestStartedAt)
+  });
+
   return {
-    message: 'We sent a verification code to your email.',
-    email: normalizedPayload.email,
-    maskedEmail: maskEmailAddress(normalizedPayload.email),
-    resendAvailableAt: pendingRegistration.resendAvailableAt?.toISOString?.() || null,
-    retryAfterSeconds: Math.max(1, env.registrationOtpResendCooldownSeconds),
-    expiresAt: pendingRegistration.verificationCodeExpiresAt?.toISOString?.() || null
+    statusCode: 201,
+    message: 'Account created successfully. You can sign in now.',
+    email: user.email,
+    user: pickUser(user, req)
   };
 }
 
-async function resolveCompletedRegistration(pendingRegistration, req) {
-  if (!pendingRegistration?.userId) {
-    throw new AppError('This registration session has expired. Please create your account again.', 400, [
-      {
-        field: 'verificationCode',
-        message: 'This registration session has expired. Please create your account again.'
-      }
-    ]);
-  }
-
-  const user = await User.findById(pendingRegistration.userId).select('+password');
-
-  if (!user) {
-    throw new AppError('This registration session has expired. Please create your account again.', 400, [
-      {
-        field: 'verificationCode',
-        message: 'This registration session has expired. Please create your account again.'
-      }
-    ]);
-  }
-
-  return {
-    message: 'Account created successfully.',
-    token: createSessionToken(user, 'password'),
-    user: pickUser(user, req),
-    verification: {
-      email: user.email,
-      verifiedAt: pendingRegistration.completedAt?.toISOString?.() || user.emailVerifiedAt?.toISOString?.() || null
-    }
-  };
-}
-
-async function findUserByIdentifier(identifier) {
+async function findUserByIdentifier(identifier, selection = '+password') {
   const normalizedIdentifier = normalizeIdentifier(identifier);
 
   if (!normalizedIdentifier) {
@@ -429,7 +262,7 @@ async function findUserByIdentifier(identifier) {
   }
 
   if (normalizedIdentifier.includes('@')) {
-    return User.findOne({ email: normalizedIdentifier.toLowerCase() }).select('+password');
+    return User.findOne({ email: normalizedIdentifier.toLowerCase() }).select(selection);
   }
 
   const employeeIdMatcher = new RegExp(`^${escapeRegex(normalizedIdentifier)}$`, 'i');
@@ -440,7 +273,7 @@ async function findUserByIdentifier(identifier) {
       { enrollment: normalizedIdentifier },
       { employeeId: employeeIdMatcher }
     ]
-  }).select('+password');
+  }).select(selection);
 }
 
 function createSessionToken(user, authMethod = 'password') {
@@ -471,7 +304,7 @@ function buildLoginFailureIdentityKey(identifier) {
 }
 
 function buildLoginLockedError(retryAfterSeconds) {
-  const message = `Too many failed sign-in attempts for this account. Please wait ${formatRetryWindow(retryAfterSeconds)} before trying again or use Forgot Password.`;
+  const message = `Too many failed sign-in attempts for this account. Please wait ${formatRetryWindow(retryAfterSeconds)} before trying again.`;
 
   return createRateLimitError({
     message,
@@ -599,161 +432,6 @@ async function checkRegistrationAvailability(payload) {
   };
 }
 
-async function sendRegistrationVerificationCode(payload, requestMeta) {
-  return createOrRefreshPendingRegistration(payload, requestMeta);
-}
-
-async function verifyRegistrationEmail(payload, req, requestMeta) {
-  const normalizedEmail = String(payload.email || '').trim().toLowerCase();
-  const verificationCode = String(payload.verificationCode || '').trim();
-
-  const pendingRegistration = await PendingRegistration.findOne({
-    email: normalizedEmail
-  }).select('+passwordHash +verificationCodeHash');
-
-  if (!pendingRegistration) {
-    throw new AppError('Your verification session expired. Please create your account again.', 400, [
-      {
-        field: 'verificationCode',
-        message: 'Your verification session expired. Please create your account again.'
-      }
-    ]);
-  }
-
-  if (!pendingRegistration.verificationCodeHash || !pendingRegistration.passwordHash) {
-    if (pendingRegistration.completedAt) {
-      const completedCodeHash = hashToken(verificationCode);
-
-      if (completedCodeHash === pendingRegistration.verificationCodeHash) {
-        return resolveCompletedRegistration(pendingRegistration, req);
-      }
-    }
-
-    throw new AppError('Your verification session expired. Please request a new code.', 400, [
-      {
-        field: 'verificationCode',
-        message: 'Your verification session expired. Please request a new code.'
-      }
-    ]);
-  }
-
-  if (
-    !(pendingRegistration.verificationCodeExpiresAt instanceof Date) ||
-    pendingRegistration.verificationCodeExpiresAt.getTime() <= Date.now()
-  ) {
-    throw new AppError('The verification code expired. Please request a new code.', 400, [
-      {
-        field: 'verificationCode',
-        message: 'The verification code expired. Please request a new code.'
-      }
-    ]);
-  }
-
-  if (pendingRegistration.verificationAttempts >= env.registrationOtpMaxAttempts) {
-    throw new AppError('Too many incorrect verification attempts. Please request a new code.', 429, [
-      {
-        field: 'verificationCode',
-        message: 'Too many incorrect verification attempts. Please request a new code.'
-      }
-    ]);
-  }
-
-  const verificationCodeHash = hashToken(verificationCode);
-
-  if (verificationCodeHash !== pendingRegistration.verificationCodeHash) {
-    pendingRegistration.verificationAttempts += 1;
-    await pendingRegistration.save({ validateModifiedOnly: true });
-
-    throw new AppError('The verification code is incorrect. Please try again.', 400, [
-      {
-        field: 'verificationCode',
-        message: 'The verification code is incorrect. Please try again.'
-      }
-    ]);
-  }
-
-  const userPayload = {
-    fullName: pendingRegistration.fullName,
-    email: pendingRegistration.email,
-    password: pendingRegistration.passwordHash,
-    role: pendingRegistration.role,
-    program: pendingRegistration.program,
-    department: pendingRegistration.department,
-    semester: pendingRegistration.semester,
-    enrollmentNo: pendingRegistration.enrollmentNo,
-    employeeId: pendingRegistration.employeeId,
-    phone: pendingRegistration.phone
-  };
-
-  await assertRegistrationAvailability(userPayload);
-
-  let user = null;
-  let createUserError = null;
-
-  try {
-    user = await User.create({
-      fullName: pendingRegistration.fullName,
-      email: pendingRegistration.email,
-      password: pendingRegistration.passwordHash,
-      role: pendingRegistration.role,
-      program: pendingRegistration.program || undefined,
-      department: pendingRegistration.department || undefined,
-      semester: pendingRegistration.role === 'student' ? Number(pendingRegistration.semester) : undefined,
-      enrollmentNo: pendingRegistration.role === 'student' ? pendingRegistration.enrollmentNo : undefined,
-      employeeId: pendingRegistration.role === 'student' ? undefined : pendingRegistration.employeeId,
-      phone: pendingRegistration.phone,
-      emailVerified: true,
-      emailVerifiedAt: new Date()
-    });
-  } catch (error) {
-    createUserError = error;
-
-    if (error?.code === 11000) {
-      user = await User.findOne({ email: pendingRegistration.email }).select('+password');
-    } else {
-      throw error;
-    }
-  }
-
-  if (!user) {
-    if (createUserError) {
-      throw createUserError;
-    }
-
-    throw new AppError('Unable to complete account creation right now. Please try again.', 500);
-  }
-
-  pendingRegistration.passwordHash = null;
-  pendingRegistration.completedAt = new Date();
-  pendingRegistration.userId = user._id;
-  await pendingRegistration.save({ validateModifiedOnly: true });
-
-  await logAction({
-    actorId: user._id,
-    resourceType: 'auth',
-    resourceId: user._id,
-    action: 'register',
-    message: `${user.role} account registered`,
-    metadata: {
-      role: user.role,
-      email: user.email,
-      phone: user.phone,
-      emailVerifiedAt: user.emailVerifiedAt?.toISOString?.() || null
-    },
-    requestMeta
-  });
-
-  return {
-    message: 'Account created successfully.',
-    token: createSessionToken(user, 'password'),
-    user: pickUser(user, req),
-    verification: {
-      email: user.email,
-      verifiedAt: user.emailVerifiedAt?.toISOString?.() || null
-    }
-  };
-}
-
 async function loginUser(payload, req, requestMeta) {
   const identifier = extractLoginIdentifier(payload);
   // Failed-login buckets are keyed to the account plus client fingerprint so one
@@ -763,27 +441,18 @@ async function loginUser(payload, req, requestMeta) {
 
   if (!user) {
     await recordFailedLoginAttempt(identifier, req);
-    throw new AppError('Invalid credentials. Please check your ID and password and try again.', 401);
+    throw new AppError('Invalid credentials. Please check your email or ID and password and try again.', 401);
   }
 
   if (!user.isActive) {
     throw new AppError('Your account is inactive. Please contact administration.', 403);
   }
 
-  if (user.emailVerified === false) {
-    throw new AppError('Please verify your email before logging in.', 403, [
-      {
-        field: 'identifier',
-        message: 'Please verify your email before logging in.'
-      }
-    ]);
-  }
-
   const passwordMatches = await user.comparePassword(payload.password);
 
   if (!passwordMatches) {
     await recordFailedLoginAttempt(identifier, req);
-    throw new AppError('Invalid credentials. Please check your ID and password and try again.', 401);
+    throw new AppError('Invalid credentials. Please check your email or ID and password and try again.', 401);
   }
 
   const normalizedRole = normalizeRole(user.role);
@@ -947,7 +616,7 @@ async function getWebAuthnAuthenticationOptions(payload, req) {
   const user = await findUserByIdentifier(identifier);
 
   if (!user) {
-    throw new AppError('No account was found for that enrollment number, employee ID, or email.', 404);
+    throw new AppError('No account was found for that enrollment number or employee ID.', 404);
   }
 
   if (!user.isActive) {
@@ -1135,112 +804,18 @@ async function changePassword(userId, payload, requestMeta) {
   };
 }
 
-async function forgotPassword(payload, requestMeta) {
-  const normalizedEmail = String(payload.email || '').trim().toLowerCase();
-
-  const user = await User.findOne({ email: normalizedEmail }).select(
-    '+passwordResetToken +passwordResetExpiresAt'
-  );
-
-  if (!user) {
-    throw new AppError('No account was found for this email address.', 404, [
-      {
-        field: 'email',
-        message: 'No account was found for this email address.'
-      }
-    ]);
-  }
-
-  const resetToken = crypto.randomBytes(32).toString('hex');
-  const hashedToken = hashToken(resetToken);
-  const passwordResetExpiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS);
-  const resetUrl = buildPasswordResetUrl(resetToken, user.email);
-
-  user.passwordResetToken = hashedToken;
-  user.passwordResetExpiresAt = passwordResetExpiresAt;
-  await user.save({ validateModifiedOnly: true });
-
-  try {
-    await sendPasswordResetEmail({
-      to: user.email,
-      fullName: user.fullName,
-      resetUrl,
-      expiresInMinutes: env.passwordResetTokenExpiresMinutes
-    });
-  } catch (error) {
-    user.passwordResetToken = null;
-    user.passwordResetExpiresAt = null;
-    await user.save({ validateModifiedOnly: true });
-    throw error;
-  }
-
-  await logAction({
-    actorId: user._id,
-    resourceType: 'auth',
-    resourceId: user._id,
-    action: 'forgot_password',
-    message: 'Password reset token generated',
-    requestMeta
-  });
-
-  return {
-    message: 'We sent you a password reset email.'
-  };
-}
-
-async function resetPassword(payload, requestMeta) {
-  const hashedToken = hashToken(payload.token);
-
-  const user = await User.findOne({
-    passwordResetToken: hashedToken,
-    passwordResetExpiresAt: { $gt: new Date() }
-  }).select('+passwordResetToken +passwordResetExpiresAt');
-
-  if (!user) {
-    throw new AppError('Reset link is invalid or has expired.', 400, [
-      {
-        field: 'token',
-        message: 'Reset link is invalid or has expired.'
-      }
-    ]);
-  }
-
-  user.password = payload.newPassword;
-  await user.save();
-
-  user.passwordResetToken = null;
-  user.passwordResetExpiresAt = null;
-  await user.save({ validateModifiedOnly: true });
-
-  await logAction({
-    actorId: user._id,
-    resourceType: 'auth',
-    resourceId: user._id,
-    action: 'reset_password',
-    message: 'Password reset completed',
-    requestMeta
-  });
-
-  return {
-    message: 'Password reset successfully. You can now log in with your new password.'
-  };
-}
-
 module.exports = {
   buildSessionPayload,
   checkRegistrationAvailability,
   changePassword,
-  forgotPassword,
   getCurrentUser,
   getWebAuthnAuthenticationOptions,
   getWebAuthnDevices,
   getWebAuthnRegistrationOptions,
   loginUser,
+  registerUser,
   removeWebAuthnDevice,
-  resetPassword,
-  sendRegistrationVerificationCode,
   verifyAuthState,
-  verifyRegistrationEmail,
   verifyWebAuthnAuthentication,
   verifyWebAuthnRegistration
 };

@@ -9,7 +9,7 @@ const seedDefaultAdmins = asyncHandler(async (req, res) => {
   const providedSeedKey = req.get('x-seed-key');
 
   if (!env.seedAdminKey || providedSeedKey !== env.seedAdminKey) {
-    throw new AppError('Valid x-seed-key header is required to seed admin accounts', 403);
+    throw new AppError('Valid x-seed-key header is required to seed system accounts', 403);
   }
 
   const result = await adminService.seedDefaultAdmins({
@@ -17,7 +17,7 @@ const seedDefaultAdmins = asyncHandler(async (req, res) => {
   });
 
   return sendSuccess(res, {
-    message: 'Default admin seeding completed',
+    message: 'System account seeding completed',
     data: result
   });
 });

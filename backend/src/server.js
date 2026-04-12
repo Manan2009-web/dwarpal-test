@@ -11,6 +11,9 @@ const {
 } = require('./services/gatepassService');
 const { closeRealtimeServer, createRealtimeServer } = require('./services/realtimeService');
 
+let shutdownPromise = null;
+let processHandlersRegistered = false;
+
 async function repairVerificationTokens() {
   const result = await Gatepass.updateMany(
     { verificationToken: null },
@@ -18,98 +21,230 @@ async function repairVerificationTokens() {
   );
 
   if (result.modifiedCount > 0) {
-    console.log(`Normalized ${result.modifiedCount} gatepass verification tokens.`);
+    console.log(`[startup] Normalized ${result.modifiedCount} gatepass verification tokens.`);
   }
 }
 
-async function ensureDemoAccounts() {
-  if (env.nodeEnv !== 'development' || !env.autoSeedDemoAccounts) {
+function warnAboutBootstrapPassword() {
+  if (env.isProduction && env.autoBootstrapSystemAccounts && env.seedAdminPassword === 'DwarPal@123') {
+    console.warn(
+      '[bootstrap] DEFAULT_ADMIN_PASSWORD is using the development fallback. Set a strong value before bootstrapping system accounts in production.'
+    );
+  }
+}
+
+async function ensureSystemAccounts() {
+  if (!env.autoBootstrapSystemAccounts) {
     return null;
   }
 
-  const result = await seedDefaultAdmins();
+  warnAboutBootstrapPassword();
+
+  const result = await seedDefaultAdmins({
+    onlyWhenDatabaseEmpty: true
+  });
+  const skippedReason = result.skipped?.[0]?.reason || null;
+
+  if (skippedReason === 'database_not_empty') {
+    console.log('[bootstrap] Existing users detected, so automatic system-account bootstrap was skipped.');
+    return result;
+  }
+
   console.log(
-    `Demo accounts ready (${result.created.length} created, ${result.updated.length} refreshed).`
+    `[bootstrap] System accounts ready (${result.created.length} created, ${result.updated.length} repaired, ${result.existing.length} already present).`
   );
   return result;
 }
 
-async function shutdownServer(server, exitCode = 0) {
-  try {
-    stopGatepassEscalationScheduler();
-    await closeRealtimeServer();
+function validateStartupConfiguration() {
+  const startupErrors = typeof env.validateStartupEnv === 'function' ? env.validateStartupEnv() : [];
 
-    if (server?.listening) {
-      await new Promise((resolve, reject) => {
-        server.close((error) => {
-          if (error && error.code !== 'ERR_SERVER_NOT_RUNNING') {
-            reject(error);
-            return;
-          }
-
-          resolve();
-        });
-      });
-    }
-
-    if (connectDatabase.disconnectDatabase) {
-      await connectDatabase.disconnectDatabase();
-    }
-  } catch (error) {
-    console.error('Error while shutting down the DwarPal backend:', error);
-    process.exit(1);
+  if (!startupErrors.length) {
+    return;
   }
 
-  process.exit(exitCode);
+  const error = new Error(`Invalid startup configuration:\n- ${startupErrors.join('\n- ')}`);
+  error.code = 'INVALID_STARTUP_CONFIGURATION';
+  throw error;
 }
 
-async function startServer() {
-  const database = await connectDatabase();
-  await ensureRateLimitStorage();
-  await repairVerificationTokens();
-  await ensureDemoAccounts();
+async function runOptionalStartupTask(name, task) {
+  try {
+    await task();
+  } catch (error) {
+    console.warn(`[startup] ${name} skipped: ${error.message || error}`);
+  }
+}
 
+function kickOffOptionalStartupTasks() {
+  void (async () => {
+    await runOptionalStartupTask('Auth rate-limit storage initialization', async () => {
+      await ensureRateLimitStorage();
+      console.log('[startup] Auth rate-limit storage ready.');
+    });
+
+    await runOptionalStartupTask('Gatepass verification-token repair', repairVerificationTokens);
+    await runOptionalStartupTask('System-account bootstrap', ensureSystemAccounts);
+  })();
+}
+
+function startOptionalRuntimeServices(server) {
+  try {
+    startGatepassEscalationScheduler();
+  } catch (error) {
+    console.warn(`[startup] Gatepass escalation scheduler did not start: ${error.message || error}`);
+  }
+
+  try {
+    createRealtimeServer(server);
+  } catch (error) {
+    console.warn(`[startup] Realtime server did not start: ${error.message || error}`);
+  }
+}
+
+async function stopOptionalRuntimeServices() {
+  stopGatepassEscalationScheduler();
+  await closeRealtimeServer();
+}
+
+async function shutdownServer(server, exitCode = 0) {
+  if (shutdownPromise) {
+    return shutdownPromise;
+  }
+
+  shutdownPromise = (async () => {
+    try {
+      await stopOptionalRuntimeServices();
+
+      if (server?.listening) {
+        await new Promise((resolve, reject) => {
+          server.close((error) => {
+            if (error && error.code !== 'ERR_SERVER_NOT_RUNNING') {
+              reject(error);
+              return;
+            }
+
+            resolve();
+          });
+        });
+      }
+
+      if (connectDatabase.disconnectDatabase) {
+        await connectDatabase.disconnectDatabase();
+      }
+    } catch (error) {
+      console.error('Error while shutting down the DwarPal backend:', error);
+      process.exit(1);
+      return;
+    }
+
+    process.exit(exitCode);
+  })();
+
+  return shutdownPromise;
+}
+
+function registerProcessHandlers(server) {
+  if (processHandlersRegistered) {
+    return;
+  }
+
+  processHandlersRegistered = true;
+
+  process.once('unhandledRejection', (error) => {
+    console.error('Unhandled rejection:', error);
+    void shutdownServer(server, 1);
+  });
+
+  process.once('uncaughtException', (error) => {
+    console.error('Uncaught exception:', error);
+    void shutdownServer(server, 1);
+  });
+
+  process.once('SIGINT', () => {
+    void shutdownServer(server, 0);
+  });
+
+  process.once('SIGTERM', () => {
+    void shutdownServer(server, 0);
+  });
+}
+
+function createHttpServer() {
   const server = http.createServer(app);
   server.requestTimeout = env.httpRequestTimeoutMs;
   server.headersTimeout = env.httpHeadersTimeoutMs;
   server.keepAliveTimeout = env.httpKeepAliveTimeoutMs;
-  startGatepassEscalationScheduler();
-  createRealtimeServer(server);
+  return server;
+}
 
-  server.on('error', async (error) => {
+function attachServerErrorHandler(server) {
+  server.on('error', (error) => {
     if (error.code === 'EADDRINUSE') {
       console.error(`Failed to start server: port ${env.port} is already in use. Stop the existing process or change PORT.`);
     } else {
-      console.error('Failed to start server:', error);
+      console.error('HTTP server error:', error);
     }
 
-    await shutdownServer(server, 1);
+    void shutdownServer(server, 1);
   });
+}
 
-  server.listen(env.port, "0.0.0.0", () => {
-    console.log(`DwarPal backend running on port ${env.port}`);
-    console.log(`Database mode: ${database.mode}`);
-    console.log(
-      `HTTP timeouts configured (request=${env.httpRequestTimeoutMs}ms, headers=${env.httpHeadersTimeoutMs}ms, keepAlive=${env.httpKeepAliveTimeoutMs}ms)`
-    );
+async function listen(server) {
+  await new Promise((resolve, reject) => {
+    const handleError = (error) => {
+      server.off('listening', handleListening);
+      reject(error);
+    };
+
+    const handleListening = () => {
+      server.off('error', handleError);
+      resolve();
+    };
+
+    server.once('error', handleError);
+    server.once('listening', handleListening);
+    server.listen(env.port, '0.0.0.0');
   });
+}
 
-  process.on('unhandledRejection', (error) => {
-    console.error('Unhandled rejection:', error);
-    shutdownServer(server, 1);
-  });
+async function startServer() {
+  validateStartupConfiguration();
+  app.locals.degradedMode = false;
 
-  process.on('SIGINT', () => shutdownServer(server, 0));
-  process.on('SIGTERM', () => shutdownServer(server, 0));
+  const database = await connectDatabase();
+  const server = createHttpServer();
+
+  await listen(server);
+  attachServerErrorHandler(server);
+  registerProcessHandlers(server);
+
+  console.log(`DwarPal backend running on http://0.0.0.0:${env.port}`);
+  console.log(`[startup] CORS allowed origins: ${env.allowedOrigins.join(', ')}`);
+  console.log(`Database mode: ${database.mode}`);
+  if (database.uri) {
+    console.log(`[startup] MongoDB host: ${database.uri}`);
+  }
+  console.log(
+    `HTTP timeouts configured (request=${env.httpRequestTimeoutMs}ms, headers=${env.httpHeadersTimeoutMs}ms, keepAlive=${env.httpKeepAliveTimeoutMs}ms)`
+  );
+
+  kickOffOptionalStartupTasks();
+  startOptionalRuntimeServices(server);
+
+  return server;
 }
 
 startServer().catch((error) => {
-  if (error?.name === 'MongooseServerSelectionError') {
-    console.error(
-      `Failed to start server: unable to connect to MongoDB at ${env.mongoUri}. Start MongoDB or set ENABLE_IN_MEMORY_DB=true to use the embedded dev database.`
-    );
+  if (error.code === 'EADDRINUSE') {
+    console.error(`Failed to start server: port ${env.port} is already in use. Stop the existing process or change PORT.`);
   } else {
-    console.error('Failed to start server:', error);
+    console.error('Failed to start server:', error.message || error);
   }
+
+  if (!env.isProduction && error?.stack) {
+    console.error(error.stack);
+  }
+
   process.exit(1);
 });

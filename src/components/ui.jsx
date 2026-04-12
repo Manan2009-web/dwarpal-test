@@ -41,9 +41,24 @@ export function StatusBadge({ status }) {
   return <span className={`status-badge ${STATUS_COLORS[status] || 'pending'}`}>{status}</span>
 }
 
-export function ActionButton({ children, tone = 'primary', icon: Icon, ...props }) {
+export function ActionButton({
+  children,
+  tone = 'primary',
+  icon: Icon,
+  type = 'button',
+  onClick,
+  disabled = false,
+  className = '',
+  ...props
+}) {
   return (
-    <button className={`action-button ${tone}`} {...props}>
+    <button
+      type={type}
+      className={['action-button', tone, className].filter(Boolean).join(' ')}
+      onClick={onClick}
+      disabled={disabled}
+      {...props}
+    >
       {Icon ? <Icon size={16} /> : null}
       <span>{children}</span>
     </button>

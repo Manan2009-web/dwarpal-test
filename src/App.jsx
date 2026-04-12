@@ -69,15 +69,12 @@ import {
   loginUser,
   logoutUser,
   normalizePhoneNumberInput,
-  requestPasswordReset,
+  registerUser,
   readBiometricDeviceId,
   removeBiometricDevice,
-  resetPassword as resetPasswordWithApi,
-  sendRegistrationVerificationCode,
   submitRequest,
   updateCurrentUserProfile,
   updateRequestStatus,
-  verifyRegistrationEmail,
   verifyBiometricAuthentication,
   verifyBiometricRegistration,
   verifyGatepassQr,
@@ -111,6 +108,32 @@ const VEHICLE_NUMBER_PATTERN = /^[A-Za-z0-9 -]+$/
 const REQUIRED_FIELD_MESSAGE = 'Please fill this field'
 const REASON_MIN_LENGTH = 5
 const REASON_MAX_LENGTH = 500
+const ROLE_DASHBOARD_PATHS = {
+  student: '/student/dashboard',
+  faculty: '/faculty/dashboard',
+  principal: '/principal/dashboard',
+  hod: '/hod/dashboard',
+  security: '/security/dashboard',
+  cao: '/cao/dashboard',
+}
+
+function maskAuthIdentifier(value) {
+  const normalizedValue = String(value || '').trim()
+
+  if (!normalizedValue) {
+    return ''
+  }
+
+  if (normalizedValue.length <= 4) {
+    return normalizedValue
+  }
+
+  return `${normalizedValue.slice(0, 2)}${'*'.repeat(Math.max(normalizedValue.length - 4, 1))}${normalizedValue.slice(-2)}`
+}
+
+function getDashboardPathForRole(role) {
+  return ROLE_DASHBOARD_PATHS[normalizeRole(role)] || '/app/dashboard'
+}
 
 function logBootstrapDebug(event, details) {
   if (!import.meta.env.DEV) {
@@ -307,7 +330,6 @@ function mapRegisterFieldErrors(fieldErrors = {}, role = '') {
     department: fieldErrors.department || '',
     enrollment: fieldErrors.enrollment || fieldErrors.enrollmentNo || fieldErrors.employeeId || '',
     phone: fieldErrors.phone || '',
-    verificationCode: fieldErrors.verificationCode || fieldErrors.code || '',
     role: fieldErrors.role || '',
     semester: fieldErrors.semester || '',
     password: fieldErrors.password || '',
@@ -332,32 +354,6 @@ function mapRegisterFieldErrors(fieldErrors = {}, role = '') {
 
     return errors
   }, {})
-}
-
-function getSecondsUntil(value) {
-  if (!value) {
-    return 0
-  }
-
-  const timestamp = new Date(value).getTime()
-
-  if (Number.isNaN(timestamp)) {
-    return 0
-  }
-
-  return Math.max(0, Math.ceil((timestamp - Date.now()) / 1000))
-}
-
-function formatCountdown(seconds) {
-  const safeSeconds = Math.max(0, Number(seconds) || 0)
-  const minutes = Math.floor(safeSeconds / 60)
-  const remainingSeconds = safeSeconds % 60
-
-  return `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`
-}
-
-function isLikelyEmailAddress(value) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim())
 }
 
 function FieldLabel({ children, required = false }) {
@@ -542,13 +538,33 @@ function App() {
       const errorDetails = getApiErrorDetails(error, fallbackMessage)
 
       if (error instanceof ApiError) {
-        if (error.status === 0) {
+        if (errorDetails.code === 'INVALID_API_RESPONSE') {
           return {
             ...errorDetails,
             fieldErrors: {},
-            message: import.meta.env.DEV
-              ? 'Unable to reach the DwarPal backend. Please start the backend server and try again.'
-              : 'Unable to reach the DwarPal backend right now. Please check your connection and try again.',
+            message:
+              'DwarPal received an invalid response from the backend. Check the API base URL and any Vite proxy settings.',
+          }
+        }
+
+        if (error.status === 0) {
+          const requestUrl = String(errorDetails.payload?.requestUrl || '').trim()
+          let backendTarget = ''
+
+          if (requestUrl) {
+            try {
+              backendTarget = new URL(requestUrl).origin
+            } catch {
+              backendTarget = ''
+            }
+          }
+
+          return {
+            ...errorDetails,
+            fieldErrors: {},
+            message: backendTarget
+              ? `Network error. Unable to reach the DwarPal backend at ${backendTarget}. Make sure the backend server is running, the API base URL is correct, and CORS allows this origin.`
+              : 'Network error. Unable to reach the DwarPal backend right now. Please check the backend server, API base URL, and your connection.',
           }
         }
 
@@ -561,12 +577,33 @@ function App() {
           }
         }
 
+        if (error.status === 503) {
+          return {
+            ...errorDetails,
+            fieldErrors: {},
+            message:
+              'Backend is running but currently unavailable. If you are testing locally, make sure the database is connected and the server finished booting.',
+          }
+        }
+
+        if (error.status === 404 && /route not found:/i.test(errorDetails.message)) {
+          const missingRoute = errorDetails.message.replace(/^.*route not found:\s*/i, '').trim()
+
+          return {
+            ...errorDetails,
+            fieldErrors: {},
+            message: missingRoute
+              ? `The DwarPal backend is reachable, but this API route is not available: ${missingRoute}.`
+              : 'The DwarPal backend is reachable, but this API route is not available.',
+          }
+        }
+
         if (error.status === 401) {
           if (authMode === 'login') {
             return {
               ...errorDetails,
               fieldErrors: {},
-              message: 'Invalid credentials. Please check your ID and password.',
+              message: 'Invalid credentials. Please check your email or ID and password.',
             }
           }
 
@@ -764,27 +801,43 @@ function App() {
   }, [currentUser?.id, currentUser?.role, refreshAppData, resetWorkspace])
 
   async function login(identifier, password) {
+    const normalizedIdentifier = String(identifier || '').trim()
+    console.info('[dwarpal-auth-ui] login request starting', {
+      identifier: maskAuthIdentifier(normalizedIdentifier),
+    })
+
     try {
-      const user = await loginUser(String(identifier || '').trim(), password)
+      const user = await loginUser(normalizedIdentifier, password)
+      console.info('[dwarpal-auth-ui] login response received', {
+        identifier: maskAuthIdentifier(normalizedIdentifier),
+        role: user?.role || '',
+        userId: user?.id || '',
+      })
       setCurrentUser(user)
       toast.success({
         title: 'Login successful',
         message: `Welcome back to DwarPal, ${user.name}.`,
       })
-      return { ok: true, user }
+      return { ok: true, user, dashboardPath: getDashboardPathForRole(user?.role) }
     } catch (error) {
-      const { message } = resolveApiError(error, {
+      console.error('[dwarpal-auth-ui] login request failed', {
+        error,
+        identifier: maskAuthIdentifier(normalizedIdentifier),
+      })
+      const errorDetails = resolveApiError(error, {
         fallbackMessage: 'Unable to complete DwarPal sign-in. Please try again.',
         authMode: 'login',
       })
       toast.error({
         title: 'Login failed',
-        message,
+        message: errorDetails.message,
       })
 
       return {
         ok: false,
-        error: message,
+        error: errorDetails.message,
+        code: errorDetails.code,
+        status: errorDetails.status,
       }
     }
   }
@@ -799,21 +852,23 @@ function App() {
         title: 'Login successful',
         message: `Signed in with ${mode === 'face' ? 'face recognition' : 'fingerprint'} successfully.`,
       })
-      return { ok: true, user }
+      return { ok: true, user, dashboardPath: getDashboardPathForRole(user?.role) }
     } catch (error) {
       if (error instanceof ApiError) {
-        const { message } = resolveApiError(error, {
+        const errorDetails = resolveApiError(error, {
           fallbackMessage: 'Biometric verification failed. Please try again or use manual login.',
           authMode: 'login',
         })
         toast.error({
           title: 'Biometric login failed',
-          message,
+          message: errorDetails.message,
         })
 
         return {
           ok: false,
-          error: message,
+          error: errorDetails.message,
+          code: errorDetails.code,
+          status: errorDetails.status,
         }
       }
 
@@ -824,7 +879,7 @@ function App() {
     }
   }
 
-  async function sendRegisterVerificationCode(payload) {
+  async function registerAccount(payload) {
     const normalizedRole = normalizeRole(payload.role)
     const normalizedProgram = normalizeProgram(payload.program)
     const normalizedDepartment = normalizeDepartment(payload.department)
@@ -871,8 +926,14 @@ function App() {
       }
     }
 
+    console.info('[dwarpal-auth-ui] register request starting', {
+      email: normalizedEmail,
+      identifier: maskAuthIdentifier(normalizedEnrollment),
+      role: normalizedRole,
+    })
+
     try {
-      const result = await sendRegistrationVerificationCode({
+      const result = await registerUser({
         ...payload,
         email: normalizedEmail,
         enrollment: normalizedEnrollment,
@@ -882,117 +943,32 @@ function App() {
         phone: normalizedPhone,
       })
 
+      console.info('[dwarpal-auth-ui] register response received', {
+        email: result.email || normalizedEmail,
+        role: normalizedRole,
+        userId: result.user?.id || '',
+      })
+
       return {
         ok: true,
         message: result.message,
         email: result.email || normalizedEmail,
-        maskedEmail: result.maskedEmail || normalizedEmail,
-        resendAvailableAt: result.resendAvailableAt,
-        retryAfterSeconds: result.retryAfterSeconds,
-        expiresAt: result.expiresAt,
+        user: result.user || null,
       }
     } catch (error) {
+      console.error('[dwarpal-auth-ui] register request failed', {
+        email: normalizedEmail,
+        error,
+        role: normalizedRole,
+      })
       const { message, fieldErrors } = resolveApiError(error, {
-        fallbackMessage: 'Unable to send the verification code right now.',
+        fallbackMessage: 'Unable to create your account right now.',
       })
 
       return {
         ok: false,
         error: message,
         fieldErrors,
-      }
-    }
-  }
-
-  async function verifyRegisterEmail(payload) {
-    try {
-      const result = await verifyRegistrationEmail(payload)
-      const user = result?.user || null
-
-      if (user) {
-        setCurrentUser(user)
-      }
-
-      toast.success({
-        title: 'Email verified',
-        message: result?.message || 'Account created successfully.',
-      })
-
-      return {
-        ok: true,
-        message: result?.message || 'Account created successfully.',
-        user,
-        verification: result?.verification || null,
-      }
-    } catch (error) {
-      const errorDetails = resolveApiError(error, {
-        fallbackMessage: 'Unable to verify your email right now.',
-      })
-
-      return {
-        ok: false,
-        error: errorDetails.message,
-        fieldErrors: errorDetails.fieldErrors,
-      }
-    }
-  }
-
-  async function forgotPassword(email) {
-    try {
-      const result = await requestPasswordReset(email)
-      toast.success({
-        title: 'Reset email sent',
-        message: result.message,
-      })
-
-      return {
-        ok: true,
-        message: result.message,
-      }
-    } catch (error) {
-      const errorDetails = resolveApiError(error, {
-        fallbackMessage: 'Unable to send the password reset email right now.',
-      })
-
-      toast.error({
-        title: 'Password reset failed',
-        message: errorDetails.message,
-      })
-
-      return {
-        ok: false,
-        error: errorDetails.message,
-        fieldErrors: errorDetails.fieldErrors,
-      }
-    }
-  }
-
-  async function completePasswordReset(token, newPassword) {
-    try {
-      const result = await resetPasswordWithApi(token, newPassword)
-      toast.success({
-        title: 'Password updated',
-        message: result.message,
-      })
-
-      return {
-        ok: true,
-        message: result.message,
-      }
-    } catch (error) {
-      const errorDetails = resolveApiError(error, {
-        fallbackMessage: 'Unable to reset your password right now.',
-      })
-
-      toast.error({
-        title: 'Password reset failed',
-        message: errorDetails.message,
-      })
-
-      return {
-        ok: false,
-        error: errorDetails.message,
-        fieldErrors: errorDetails.fieldErrors,
       }
     }
   }
@@ -1143,6 +1119,46 @@ function App() {
     }
   }
 
+  function renderAppShellRoute(routeRole = '') {
+    const shell = (
+      <NotificationProvider currentUser={currentUser}>
+        <AppShell
+          currentUser={currentUser}
+          summary={summary}
+          gatepasses={gatepasses}
+          onLogout={logout}
+          onAddGatepass={addGatepass}
+          onCurrentUserPatch={patchCurrentUser}
+          onUpdateCurrentUserProfile={saveCurrentUserProfile}
+          onGatepassAction={updateGatepass}
+          onRefreshData={refreshAppData}
+          cookieConsent={cookieConsent}
+          notificationPermissionState={notificationPermissionState}
+          notificationsSupported={notificationPermissionState !== 'unsupported'}
+          notificationPromptOpen={notificationPromptOpen}
+          onManageCookiePreferences={handleOpenCookiePreferences}
+          onOpenNotificationPrompt={handleOpenNotificationPrompt}
+          onAllowNotificationPermission={handleAllowNotificationPrompt}
+          onDeferNotificationPermission={handleDeferNotificationPrompt}
+        />
+      </NotificationProvider>
+    )
+
+    if (routeRole) {
+      return (
+        <RoleDashboardRoute currentUser={currentUser} authReady={authReady} expectedRole={routeRole}>
+          {shell}
+        </RoleDashboardRoute>
+      )
+    }
+
+    return (
+      <ProtectedRoute currentUser={currentUser} authReady={authReady}>
+        {shell}
+      </ProtectedRoute>
+    )
+  }
+
   return (
     <BrowserRouter>
       <Routes>
@@ -1154,11 +1170,7 @@ function App() {
           path="/login"
           element={
             <PublicAuthRoute currentUser={currentUser} authReady={authReady}>
-              <LoginScreen
-                onBiometricLogin={loginWithBiometric}
-                onForgotPassword={forgotPassword}
-                onLogin={login}
-              />
+              <LoginScreen onBiometricLogin={loginWithBiometric} onLogin={login} />
             </PublicAuthRoute>
           }
         />
@@ -1166,42 +1178,20 @@ function App() {
           path="/register"
           element={
             <PublicAuthRoute currentUser={currentUser} authReady={authReady}>
-              <RegisterScreen
-                onRequestVerificationCode={sendRegisterVerificationCode}
-                onVerifyEmailCode={verifyRegisterEmail}
-              />
+              <RegisterScreen onRegister={registerAccount} />
             </PublicAuthRoute>
           }
         />
-        <Route path="/reset-password" element={<ResetPasswordScreen onResetPassword={completePasswordReset} />} />
         <Route
           path="/app/:page"
-          element={
-            <ProtectedRoute currentUser={currentUser} authReady={authReady}>
-              <NotificationProvider currentUser={currentUser}>
-                <AppShell
-                  currentUser={currentUser}
-                  summary={summary}
-                  gatepasses={gatepasses}
-                  onLogout={logout}
-                  onAddGatepass={addGatepass}
-                  onCurrentUserPatch={patchCurrentUser}
-                  onUpdateCurrentUserProfile={saveCurrentUserProfile}
-                  onGatepassAction={updateGatepass}
-                  onRefreshData={refreshAppData}
-                  cookieConsent={cookieConsent}
-                  notificationPermissionState={notificationPermissionState}
-                  notificationsSupported={notificationPermissionState !== 'unsupported'}
-                  notificationPromptOpen={notificationPromptOpen}
-                  onManageCookiePreferences={handleOpenCookiePreferences}
-                  onOpenNotificationPrompt={handleOpenNotificationPrompt}
-                  onAllowNotificationPermission={handleAllowNotificationPrompt}
-                  onDeferNotificationPermission={handleDeferNotificationPrompt}
-                />
-              </NotificationProvider>
-            </ProtectedRoute>
-          }
+          element={renderAppShellRoute()}
         />
+        <Route path="/student/dashboard" element={renderAppShellRoute('student')} />
+        <Route path="/faculty/dashboard" element={renderAppShellRoute('faculty')} />
+        <Route path="/principal/dashboard" element={renderAppShellRoute('principal')} />
+        <Route path="/hod/dashboard" element={renderAppShellRoute('hod')} />
+        <Route path="/security/dashboard" element={renderAppShellRoute('security')} />
+        <Route path="/cao/dashboard" element={renderAppShellRoute('cao')} />
         <Route path="*" element={<DefaultRoute currentUser={currentUser} authReady={authReady} />} />
       </Routes>
       <FeatureBoundary label="Privacy preferences banner">
@@ -1224,12 +1214,27 @@ function ProtectedRoute({ currentUser, authReady, children }) {
   return children
 }
 
+function RoleDashboardRoute({ currentUser, authReady, expectedRole, children }) {
+  useRouteGuardDebug(`${expectedRole}-dashboard`, authReady, currentUser)
+
+  if (!authReady) return <AuthBootstrapScreen />
+  if (!currentUser) return <Navigate to="/login" replace />
+
+  const normalizedCurrentRole = normalizeRole(currentUser.role)
+  if (normalizedCurrentRole !== expectedRole) {
+    return <Navigate to={getDashboardPathForRole(normalizedCurrentRole)} replace />
+  }
+
+  return children
+}
+
 function PublicAuthRoute({ currentUser, authReady, children }) {
   useRouteGuardDebug('public-auth', authReady, currentUser)
 
   // Login redirect protection: authenticated users are pushed away from public auth screens with replace
   // so the browser back button cannot reopen login/register as an active page.
-  if (currentUser) return <Navigate to="/app/dashboard" replace />
+  if (!authReady) return <AuthBootstrapScreen />
+  if (currentUser) return <Navigate to={getDashboardPathForRole(currentUser.role)} replace />
   return children
 }
 
@@ -1237,7 +1242,7 @@ function DefaultRoute({ currentUser, authReady }) {
   useRouteGuardDebug('default', authReady, currentUser)
 
   if (!authReady) return <AuthBootstrapScreen />
-  return <Navigate to={currentUser ? '/app/dashboard' : '/login'} replace />
+  return <Navigate to={currentUser ? getDashboardPathForRole(currentUser.role) : '/login'} replace />
 }
 
 function AuthBootstrapScreen() {
@@ -1285,7 +1290,7 @@ function BiometricSymbolButton({ mode, active, loading, onClick }) {
   )
 }
 
-function LoginScreen({ onLogin, onBiometricLogin, onForgotPassword }) {
+function LoginScreen({ onLogin, onBiometricLogin }) {
   const navigate = useNavigate()
   const location = useLocation()
   const [form, setForm] = useState({ identifier: '', password: '' })
@@ -1293,11 +1298,6 @@ function LoginScreen({ onLogin, onBiometricLogin, onForgotPassword }) {
   const [success, setSuccess] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false)
-  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('')
-  const [forgotPasswordFieldErrors, setForgotPasswordFieldErrors] = useState({})
-  const [forgotPasswordError, setForgotPasswordError] = useState('')
-  const [isForgotPasswordSubmitting, setIsForgotPasswordSubmitting] = useState(false)
   const submitLockRef = useRef(false)
   const [biometricSupport, setBiometricSupport] = useState({
     supported: false,
@@ -1336,6 +1336,7 @@ function LoginScreen({ onLogin, onBiometricLogin, onForgotPassword }) {
     }
 
     setSuccess(authNotice)
+    setError('')
     navigate(location.pathname, { replace: true, state: null })
   }, [location.pathname, location.state, navigate])
 
@@ -1346,72 +1347,19 @@ function LoginScreen({ onLogin, onBiometricLogin, onForgotPassword }) {
     setSuccess('')
   }
 
-  function openForgotPasswordModal() {
-    setForgotPasswordEmail(String(form.identifier || '').trim())
-    setForgotPasswordFieldErrors({})
-    setForgotPasswordError('')
-    setForgotPasswordOpen(true)
+  function handleSignInButtonClick() {
+    console.log('Sign in button clicked')
   }
 
-  function closeForgotPasswordModal() {
-    if (isForgotPasswordSubmitting) {
-      return
-    }
-
-    setForgotPasswordOpen(false)
-    setForgotPasswordFieldErrors({})
-    setForgotPasswordError('')
-  }
-
-  async function handleForgotPasswordSubmit(event) {
+  async function handleLogin(event) {
     event.preventDefault()
-
-    const normalizedEmail = String(forgotPasswordEmail || '').trim().toLowerCase()
-    const nextFieldErrors = {}
-
-    if (!normalizedEmail) {
-      nextFieldErrors.email = 'Please enter your registered email address.'
-    } else if (!isLikelyEmailAddress(normalizedEmail)) {
-      nextFieldErrors.email = 'Please enter a valid email address.'
-    }
-
-    if (Object.keys(nextFieldErrors).length) {
-      setForgotPasswordFieldErrors(nextFieldErrors)
-      setForgotPasswordError('')
-      return
-    }
-
-    setIsForgotPasswordSubmitting(true)
-    setForgotPasswordFieldErrors({})
-    setForgotPasswordError('')
-
-    try {
-      const result = await onForgotPassword(normalizedEmail)
-
-      if (!result?.ok) {
-        if (result?.fieldErrors) {
-          setForgotPasswordFieldErrors((prev) => ({
-            ...prev,
-            email: result.fieldErrors.email || prev.email,
-          }))
-        }
-
-        setForgotPasswordError(result?.error || 'Unable to send the password reset email right now.')
-        return
-      }
-
-      setForgotPasswordOpen(false)
-      setSuccess(result?.message || 'We sent you a password reset email.')
-      setError('')
-    } finally {
-      setIsForgotPasswordSubmitting(false)
-    }
-  }
-
-  async function handleSubmit(event) {
-    event.preventDefault()
+    console.log('Login submit triggered')
+    console.info('[dwarpal-auth-ui] login submit triggered', {
+      identifier: maskAuthIdentifier(form.identifier),
+    })
 
     if (isSubmitting || submitLockRef.current) {
+      console.warn('[dwarpal-auth-ui] login submit ignored because a request is already in progress')
       return
     }
 
@@ -1421,27 +1369,44 @@ function LoginScreen({ onLogin, onBiometricLogin, onForgotPassword }) {
     })
 
     if (Object.keys(nextFieldErrors).length) {
+      console.warn('[dwarpal-auth-ui] login submit blocked by client validation', nextFieldErrors)
       setFieldErrors(nextFieldErrors)
-      setError('')
+      setError('Please enter both your identifier and password.')
       return
     }
 
     setError('')
     setSuccess('')
+    setFieldErrors({})
     submitLockRef.current = true
     setIsSubmitting(true)
 
     try {
-      const result = await onLogin(form.identifier, form.password)
+      const normalizedIdentifier = String(form.identifier || '').trim()
+      const formData = {
+        identifier: normalizedIdentifier,
+        password: form.password ? '[redacted]' : '',
+      }
+      console.log('Sending login request', formData)
+      console.info('[dwarpal-auth-ui] login submit calling API', {
+        identifier: maskAuthIdentifier(normalizedIdentifier),
+      })
+      const result = await onLogin(normalizedIdentifier, form.password)
       if (!result?.ok) {
+        console.warn('[dwarpal-auth-ui] login submit received failure response', result)
         setError(result?.error || 'Unable to sign in. Please try again.')
         return
       }
 
+      console.info('[dwarpal-auth-ui] login submit completed successfully', {
+        identifier: maskAuthIdentifier(form.identifier),
+      })
+      const dashboardPath = result.dashboardPath || getDashboardPathForRole(result.user?.role)
       setSuccess('Login successful. Redirecting to your dashboard...')
       // Use replace so the previous login entry is not left as a reachable back-navigation target.
-      navigate('/app/dashboard', { replace: true })
-    } catch {
+      navigate(dashboardPath, { replace: true })
+    } catch (error) {
+      console.error('[dwarpal-auth-ui] login submit crashed unexpectedly', error)
       setError('Unable to sign in right now. Please try again.')
     } finally {
       submitLockRef.current = false
@@ -1464,7 +1429,7 @@ function LoginScreen({ onLogin, onBiometricLogin, onForgotPassword }) {
     if (!form.identifier.trim()) {
       setFieldErrors((prev) => ({
         ...prev,
-        identifier: 'Enter your registered email address before using biometric login.',
+        identifier: 'Enter your enrollment number or employee ID before using biometric login.',
       }))
       setError('')
       return
@@ -1481,8 +1446,9 @@ function LoginScreen({ onLogin, onBiometricLogin, onForgotPassword }) {
         return
       }
 
+      const dashboardPath = result.dashboardPath || getDashboardPathForRole(result.user?.role)
       setSuccess('Login successful. Redirecting to your dashboard...')
-      navigate('/app/dashboard', { replace: true })
+      navigate(dashboardPath, { replace: true })
     } catch {
       setError('Biometric verification failed. Please try again or use manual login.')
     } finally {
@@ -1497,14 +1463,14 @@ function LoginScreen({ onLogin, onBiometricLogin, onForgotPassword }) {
 
   return (
     <AuthShell title="Login">
-      <form className="auth-form" onSubmit={handleSubmit} noValidate>
+      <form className="auth-form" onSubmit={handleLogin} noValidate>
         <label>
-          <FieldLabel required>Email</FieldLabel>
+          <FieldLabel required>Email / Enrollment Number / Employee ID</FieldLabel>
           <input
             value={form.identifier}
             onChange={(event) => updateFormField('identifier', event.target.value)}
-            placeholder="Enter your registered email address"
-            autoComplete="email"
+            placeholder="Enter your email, enrollment number, or employee ID"
+            autoComplete="username"
             className={fieldErrors.identifier ? 'field-invalid' : ''}
             aria-invalid={Boolean(fieldErrors.identifier)}
             disabled={isSubmitting}
@@ -1527,20 +1493,16 @@ function LoginScreen({ onLogin, onBiometricLogin, onForgotPassword }) {
           />
           {fieldErrors.password ? <p className="field-error">{fieldErrors.password}</p> : null}
         </label>
-        <div className="auth-inline-action-row">
-          <button
-            type="button"
-            className="auth-inline-link"
-            onClick={openForgotPasswordModal}
-            disabled={isSubmitting}
-          >
-            Forgot Password?
-          </button>
-        </div>
-        {error ? <p className="form-error" aria-live="polite">{error}</p> : null}
+        {error ? <p className="form-error" aria-live="polite" role="alert">{error}</p> : null}
         {success ? <p className="form-success" aria-live="polite">{success}</p> : null}
         {isSubmitting ? <p className="field-hint" aria-live="polite">Signing in...</p> : null}
-        <ActionButton icon={ShieldCheck} type="submit" disabled={isSubmitting} aria-busy={isSubmitting}>
+        <ActionButton
+          icon={ShieldCheck}
+          type="submit"
+          onClick={handleSignInButtonClick}
+          disabled={isSubmitting}
+          aria-busy={isSubmitting}
+        >
           {isSubmitting ? 'Signing in...' : 'Sign In'}
         </ActionButton>
       </form>
@@ -1570,53 +1532,11 @@ function LoginScreen({ onLogin, onBiometricLogin, onForgotPassword }) {
           Register
         </Link>
       </p>
-      <ModalForm
-        open={forgotPasswordOpen}
-        title="Forgot Password?"
-        subtitle="Enter your registered email address to receive a reset link."
-        onClose={closeForgotPasswordModal}
-      >
-        <form className="modal-form" onSubmit={handleForgotPasswordSubmit} noValidate>
-          <label>
-            <FieldLabel required>Email</FieldLabel>
-            <input
-              type="email"
-              value={forgotPasswordEmail}
-              onChange={(event) => {
-                setForgotPasswordEmail(event.target.value)
-                setForgotPasswordFieldErrors((prev) => clearFieldError(prev, 'email'))
-                setForgotPasswordError('')
-              }}
-              placeholder="Enter your registered email address"
-              autoComplete="email"
-              className={forgotPasswordFieldErrors.email ? 'field-invalid' : ''}
-              aria-invalid={Boolean(forgotPasswordFieldErrors.email)}
-              disabled={isForgotPasswordSubmitting}
-              required
-            />
-            {forgotPasswordFieldErrors.email ? <p className="field-error">{forgotPasswordFieldErrors.email}</p> : null}
-          </label>
-          {forgotPasswordError ? <p className="form-error">{forgotPasswordError}</p> : null}
-          <div className="modal-actions">
-            <ActionButton
-              tone="secondary"
-              type="button"
-              onClick={closeForgotPasswordModal}
-              disabled={isForgotPasswordSubmitting}
-            >
-              Cancel
-            </ActionButton>
-            <ActionButton type="submit" icon={Send} disabled={isForgotPasswordSubmitting}>
-              {isForgotPasswordSubmitting ? 'Sending...' : 'Send Reset Link'}
-            </ActionButton>
-          </div>
-        </form>
-      </ModalForm>
     </AuthShell>
   )
 }
 
-function RegisterScreen({ onRequestVerificationCode, onVerifyEmailCode }) {
+function RegisterScreen({ onRegister }) {
   const navigate = useNavigate()
   const [form, setForm] = useState({
     name: '',
@@ -1631,16 +1551,7 @@ function RegisterScreen({ onRequestVerificationCode, onVerifyEmailCode }) {
   })
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
-  const [verificationCode, setVerificationCode] = useState('')
-  const [verificationEmail, setVerificationEmail] = useState('')
-  const [maskedVerificationEmail, setMaskedVerificationEmail] = useState('')
-  const [verificationPayload, setVerificationPayload] = useState(null)
-  const [verificationOpen, setVerificationOpen] = useState(false)
-  const [verificationError, setVerificationError] = useState('')
-  const [verificationSuccess, setVerificationSuccess] = useState('')
-  const [resendCountdown, setResendCountdown] = useState(0)
-  const [isSendingVerificationCode, setIsSendingVerificationCode] = useState(false)
-  const [isVerifyingEmail, setIsVerifyingEmail] = useState(false)
+  const [isRegistering, setIsRegistering] = useState(false)
   const hasSelectedRole = Boolean(form.role)
   const isStudentRole = form.role === 'student'
   const isSecurityRole = form.role === 'security'
@@ -1656,39 +1567,17 @@ function RegisterScreen({ onRequestVerificationCode, onVerifyEmailCode }) {
       ? 'Enter your employee ID'
       : 'Select a role to continue'
 
-  useEffect(() => {
-    if (resendCountdown <= 0) {
-      return undefined
-    }
-
-    const timerId = window.setInterval(() => {
-      setResendCountdown((previousCount) => (previousCount <= 1 ? 0 : previousCount - 1))
-    }, 1000)
-
-    return () => window.clearInterval(timerId)
-  }, [resendCountdown])
-
-  function clearVerificationFieldError() {
-    setFieldErrors((prev) => clearFieldError(prev, 'verificationCode'))
-  }
-
-  function resetVerificationState({ preserveModal = false } = {}) {
-    setVerificationCode('')
-    setVerificationEmail('')
-    setMaskedVerificationEmail('')
-    setVerificationPayload(null)
-    setVerificationError('')
-    setVerificationSuccess('')
-    setResendCountdown(0)
-    setIsSendingVerificationCode(false)
-    setIsVerifyingEmail(false)
-    if (!preserveModal) {
-      setVerificationOpen(false)
-    }
-    setFieldErrors((prev) => {
-      const nextErrors = { ...prev }
-      delete nextErrors.verificationCode
-      return nextErrors
+  function resetForm() {
+    setForm({
+      name: '',
+      email: '',
+      program: '',
+      department: '',
+      enrollment: '',
+      phone: '',
+      role: '',
+      semester: '',
+      password: '',
     })
   }
 
@@ -1743,10 +1632,6 @@ function RegisterScreen({ onRequestVerificationCode, onVerifyEmailCode }) {
   }
 
   function updateFormField(field, value) {
-    if (verificationPayload && form[field] !== value) {
-      resetVerificationState()
-    }
-
     setForm((prev) => ({ ...prev, [field]: value }))
     setFieldErrors((prev) => clearFieldError(prev, field))
     setError('')
@@ -1755,10 +1640,6 @@ function RegisterScreen({ onRequestVerificationCode, onVerifyEmailCode }) {
   function handleRoleChange(event) {
     const nextRole = normalizeRole(event.target.value)
     const nextRoleUsesProgram = roleUsesProgramRouting(nextRole)
-
-    if (verificationPayload && form.role !== nextRole) {
-      resetVerificationState()
-    }
 
     setForm((prev) => ({
       ...prev,
@@ -1783,10 +1664,6 @@ function RegisterScreen({ onRequestVerificationCode, onVerifyEmailCode }) {
   function handleProgramChange(event) {
     const nextProgram = normalizeProgram(event.target.value)
 
-    if (verificationPayload && form.program !== nextProgram) {
-      resetVerificationState()
-    }
-
     setForm((prev) => ({
       ...prev,
       program: nextProgram,
@@ -1803,14 +1680,20 @@ function RegisterScreen({ onRequestVerificationCode, onVerifyEmailCode }) {
 
   async function handleCreateAccount(event) {
     event.preventDefault()
+    console.info('[dwarpal-auth-ui] register submit triggered', {
+      email: String(form.email || '').trim().toLowerCase(),
+      role: normalizeRole(form.role),
+    })
 
-    if (isSendingVerificationCode || isVerifyingEmail) {
+    if (isRegistering) {
+      console.warn('[dwarpal-auth-ui] register submit ignored because a request is already in progress')
       return
     }
 
     const preparedSubmission = buildSubmissionPayload()
 
     if (!preparedSubmission.ok) {
+      console.warn('[dwarpal-auth-ui] register submit blocked by client validation', preparedSubmission.fieldErrors)
       setFieldErrors(preparedSubmission.fieldErrors)
       setError('')
       return
@@ -1818,121 +1701,18 @@ function RegisterScreen({ onRequestVerificationCode, onVerifyEmailCode }) {
 
     const submissionPayload = preparedSubmission.payload
 
-    if (
-      verificationPayload &&
-      JSON.stringify(verificationPayload) === JSON.stringify(submissionPayload)
-    ) {
-      setVerificationOpen(true)
-      setError('')
-      return
-    }
-
-    setIsSendingVerificationCode(true)
+    setIsRegistering(true)
     setError('')
-    setVerificationError('')
-    setVerificationSuccess('')
 
     try {
-      const result = await onRequestVerificationCode(submissionPayload)
-
-      if (!result?.ok) {
-        if (result?.fieldErrors) {
-          setFieldErrors((prev) => ({
-            ...prev,
-            ...mapRegisterFieldErrors(result.fieldErrors, form.role),
-          }))
-        }
-
-        if (result?.retryAfterSeconds) {
-          setResendCountdown(result.retryAfterSeconds)
-        }
-
-        setError(result?.error || 'Unable to send the verification code right now.')
-        return
-      }
-
-      setVerificationPayload(submissionPayload)
-      setVerificationEmail(result.email || submissionPayload.email)
-      setMaskedVerificationEmail(result.maskedEmail || result.email || submissionPayload.email)
-      setVerificationCode('')
-      setVerificationError('')
-      setVerificationSuccess(result?.message || 'We sent a verification code to your email.')
-      setVerificationOpen(true)
-      setResendCountdown(result?.retryAfterSeconds || getSecondsUntil(result?.resendAvailableAt))
-      clearVerificationFieldError()
-    } finally {
-      setIsSendingVerificationCode(false)
-    }
-  }
-
-  async function handleResendVerificationCode() {
-    if (!verificationPayload || isSendingVerificationCode || isVerifyingEmail || resendCountdown > 0) {
-      return
-    }
-
-    setIsSendingVerificationCode(true)
-    setVerificationError('')
-    setVerificationSuccess('')
-
-    try {
-      const result = await onRequestVerificationCode(verificationPayload)
-
-      if (!result?.ok) {
-        if (result?.fieldErrors) {
-          setFieldErrors((prev) => ({
-            ...prev,
-            ...mapRegisterFieldErrors(result.fieldErrors, form.role),
-          }))
-        }
-
-        if (result?.retryAfterSeconds) {
-          setResendCountdown(result.retryAfterSeconds)
-        }
-
-        setVerificationError(result?.error || 'Unable to resend the verification code right now.')
-        return
-      }
-
-      setVerificationEmail(result.email || verificationPayload.email)
-      setMaskedVerificationEmail(result.maskedEmail || result.email || verificationPayload.email)
-      setVerificationCode('')
-      clearVerificationFieldError()
-      setVerificationSuccess(result?.message || 'We sent a new verification code to your email.')
-      setResendCountdown(result?.retryAfterSeconds || getSecondsUntil(result?.resendAvailableAt))
-    } finally {
-      setIsSendingVerificationCode(false)
-    }
-  }
-
-  async function handleVerifyEmail(event) {
-    event.preventDefault()
-
-    if (!verificationEmail || isSendingVerificationCode || isVerifyingEmail) {
-      return
-    }
-
-    const normalizedVerificationCode = String(verificationCode || '').trim()
-
-    if (!normalizedVerificationCode) {
-      setFieldErrors((prev) => ({
-        ...prev,
-        verificationCode: 'Please enter the verification code sent to your email.',
-      }))
-      setVerificationError('')
-      return
-    }
-
-    setIsVerifyingEmail(true)
-    setVerificationError('')
-    clearVerificationFieldError()
-
-    try {
-      const result = await onVerifyEmailCode({
-        email: verificationEmail,
-        verificationCode: normalizedVerificationCode,
+      console.info('[dwarpal-auth-ui] register submit calling API', {
+        email: submissionPayload.email,
+        role: submissionPayload.role,
       })
+      const result = await onRegister(submissionPayload)
 
       if (!result?.ok) {
+        console.warn('[dwarpal-auth-ui] register submit received failure response', result)
         if (result?.fieldErrors) {
           setFieldErrors((prev) => ({
             ...prev,
@@ -1940,36 +1720,27 @@ function RegisterScreen({ onRequestVerificationCode, onVerifyEmailCode }) {
           }))
         }
 
-        setVerificationError(result?.error || 'Unable to verify your email right now.')
+        setError(result?.error || 'Unable to create your account right now.')
         return
       }
 
-      setVerificationSuccess(result?.message || 'Account created successfully.')
+      console.info('[dwarpal-auth-ui] register submit completed successfully', {
+        email: result.email || submissionPayload.email,
+        role: submissionPayload.role,
+      })
+      resetForm()
       navigate('/login', {
         replace: true,
         state: {
-          authNotice: 'Registration successful! Please sign in with your credentials.',
-        }
+          authNotice: result?.message || 'Account created successfully. You can sign in now.',
+        },
       })
+    } catch (error) {
+      console.error('[dwarpal-auth-ui] register submit crashed unexpectedly', error)
+      setError('Server error. Please try again. If it continues, check the backend logs.')
     } finally {
-      setIsVerifyingEmail(false)
+      setIsRegistering(false)
     }
-  }
-
-  function handleChangeEmail() {
-    if (isSendingVerificationCode || isVerifyingEmail) {
-      return
-    }
-
-    resetVerificationState()
-  }
-
-  function handleCloseVerificationModal() {
-    if (isSendingVerificationCode || isVerifyingEmail) {
-      return
-    }
-
-    setVerificationOpen(false)
   }
 
   return (
@@ -1984,7 +1755,7 @@ function RegisterScreen({ onRequestVerificationCode, onVerifyEmailCode }) {
             autoComplete="name"
             className={fieldErrors.name ? 'field-invalid' : ''}
             aria-invalid={Boolean(fieldErrors.name)}
-            disabled={isSendingVerificationCode || isVerifyingEmail}
+            disabled={isRegistering}
             required
           />
           {fieldErrors.name ? <p className="field-error">{fieldErrors.name}</p> : null}
@@ -1999,7 +1770,7 @@ function RegisterScreen({ onRequestVerificationCode, onVerifyEmailCode }) {
             autoComplete="email"
             className={fieldErrors.email ? 'field-invalid' : ''}
             aria-invalid={Boolean(fieldErrors.email)}
-            disabled={isSendingVerificationCode || isVerifyingEmail}
+            disabled={isRegistering}
             required
           />
           {fieldErrors.email ? <p className="field-error">{fieldErrors.email}</p> : null}
@@ -2011,7 +1782,7 @@ function RegisterScreen({ onRequestVerificationCode, onVerifyEmailCode }) {
             onChange={handleRoleChange}
             className={fieldErrors.role ? 'field-invalid' : ''}
             aria-invalid={Boolean(fieldErrors.role)}
-            disabled={isSendingVerificationCode || isVerifyingEmail}
+            disabled={isRegistering}
             required
           >
             <option value="" disabled>
@@ -2033,7 +1804,7 @@ function RegisterScreen({ onRequestVerificationCode, onVerifyEmailCode }) {
               onChange={handleProgramChange}
               className={fieldErrors.program ? 'field-invalid' : ''}
               aria-invalid={Boolean(fieldErrors.program)}
-              disabled={isSendingVerificationCode || isVerifyingEmail}
+              disabled={isRegistering}
               required
             >
               <option value="" disabled>
@@ -2056,7 +1827,7 @@ function RegisterScreen({ onRequestVerificationCode, onVerifyEmailCode }) {
               onChange={(event) => updateFormField('department', event.target.value)}
               className={fieldErrors.department ? 'field-invalid' : ''}
               aria-invalid={Boolean(fieldErrors.department)}
-              disabled={isSendingVerificationCode || isVerifyingEmail}
+              disabled={isRegistering}
               required={requiresDepartment}
             >
               <option value="" disabled>
@@ -2086,7 +1857,7 @@ function RegisterScreen({ onRequestVerificationCode, onVerifyEmailCode }) {
             autoComplete="tel"
             className={fieldErrors.phone ? 'field-invalid' : ''}
             aria-invalid={Boolean(fieldErrors.phone)}
-            disabled={isSendingVerificationCode || isVerifyingEmail}
+            disabled={isRegistering}
             required
           />
           {fieldErrors.phone ? <p className="field-error">{fieldErrors.phone}</p> : null}
@@ -2102,7 +1873,7 @@ function RegisterScreen({ onRequestVerificationCode, onVerifyEmailCode }) {
             autoComplete="off"
             className={fieldErrors.enrollment ? 'field-invalid' : ''}
             aria-invalid={Boolean(fieldErrors.enrollment)}
-            disabled={isSendingVerificationCode || isVerifyingEmail}
+            disabled={isRegistering}
             required
           />
           {fieldErrors.enrollment ? <p className="field-error">{fieldErrors.enrollment}</p> : null}
@@ -2115,7 +1886,7 @@ function RegisterScreen({ onRequestVerificationCode, onVerifyEmailCode }) {
               onChange={(event) => updateFormField('semester', event.target.value)}
               className={fieldErrors.semester ? 'field-invalid' : ''}
               aria-invalid={Boolean(fieldErrors.semester)}
-              disabled={isSendingVerificationCode || isVerifyingEmail}
+              disabled={isRegistering}
               required
             >
               <option value="" disabled>
@@ -2140,229 +1911,28 @@ function RegisterScreen({ onRequestVerificationCode, onVerifyEmailCode }) {
             autoComplete="new-password"
             className={fieldErrors.password ? 'field-invalid' : ''}
             aria-invalid={Boolean(fieldErrors.password)}
-            disabled={isSendingVerificationCode || isVerifyingEmail}
+            disabled={isRegistering}
             required
           />
           {fieldErrors.password ? <p className="field-error">{fieldErrors.password}</p> : null}
         </label>
         {error ? <p className="form-error full-span" aria-live="polite">{error}</p> : null}
-        {verificationPayload ? (
-          <p className="form-success full-span" aria-live="polite">
-            Verification is pending for {maskedVerificationEmail || verificationEmail}. Open the email modal to complete setup.
-          </p>
-        ) : null}
-        {isSendingVerificationCode ? (
-          <p className="field-hint full-span" aria-live="polite">Sending verification code...</p>
+        {isRegistering ? (
+          <p className="field-hint full-span" aria-live="polite">Creating your account...</p>
         ) : null}
         <div className="full-span">
           <ActionButton
             icon={UserPlus2}
             type="submit"
-            disabled={isSendingVerificationCode || isVerifyingEmail}
-            aria-busy={isSendingVerificationCode}
+            disabled={isRegistering}
+            aria-busy={isRegistering}
           >
-            {isSendingVerificationCode ? 'Sending Code...' : 'Create Account'}
+            {isRegistering ? 'Creating Account...' : 'Create Account'}
           </ActionButton>
         </div>
       </form>
       <p className="auth-nav">
         Already have an account?{' '}
-        <Link to="/login" replace className="auth-link">
-          Login
-        </Link>
-      </p>
-      <ModalForm
-        open={verificationOpen}
-        title="Verify Your Email"
-        subtitle="We sent a verification code to your email."
-        onClose={handleCloseVerificationModal}
-      >
-        <form className="modal-form" onSubmit={handleVerifyEmail} noValidate>
-          <p className="field-hint">
-            Enter the code sent to <strong>{maskedVerificationEmail || verificationEmail}</strong>.
-          </p>
-          <label>
-            <FieldLabel required>Verification Code</FieldLabel>
-            <input
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={verificationCode}
-              onChange={(event) => {
-                setVerificationCode(event.target.value.replace(/\D/g, '').slice(0, 8))
-                clearVerificationFieldError()
-                setVerificationError('')
-              }}
-              placeholder="Enter verification code"
-              className={fieldErrors.verificationCode ? 'field-invalid' : ''}
-              aria-invalid={Boolean(fieldErrors.verificationCode)}
-              disabled={isVerifyingEmail}
-              required
-            />
-            {fieldErrors.verificationCode ? <p className="field-error">{fieldErrors.verificationCode}</p> : null}
-          </label>
-          <div className="verification-modal-links">
-            <button
-              type="button"
-              className="auth-inline-link"
-              onClick={handleChangeEmail}
-              disabled={isSendingVerificationCode || isVerifyingEmail}
-            >
-              Change Email
-            </button>
-            <button
-              type="button"
-              className="auth-inline-link"
-              onClick={handleResendVerificationCode}
-              disabled={isSendingVerificationCode || isVerifyingEmail || resendCountdown > 0}
-            >
-              {resendCountdown > 0 ? `Resend OTP in ${formatCountdown(resendCountdown)}` : 'Resend OTP'}
-            </button>
-          </div>
-          {verificationError ? <p className="form-error">{verificationError}</p> : null}
-          {verificationSuccess ? <p className="form-success">{verificationSuccess}</p> : null}
-          <div className="modal-actions">
-            <ActionButton
-              tone="secondary"
-              type="button"
-              onClick={handleCloseVerificationModal}
-              disabled={isSendingVerificationCode || isVerifyingEmail}
-            >
-              Back to Form
-            </ActionButton>
-            <ActionButton
-              type="submit"
-              icon={ShieldCheck}
-              disabled={isSendingVerificationCode || isVerifyingEmail}
-            >
-              {isVerifyingEmail ? 'Verifying...' : 'Verify'}
-            </ActionButton>
-          </div>
-        </form>
-      </ModalForm>
-    </AuthShell>
-  )
-}
-
-function ResetPasswordScreen({ onResetPassword }) {
-  const navigate = useNavigate()
-  const location = useLocation()
-  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
-  const resetToken = searchParams.get('token')?.trim() || ''
-  const resetEmail = searchParams.get('email')?.trim() || ''
-  const [form, setForm] = useState({
-    password: '',
-    confirmPassword: '',
-  })
-  const [error, setError] = useState('')
-  const [fieldErrors, setFieldErrors] = useState({})
-  const [isSubmitting, setIsSubmitting] = useState(false)
-
-  function updateField(field, value) {
-    setForm((prev) => ({ ...prev, [field]: value }))
-    setFieldErrors((prev) => clearFieldError(prev, field))
-    setError('')
-  }
-
-  async function handleSubmit(event) {
-    event.preventDefault()
-
-    const nextFieldErrors = getRequiredFieldErrors({
-      password: form.password,
-      confirmPassword: form.confirmPassword,
-    })
-
-    if (!resetToken) {
-      setError('Reset link is invalid or incomplete.')
-      return
-    }
-
-    if (form.password !== form.confirmPassword) {
-      nextFieldErrors.confirmPassword = 'Passwords do not match.'
-    }
-
-    if (Object.keys(nextFieldErrors).length) {
-      setFieldErrors(nextFieldErrors)
-      setError('')
-      return
-    }
-
-    setIsSubmitting(true)
-
-    try {
-      const result = await onResetPassword(resetToken, form.password)
-
-      if (!result?.ok) {
-        if (result?.fieldErrors) {
-          setFieldErrors((prev) => ({
-            ...prev,
-            password: result.fieldErrors.newPassword || prev.password,
-          }))
-
-          if (result.fieldErrors.token) {
-            setError(result.fieldErrors.token)
-          }
-        }
-
-        if (!result?.fieldErrors?.token) {
-          setError(result?.error || 'Unable to reset your password right now.')
-        }
-
-        return
-      }
-
-      navigate('/login', {
-        replace: true,
-        state: {
-          authNotice: result?.message || 'Password reset successful. You can sign in with your new password.',
-        },
-      })
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  return (
-    <AuthShell title="Reset Password">
-      <form className="auth-form" onSubmit={handleSubmit} noValidate>
-        {resetEmail ? <p className="field-hint">Resetting password for {resetEmail}.</p> : null}
-        <label>
-          <FieldLabel required>New Password</FieldLabel>
-          <input
-            type="password"
-            value={form.password}
-            onChange={(event) => updateField('password', event.target.value)}
-            placeholder="Enter your new password"
-            autoComplete="new-password"
-            className={fieldErrors.password ? 'field-invalid' : ''}
-            aria-invalid={Boolean(fieldErrors.password)}
-            disabled={isSubmitting}
-            required
-          />
-          {fieldErrors.password ? <p className="field-error">{fieldErrors.password}</p> : null}
-        </label>
-        <label>
-          <FieldLabel required>Confirm Password</FieldLabel>
-          <input
-            type="password"
-            value={form.confirmPassword}
-            onChange={(event) => updateField('confirmPassword', event.target.value)}
-            placeholder="Confirm your new password"
-            autoComplete="new-password"
-            className={fieldErrors.confirmPassword ? 'field-invalid' : ''}
-            aria-invalid={Boolean(fieldErrors.confirmPassword)}
-            disabled={isSubmitting}
-            required
-          />
-          {fieldErrors.confirmPassword ? <p className="field-error">{fieldErrors.confirmPassword}</p> : null}
-        </label>
-        {error ? <p className="form-error">{error}</p> : null}
-        <ActionButton icon={ShieldCheck} type="submit" disabled={isSubmitting || !resetToken}>
-          {isSubmitting ? 'Updating password...' : 'Update Password'}
-        </ActionButton>
-      </form>
-      <p className="auth-nav">
-        Back to{' '}
         <Link to="/login" replace className="auth-link">
           Login
         </Link>
@@ -3485,7 +3055,8 @@ function DashboardPage({
       <section className="hero-strip">
         <div>
           <h2>
-            {currentUser.name} <span>{currentUser.enrollment || currentUser.employeeId}</span>
+            {currentUser.name}{' '}
+            <span>{`${ROLE_META[currentUser.role].idLabel}: ${currentUser.enrollment || currentUser.employeeId}`}</span>
           </h2>
         </div>
         {isRequester ? (
@@ -3667,7 +3238,10 @@ function CreateGatepassModal({ open, currentUser, onClose, onSubmit }) {
       <form className="modal-form" onSubmit={handleSubmit} noValidate>
         <div className="read-only-grid">
           <ReadOnlyField label="Name" value={currentUser.name} />
-          <ReadOnlyField label={currentUser.enrollment ? 'Enrollment' : 'Employee ID'} value={currentUser.enrollment || currentUser.employeeId} />
+          <ReadOnlyField
+            label={currentUser.enrollment ? 'Enrollment Number' : 'Employee ID'}
+            value={currentUser.enrollment || currentUser.employeeId}
+          />
           {currentUser.program ? <ReadOnlyField label="Program" value={currentUser.program} /> : null}
           <ReadOnlyField label="Department" value={currentUser.department} />
         </div>

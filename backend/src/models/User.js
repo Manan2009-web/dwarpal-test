@@ -114,17 +114,18 @@ const userSchema = new mongoose.Schema(
       trim: true,
       lowercase: true,
       enum: ROLES,
-      required: true
+      required: [true, 'Role is required']
     },
     program: {
       type: String,
       trim: true,
+      default: null,
+      required: [function() { return ['student', 'hod'].includes(this.role); }, 'Program is required for students and HODs'],
       validate: {
         validator(value) {
           if (!value) {
             return !['student', 'hod'].includes(this.role);
           }
-
           return STUDENT_PROGRAMS.includes(value);
         },
         message: 'Please provide a valid program'
@@ -133,16 +134,16 @@ const userSchema = new mongoose.Schema(
     department: {
       type: String,
       trim: true,
+      default: null,
+      required: [function() { return this.role !== 'security'; }, 'Department is required for non-security roles'],
       validate: {
         validator(value) {
           if (!value) {
-            return !['student', 'faculty', 'hod'].includes(this.role);
+            return this.role === 'security';
           }
-
           if (['student', 'hod'].includes(this.role)) {
             return ROUTING_DEPARTMENTS.includes(value);
           }
-
           return DEPARTMENTS.includes(value);
         },
         message: 'Please provide a valid department'
@@ -213,14 +214,6 @@ const userSchema = new mongoose.Schema(
         message: 'Please provide a valid phone number'
       }
     },
-    emailVerified: {
-      type: Boolean,
-      default: true
-    },
-    emailVerifiedAt: {
-      type: Date,
-      default: null
-    },
     profileImage: {
       type: String,
       default: null
@@ -231,16 +224,6 @@ const userSchema = new mongoose.Schema(
     },
     lastLoginAt: {
       type: Date,
-      default: null
-    },
-    passwordResetToken: {
-      type: String,
-      select: false,
-      default: null
-    },
-    passwordResetExpiresAt: {
-      type: Date,
-      select: false,
       default: null
     },
     hasBiometricCredentials: {

@@ -10,6 +10,18 @@ const { errorHandler, notFoundHandler } = require('./middleware/errorMiddleware'
 const responseSecurityMiddleware = require('./middleware/responseSecurityMiddleware');
 
 const app = express();
+
+// Middleware: If in degraded mode, block DB-dependent API routes
+app.use((req, res, next) => {
+  if (app.locals.degradedMode && req.path.startsWith('/api') && req.path !== '/api/health') {
+    return res.status(503).json({
+      success: false,
+      message: 'Service unavailable: database is not connected',
+      degradedMode: true
+    });
+  }
+  next();
+});
 const frontendDistDir = path.resolve(__dirname, '..', '..', 'dist');
 const frontendIndexPath = path.join(frontendDistDir, 'index.html');
 const hasFrontendBuild = fs.existsSync(frontendIndexPath);
@@ -17,38 +29,35 @@ const hasFrontendBuild = fs.existsSync(frontendIndexPath);
 // Trust proxy
 app.set('trust proxy', env.trustProxy);
 
-// Safe allowed origins list
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-  'https://dwarpal-test.vercel.app',
-  ...(Array.isArray(env.allowedOrigins) ? env.allowedOrigins : [])
-].filter(Boolean);
+const allowedOrigins = Array.from(
+  new Set((Array.isArray(env.allowedOrigins) ? env.allowedOrigins : []).map((origin) => normalizeOrigin(origin)).filter(Boolean))
+);
+
+function normalizeOrigin(origin) {
+  return String(origin || '').trim().replace(/\/+$/, '');
+}
 
 // CORS config
 const corsOptions = {
   origin(origin, callback) {
-    // Allow server-to-server requests or tools with no origin
     if (!origin) {
       return callback(null, true);
     }
 
-    // Allow exact configured origins
-    if (allowedOrigins.includes(origin)) {
+    const normalizedOrigin = normalizeOrigin(origin);
+
+    if (allowedOrigins.includes(normalizedOrigin)) {
       return callback(null, true);
     }
 
-    // Allow env helper if available
-    if (typeof env.isOriginAllowed === 'function' && env.isOriginAllowed(origin)) {
-      return callback(null, true);
-    }
+    console.warn(`[cors] Blocked origin: ${origin}`);
 
-    // Return false instead of throwing AppError in CORS phase
     return callback(null, false);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
+  maxAge: 24 * 60 * 60,
   optionsSuccessStatus: 204
 };
 
@@ -85,13 +94,22 @@ app.get('/', (req, res) => {
 });
 
 app.get('/api/health', (req, res) => {
-  return res.status(200).json({
-    success: true,
-    message: 'DwarPal backend is healthy',
+  const databaseState = connectDatabase.getDatabaseState ? connectDatabase.getDatabaseState() : null;
+  const databaseReady = ['external', 'in-memory'].includes(databaseState?.mode);
+
+  return res.status(databaseReady ? 200 : 503).json({
+    success: databaseReady,
+    message: databaseReady
+      ? 'DwarPal backend is healthy'
+      : 'DwarPal backend is running without a ready database connection',
     timestamp: new Date().toISOString(),
     data: {
+      apiBasePath: '/api',
+      clientUrl: env.clientUrl || null,
+      serverUrl: env.serverUrl || null,
       environment: env.nodeEnv,
-      database: connectDatabase.getDatabaseState ? connectDatabase.getDatabaseState() : null
+      degradedMode: Boolean(app.locals.degradedMode),
+      database: databaseState
     }
   });
 });

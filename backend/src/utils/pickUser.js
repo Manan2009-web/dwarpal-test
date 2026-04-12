@@ -23,8 +23,6 @@ function pickUser(user, req) {
     profileImage: source.profileImage || null,
     profileImageUrl: req ? toPublicUrl(source.profileImage, req) : source.profileImage || null,
     isActive: source.isActive,
-    emailVerified: source.emailVerified !== false,
-    emailVerifiedAt: source.emailVerifiedAt || null,
     hasBiometricCredentials:
       typeof source.hasBiometricCredentials === 'boolean'
         ? source.hasBiometricCredentials

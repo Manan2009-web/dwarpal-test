@@ -1,99 +1,19 @@
 import { normalizeDepartment, normalizeProgram, normalizeRole } from '../mockData'
 
-const DEFAULT_PRODUCTION_RENDER_API_BASE_URL = 'https://dwarpal-test.onrender.com/api'
-
-function getDefaultApiBaseUrl() {
-  const productionBaseUrl = String(
-    import.meta.env.VITE_PRODUCTION_API_BASE_URL || DEFAULT_PRODUCTION_RENDER_API_BASE_URL,
-  ).trim()
-
-  if (!import.meta.env.DEV && productionBaseUrl) {
-    return productionBaseUrl
-  }
-
-  return import.meta.env.DEV ? 'http://localhost:5000/api' : productionBaseUrl || '/api'
-}
-
-function isPrivateIpv4Host(hostname = '') {
-  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true
-  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true
-
-  const match = hostname.match(/^172\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/)
-  if (!match) return false
-
-  const secondOctet = Number(match[1])
-  return secondOctet >= 16 && secondOctet <= 31
-}
-
-function pointsToLocalOrPrivateHost(value) {
-  if (!value || value.startsWith('/')) {
-    return false
-  }
-
-  try {
-    const parsedUrl = new URL(value)
-    const hostname = String(parsedUrl.hostname || '').trim().toLowerCase()
-    return (
-      hostname === 'localhost' ||
-      hostname === '127.0.0.1' ||
-      hostname === '::1' ||
-      hostname.endsWith('.local') ||
-      isPrivateIpv4Host(hostname)
-    )
-  } catch {
-    return false
-  }
-}
-
 function normalizeApiBaseUrl(value) {
-  const normalizedValue = String(value || '').trim()
-
-  if (!normalizedValue || normalizedValue.toLowerCase() === 'auto') {
-    return getDefaultApiBaseUrl()
-  }
-
-  if (!import.meta.env.DEV && pointsToLocalOrPrivateHost(normalizedValue)) {
-    const fallbackBaseUrl = getDefaultApiBaseUrl()
-
-    if (import.meta.env.DEV) {
-      console.warn('DwarPal API base URL pointed to a local/private host in production. Falling back.', {
-        configuredValue: normalizedValue,
-        fallbackBaseUrl,
-      })
-    }
-
-    return fallbackBaseUrl
-  }
-
-  if (normalizedValue.startsWith('/')) {
-    return normalizedValue.replace(/\/+$/, '')
-  }
-
-  return normalizedValue.replace(/\/+$/, '')
+  return String(value || '').trim().replace(/\/+$/, '')
 }
 
-function resolveConfiguredApiBaseUrl() {
-  const productionBaseUrl = String(import.meta.env.VITE_PRODUCTION_API_BASE_URL || '').trim()
-  const sharedBaseUrl = String(import.meta.env.VITE_API_BASE_URL || '').trim()
-
-  if (!import.meta.env.DEV && productionBaseUrl) {
-    return productionBaseUrl
-  }
-
-  return sharedBaseUrl || getDefaultApiBaseUrl()
-}
-
-const API_BASE_URL = normalizeApiBaseUrl(resolveConfiguredApiBaseUrl())
+const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL) || '/api'
 
 export const AUTH_TOKEN_KEY = 'dwarpal-auth-token'
+export const AUTH_USER_KEY = 'dwarpal-auth-user'
 export const BIOMETRIC_DEVICE_KEY = 'dwarpal-biometric-device-id'
 const DEFAULT_PHONE_COUNTRY_CODE = '+91'
 const DEFAULT_API_TIMEOUT_MS = Number(import.meta.env.VITE_API_REQUEST_TIMEOUT_MS) || 15000
 const DEFAULT_AUTH_TIMEOUT_MS = Number(import.meta.env.VITE_AUTH_REQUEST_TIMEOUT_MS) || 25000
 const DEFAULT_REGISTER_SEND_TIMEOUT_MS =
   Number(import.meta.env.VITE_REGISTER_SEND_TIMEOUT_MS) || Math.max(DEFAULT_AUTH_TIMEOUT_MS, 35000)
-const DEFAULT_REGISTER_VERIFY_TIMEOUT_MS =
-  Number(import.meta.env.VITE_REGISTER_VERIFY_TIMEOUT_MS) || Math.max(DEFAULT_AUTH_TIMEOUT_MS, 30000)
 const DEFAULT_BACKEND_WARMUP_TIMEOUT_MS = Number(import.meta.env.VITE_BACKEND_WARMUP_TIMEOUT_MS) || 8000
 const BACKEND_WARMUP_CACHE_MS = 2 * 60 * 1000
 let lastBackendWarmupAt = 0
@@ -126,6 +46,28 @@ class ApiError extends Error {
     this.status = status
     this.payload = payload
   }
+}
+
+function shouldLogAuthRequest(path = '') {
+  return path === '/auth/login' || path === '/auth/register'
+}
+
+function sanitizeAuthDebugBody(body) {
+  if (!body || typeof body !== 'object' || body instanceof FormData) {
+    return body ?? null
+  }
+
+  const sanitizedBody = { ...body }
+
+  if ('password' in sanitizedBody) {
+    sanitizedBody.password = '[redacted]'
+  }
+
+  return sanitizedBody
+}
+
+function logAuthDebug(message, details) {
+  console.info(`[dwarpal-auth-api] ${message}`, details)
 }
 
 function createRequestSignal(signal, timeoutMs) {
@@ -189,24 +131,20 @@ function createRequestSignal(signal, timeoutMs) {
 function readAuthToken() {
   if (typeof window === 'undefined') return ''
 
-  let sessionToken = ''
+  try {
+    const sessionToken = window.sessionStorage.getItem(AUTH_TOKEN_KEY) || ''
+    if (sessionToken) {
+      return sessionToken
+    }
+  } catch {
+    // Ignore storage read failures and fall back to localStorage.
+  }
 
   try {
-    sessionToken = window.sessionStorage.getItem(AUTH_TOKEN_KEY) || ''
+    return window.localStorage.getItem(AUTH_TOKEN_KEY) || ''
   } catch {
     return ''
   }
-
-  if (sessionToken) {
-    return sessionToken
-  }
-
-  try {
-    window.localStorage.removeItem(AUTH_TOKEN_KEY)
-  } catch {
-    // Ignore storage cleanup failures so auth bootstrap never crashes the app.
-  }
-  return ''
 }
 
 export function getStoredAuthToken() {
@@ -241,8 +179,25 @@ export function storeAuthToken(token) {
   if (typeof window === 'undefined' || !token) return
 
   try {
+    window.localStorage.setItem(AUTH_TOKEN_KEY, token)
     window.sessionStorage.setItem(AUTH_TOKEN_KEY, token)
-    window.localStorage.removeItem(AUTH_TOKEN_KEY)
+  } catch {
+    // Ignore storage write failures so login errors remain recoverable in the UI.
+  }
+}
+
+export function storeAuthUser(user) {
+  if (typeof window === 'undefined') return
+
+  if (!user) {
+    clearStoredAuthUser()
+    return
+  }
+
+  try {
+    const serializedUser = JSON.stringify(user)
+    window.localStorage.setItem(AUTH_USER_KEY, serializedUser)
+    window.sessionStorage.setItem(AUTH_USER_KEY, serializedUser)
   } catch {
     // Ignore storage write failures so login errors remain recoverable in the UI.
   }
@@ -257,16 +212,25 @@ export function clearStoredAuthToken() {
   } catch {
     // Ignore storage cleanup failures.
   }
+
+  clearStoredAuthUser()
+}
+
+export function clearStoredAuthUser() {
+  if (typeof window === 'undefined') return
+
+  try {
+    window.sessionStorage.removeItem(AUTH_USER_KEY)
+    window.localStorage.removeItem(AUTH_USER_KEY)
+  } catch {
+    // Ignore storage cleanup failures.
+  }
 }
 
 export function hasStoredAuthToken() {
   if (typeof window === 'undefined') return false
 
-  try {
-    return Boolean(window.sessionStorage.getItem(AUTH_TOKEN_KEY))
-  } catch {
-    return false
-  }
+  return Boolean(readAuthToken())
 }
 
 export function storeBiometricDeviceId(deviceId) {
@@ -306,7 +270,11 @@ export function clearBiometricDeviceId() {
 
 function getDefaultErrorMessage(status, path) {
   if (status === 401 && path === '/auth/login') {
-    return 'Invalid credentials. Please check your ID and password.'
+    return 'Invalid credentials. Please check your email or ID and password.'
+  }
+
+  if (status === 404) {
+    return 'The requested DwarPal API route was not found.'
   }
 
   if (status >= 500) {
@@ -326,6 +294,69 @@ function getDefaultErrorMessage(status, path) {
   }
 
   return 'Request failed.'
+}
+
+function buildApiErrorPayload(payload, extras = {}) {
+  if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+    return {
+      ...payload,
+      ...extras,
+    }
+  }
+
+  return extras
+}
+
+async function parseApiResponse(response) {
+  const contentType = String(response.headers.get('content-type') || '').toLowerCase()
+
+  if (response.status === 204) {
+    return {
+      contentType,
+      payload: null,
+      rawText: '',
+    }
+  }
+
+  const rawText = await response.text()
+
+  if (!rawText) {
+    return {
+      contentType,
+      payload: null,
+      rawText: '',
+    }
+  }
+
+  if (contentType.includes('application/json')) {
+    try {
+      return {
+        contentType,
+        payload: JSON.parse(rawText),
+        rawText,
+      }
+    } catch {
+      return {
+        contentType,
+        payload: null,
+        rawText,
+      }
+    }
+  }
+
+  try {
+    return {
+      contentType,
+      payload: JSON.parse(rawText),
+      rawText,
+    }
+  } catch {
+    return {
+      contentType,
+      payload: null,
+      rawText,
+    }
+  }
 }
 
 export function getApiErrorDetails(error, fallbackMessage = 'Request failed.') {
@@ -356,11 +387,12 @@ export function getApiErrorDetails(error, fallbackMessage = 'Request failed.') {
       : normalizedErrors[0]?.message || fallbackMessage
 
   return {
+    code: error?.payload?.code || '',
     errors: normalizedErrors,
     fieldErrors,
     message: resolvedMessage || fallbackMessage,
     payload: error?.payload || null,
-    status: error?.status || 500,
+    status: typeof error?.status === 'number' ? error.status : 500,
   }
 }
 
@@ -431,6 +463,7 @@ export async function apiRequest(path, { method = 'GET', body, headers, signal, 
   const requestUrl = `${API_BASE_URL}${path}`
   const resolvedTimeoutMs = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_API_TIMEOUT_MS
   const requestController = createRequestSignal(signal, resolvedTimeoutMs)
+  const isAuthRequest = shouldLogAuthRequest(path)
   const requestInit = {
     method,
     headers: requestHeaders,
@@ -447,19 +480,42 @@ export async function apiRequest(path, { method = 'GET', body, headers, signal, 
     }
   }
 
+  if (isAuthRequest) {
+    logAuthDebug('request start', {
+      body: sanitizeAuthDebugBody(body),
+      method,
+      path,
+      requestUrl,
+    })
+  }
+
   let response = null
   let payload = null
+  let responsePreview = ''
+  let contentType = ''
 
   try {
     response = await fetch(requestUrl, requestInit)
-    payload = await response.json()
+    const parsedResponse = await parseApiResponse(response)
+    payload = parsedResponse.payload
+    responsePreview = parsedResponse.rawText.slice(0, 240)
+    contentType = parsedResponse.contentType
   } catch (error) {
+    if (isAuthRequest) {
+      console.error('[dwarpal-auth-api] request error', {
+        error,
+        method,
+        path,
+        requestUrl,
+      })
+    }
+
     if (requestController.didTimeout()) {
       const seconds = Math.ceil(resolvedTimeoutMs / 1000)
       throw new ApiError(
         `The DwarPal backend did not respond within ${seconds} seconds.`,
         408,
-        { code: 'REQUEST_TIMEOUT', requestUrl },
+        { code: 'REQUEST_TIMEOUT', path, requestUrl },
       )
     }
 
@@ -475,7 +531,12 @@ export async function apiRequest(path, { method = 'GET', body, headers, signal, 
       throw new ApiError(
         `Unable to reach the DwarPal backend at ${API_BASE_URL}. Please start the backend server and try again.`,
         0,
-        error,
+        {
+          code: 'NETWORK_ERROR',
+          cause: error?.message || String(error || ''),
+          path,
+          requestUrl,
+        },
       )
     }
 
@@ -485,6 +546,17 @@ export async function apiRequest(path, { method = 'GET', body, headers, signal, 
   }
 
   if (!response.ok || payload?.success === false) {
+    if (isAuthRequest) {
+      console.error('[dwarpal-auth-api] response error', {
+        message: payload?.message || getDefaultErrorMessage(response.status, path),
+        method,
+        path,
+        payload,
+        requestUrl,
+        status: response.status,
+      })
+    }
+
     if (import.meta.env.DEV) {
       console.error('DwarPal API request failed', {
         requestUrl,
@@ -494,7 +566,36 @@ export async function apiRequest(path, { method = 'GET', body, headers, signal, 
       })
     }
 
-    throw new ApiError(payload?.message || getDefaultErrorMessage(response.status, path), response.status, payload)
+    throw new ApiError(
+      payload?.message || getDefaultErrorMessage(response.status, path),
+      response.status,
+      buildApiErrorPayload(payload, {
+        contentType,
+        path,
+        requestUrl,
+        responsePreview,
+      }),
+    )
+  }
+
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new ApiError('DwarPal backend returned an invalid response.', 502, {
+      code: 'INVALID_API_RESPONSE',
+      contentType,
+      path,
+      requestUrl,
+      responsePreview,
+    })
+  }
+
+  if (isAuthRequest) {
+    logAuthDebug('response success', {
+      message: payload?.message || '',
+      method,
+      path,
+      requestUrl,
+      status: response.status,
+    })
   }
 
   return payload
@@ -534,8 +635,6 @@ function toUiUser(user, session = null) {
     semester: user.semester || null,
     profileImageUrl: user.profileImageUrl || user.profileImage || null,
     isActive: user.isActive ?? true,
-    emailVerified: user.emailVerified !== false,
-    emailVerifiedAt: user.emailVerifiedAt || null,
     hasBiometricCredentials: Boolean(user.hasBiometricCredentials),
     gatepassApprovalEnabled: user.gatepassApprovalEnabled !== false,
     coordinatorAssignment: {
@@ -1203,12 +1302,16 @@ export async function verifySession({ signal, timeoutMs = DEFAULT_AUTH_SESSION_T
   }
 
   const payload = await apiRequest('/auth/me', { signal, timeoutMs })
-  return toUiUser(payload?.data?.user, payload?.data?.session)
+  const user = toUiUser(payload?.data?.user, payload?.data?.session)
+
+  if (user) {
+    storeAuthUser(user)
+  }
+
+  return user
 }
 
 export async function loginUser(identifier, password) {
-  await warmBackendForAuth()
-
   const payload = await apiRequest('/auth/login', {
     method: 'POST',
     timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
@@ -1218,11 +1321,19 @@ export async function loginUser(identifier, password) {
     },
   })
 
+  console.log('Login response', payload?.data || null)
+
   if (payload?.data?.token) {
     storeAuthToken(payload.data.token)
   }
 
-  return toUiUser(payload?.data?.user, { authMethod: 'password' })
+  const user = toUiUser(payload?.data?.user, { authMethod: 'password' })
+
+  if (user) {
+    storeAuthUser(user)
+  }
+
+  return user
 }
 
 export async function checkRegistrationAvailability(payload) {
@@ -1238,11 +1349,11 @@ export async function checkRegistrationAvailability(payload) {
   }
 }
 
-export async function sendRegistrationVerificationCode(
+export async function registerUser(
   payload,
   { signal, timeoutMs = DEFAULT_REGISTER_SEND_TIMEOUT_MS } = {},
 ) {
-  const response = await apiRequest('/auth/register/send-verification-code', {
+  const response = await apiRequest('/auth/register', {
     method: 'POST',
     signal,
     timeoutMs,
@@ -1253,67 +1364,9 @@ export async function sendRegistrationVerificationCode(
   })
 
   return {
-    message: response?.message || 'We sent a verification code to your email.',
+    message: response?.message || 'Account created successfully. You can sign in now.',
     email: response?.data?.email || '',
-    maskedEmail: response?.data?.maskedEmail || '',
-    resendAvailableAt: response?.data?.resendAvailableAt || null,
-    retryAfterSeconds: Number(response?.data?.retryAfterSeconds || 0),
-    expiresAt: response?.data?.expiresAt || null,
-  }
-}
-
-export async function verifyRegistrationEmail(
-  payload,
-  { signal, timeoutMs = DEFAULT_REGISTER_VERIFY_TIMEOUT_MS } = {},
-) {
-  const response = await apiRequest('/auth/register/verify-email', {
-    method: 'POST',
-    signal,
-    timeoutMs,
-    body: {
-      email: String(payload.email || '').trim().toLowerCase(),
-      verificationCode: String(payload.verificationCode || payload.code || '').trim(),
-    },
-  })
-
-  if (response?.data?.token) {
-    storeAuthToken(response.data.token)
-  }
-
-  return {
-    message: response?.message || 'Account created successfully.',
-    user: toUiUser(response?.data?.user, { authMethod: 'password' }),
-    verification: response?.data?.verification || null,
-  }
-}
-
-export async function requestPasswordReset(email) {
-  await warmBackendForAuth()
-
-  const response = await apiRequest('/auth/forgot-password', {
-    method: 'POST',
-    timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
-    body: {
-      email: String(email || '').trim().toLowerCase(),
-    },
-  })
-
-  return {
-    message: response?.message || 'We sent you a password reset email.',
-  }
-}
-
-export async function resetPassword(token, newPassword) {
-  const response = await apiRequest('/auth/reset-password', {
-    method: 'POST',
-    body: {
-      token: String(token || '').trim(),
-      newPassword,
-    },
-  })
-
-  return {
-    message: response?.message || 'Password reset successfully.',
+    user: response?.data?.user || null,
   }
 }
 
@@ -1331,7 +1384,13 @@ export async function updateCurrentUserProfile(profileUpdates = {}) {
     body: profileUpdates,
   })
 
-  return toUiUser(response?.data)
+  const user = toUiUser(response?.data)
+
+  if (user) {
+    storeAuthUser(user)
+  }
+
+  return user
 }
 
 export async function getBiometricDevices() {
@@ -1400,7 +1459,13 @@ export async function verifyBiometricAuthentication(response) {
     storeBiometricDeviceId(payload.data.deviceId)
   }
 
-  return toUiUser(payload?.data?.user, { authMethod: 'webauthn' })
+  const user = toUiUser(payload?.data?.user, { authMethod: 'webauthn' })
+
+  if (user) {
+    storeAuthUser(user)
+  }
+
+  return user
 }
 
 export async function removeBiometricDevice(deviceId) {

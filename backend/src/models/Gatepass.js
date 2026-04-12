@@ -4,7 +4,9 @@ const {
   APPROVAL_LEVELS,
   GATEPASS_STATUSES,
   STUDENT_PROGRAMS,
-  VEHICLE_NUMBER_REGEX
+  VEHICLE_NUMBER_REGEX,
+  normalizeDepartment,
+  normalizeProgram
 } = require('../constants/appConstants');
 const { generateGatepassId } = require('../utils/gatepassId');
 
@@ -109,6 +111,64 @@ const applicantSnapshotSchema = new mongoose.Schema(
       default: null
     },
     phone: String
+  },
+  {
+    _id: false
+  }
+);
+
+const routingSnapshotSchema = new mongoose.Schema(
+  {
+    program: {
+      type: String,
+      enum: STUDENT_PROGRAMS,
+      default: null
+    },
+    department: {
+      type: String,
+      default: null
+    },
+    semester: {
+      type: Number,
+      default: null
+    }
+  },
+  {
+    _id: false
+  }
+);
+
+const autoEscalationSchema = new mongoose.Schema(
+  {
+    state: {
+      type: String,
+      enum: ['ready', 'blocked'],
+      default: 'ready'
+    },
+    blockedStage: {
+      type: String,
+      enum: ['principal', 'hod', 'coordinator', null],
+      default: null
+    },
+    code: {
+      type: String,
+      trim: true,
+      default: null
+    },
+    reason: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+      default: ''
+    },
+    blockedAt: {
+      type: Date,
+      default: null
+    },
+    lastAttemptAt: {
+      type: Date,
+      default: null
+    }
   },
   {
     _id: false
@@ -296,6 +356,10 @@ const gatepassSchema = new mongoose.Schema(
       type: applicantSnapshotSchema,
       required: true
     },
+    routingSnapshot: {
+      type: routingSnapshotSchema,
+      default: null
+    },
     reason: {
       type: String,
       required: [true, 'Reason of leaving is required.'],
@@ -466,6 +530,10 @@ const gatepassSchema = new mongoose.Schema(
     routingHistory: {
       type: [routingHistoryEntrySchema],
       default: []
+    },
+    autoEscalation: {
+      type: autoEscalationSchema,
+      default: () => ({})
     }
   },
   {
@@ -475,6 +543,29 @@ const gatepassSchema = new mongoose.Schema(
 
 gatepassSchema.pre('validate', async function assignIdentifiers(next) {
   try {
+    if (this.applicantType === 'student') {
+      const sourceSnapshot = this.routingSnapshot || this.applicantSnapshot || {};
+
+      this.routingSnapshot = {
+        program: normalizeProgram(sourceSnapshot.program || this.applicantSnapshot?.program) || null,
+        department: normalizeDepartment(sourceSnapshot.department || this.applicantSnapshot?.department) || null,
+        semester: Number(sourceSnapshot.semester || this.applicantSnapshot?.semester) || null
+      };
+    } else {
+      this.routingSnapshot = null;
+    }
+
+    if (!this.autoEscalation || typeof this.autoEscalation !== 'object') {
+      this.autoEscalation = {
+        state: 'ready',
+        blockedStage: null,
+        code: null,
+        reason: '',
+        blockedAt: null,
+        lastAttemptAt: null
+      };
+    }
+
     if (!this.isNew) {
       return next();
     }
@@ -502,6 +593,8 @@ gatepassSchema.index({ currentApprovalLevel: 1, updatedAt: -1 });
 gatepassSchema.index({ outDate: 1, status: 1 });
 gatepassSchema.index({ 'applicantSnapshot.department': 1, status: 1, updatedAt: -1 });
 gatepassSchema.index({ 'applicantSnapshot.program': 1, 'applicantSnapshot.department': 1, status: 1, updatedAt: -1 });
+gatepassSchema.index({ 'routingSnapshot.program': 1, 'routingSnapshot.department': 1, 'routingSnapshot.semester': 1 });
+gatepassSchema.index({ 'autoEscalation.state': 1, status: 1, updatedAt: -1 });
 gatepassSchema.index({ 'hodAction.status': 1, updatedAt: -1 });
 gatepassSchema.index({ 'coordinatorAction.status': 1, updatedAt: -1 });
 gatepassSchema.index({ 'caoAction.status': 1, updatedAt: -1 });
