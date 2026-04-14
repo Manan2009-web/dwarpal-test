@@ -39,6 +39,7 @@ function errorHandler(err, req, res, next) {
   const response = {
     success: false,
     message: error.message || 'Internal server error',
+    error: error.message || 'Internal server error',
     timestamp: new Date().toISOString()
   };
 

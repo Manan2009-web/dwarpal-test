@@ -438,13 +438,23 @@ export const GatepassCard = memo(function GatepassCard({
 
 GatepassCard.displayName = 'GatepassCard'
 
-export function ModalForm({ open, title, subtitle, children, onClose, className = '', backdropClassName = '' }) {
+export function ModalForm({
+  open,
+  title,
+  subtitle,
+  children,
+  onClose,
+  className = '',
+  backdropClassName = '',
+  closeOnBackdrop = true,
+  showCloseButton = true,
+}) {
   if (!open) return null
   return (
     <div
       className={['modal-backdrop', backdropClassName].filter(Boolean).join(' ')}
       role="presentation"
-      onClick={onClose}
+      onClick={closeOnBackdrop ? onClose : undefined}
     >
       <div
         className={['modal-card', className].filter(Boolean).join(' ')}
@@ -457,9 +467,11 @@ export function ModalForm({ open, title, subtitle, children, onClose, className 
             <h3>{title}</h3>
             {subtitle ? <span>{subtitle}</span> : null}
           </div>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="Close">
-            <X size={18} />
-          </button>
+          {showCloseButton ? (
+            <button type="button" className="icon-button" onClick={onClose} aria-label="Close">
+              <X size={18} />
+            </button>
+          ) : null}
         </div>
         {children}
       </div>

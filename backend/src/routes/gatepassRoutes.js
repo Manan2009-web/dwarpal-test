@@ -1,5 +1,5 @@
 const express = require('express');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, requireVerifiedEmail } = require('../middleware/authMiddleware');
 const authorize = require('../middleware/authorize');
 const validateRequest = require('../middleware/validateRequest');
 const gatepassController = require('../controllers/gatepassController');
@@ -27,7 +27,7 @@ const {
 
 const router = express.Router();
 
-router.use(protect);
+router.use(protect, requireVerifiedEmail);
 router.post('/', authorize('student', 'faculty'), createGatepassValidation, validateRequest, gatepassController.createGatepass);
 router.get('/my', authorize('student', 'faculty'), basePaginationQueryValidation, validateRequest, gatepassController.getMyGatepasses);
 router.get('/history', basePaginationQueryValidation, validateRequest, gatepassController.getGatepassHistory);

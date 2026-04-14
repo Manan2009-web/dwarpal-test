@@ -8,6 +8,9 @@ const {
   setWebAuthnStateCookie
 } = require('../utils/webauthnState');
 const authService = require('../services/authService');
+const emailVerificationService = require('../services/emailVerificationService');
+const passwordResetService = require('../services/passwordResetService');
+const registrationOtpService = require('../services/registrationOtpService');
 
 function maskEmail(email) {
   const normalizedEmail = String(email || '').trim().toLowerCase();
@@ -78,9 +81,37 @@ const checkRegistrationAvailability = asyncHandler(async (req, res) => {
   });
 });
 
+const registerStart = asyncHandler(async (req, res) => {
+  const result = await registrationOtpService.startRegistration(req.body);
+
+  return sendSuccess(res, {
+    message: result.message,
+    data: result
+  });
+});
+
+const verifyRegisterOtp = asyncHandler(async (req, res) => {
+  const result = await registrationOtpService.verifyRegistrationOtp(req.body, getRequestMeta(req));
+
+  return sendSuccess(res, {
+    statusCode: 201,
+    message: result.message,
+    data: result
+  });
+});
+
+const resendRegisterOtp = asyncHandler(async (req, res) => {
+  const result = await registrationOtpService.resendRegistrationOtp(req.body);
+
+  return sendSuccess(res, {
+    message: result.message,
+    data: result
+  });
+});
+
 const login = asyncHandler(async (req, res) => {
   const startedAt = Date.now();
-  const identifier = req.body?.identifier || req.body?.email || req.body?.enrollment || req.body?.employeeId;
+  const identifier = req.body?.identifier || req.body?.enrollment || req.body?.employeeId;
   console.info('[auth] POST /auth/login route entered', {
     identifier: maskIdentifier(identifier)
   });
@@ -144,6 +175,79 @@ const changePassword = asyncHandler(async (req, res) => {
   return sendSuccess(res, {
     message: result.message,
     data: null
+  });
+});
+
+const forgotPasswordStart = asyncHandler(async (req, res) => {
+  const result = await passwordResetService.startPasswordReset(req.body);
+
+  return sendSuccess(res, {
+    message: result.message,
+    data: result
+  });
+});
+
+const resolveForgotPasswordAccount = asyncHandler(async (req, res) => {
+  const result = await passwordResetService.resolvePasswordResetAccount(req.body);
+
+  return sendSuccess(res, {
+    message: result.message,
+    data: result
+  });
+});
+
+const verifyForgotPasswordOtp = asyncHandler(async (req, res) => {
+  const result = await passwordResetService.verifyPasswordResetOtp(req.body);
+
+  return sendSuccess(res, {
+    message: result.message,
+    data: result
+  });
+});
+
+const resetForgotPassword = asyncHandler(async (req, res) => {
+  const result = await passwordResetService.resetPassword(req.body, getRequestMeta(req));
+
+  return sendSuccess(res, {
+    message: result.message,
+    data: result
+  });
+});
+
+const sendEmailVerificationOtp = asyncHandler(async (req, res) => {
+  const result = await emailVerificationService.sendEmailVerificationOtp(req.user._id, req, getRequestMeta(req));
+
+  return sendSuccess(res, {
+    message: result.message,
+    data: result
+  });
+});
+
+const updateEmailVerificationEmail = asyncHandler(async (req, res) => {
+  const result = await emailVerificationService.updateVerificationEmail(
+    req.user._id,
+    req.body,
+    req,
+    getRequestMeta(req)
+  );
+
+  return sendSuccess(res, {
+    message: result.message,
+    data: result
+  });
+});
+
+const verifyEmailVerificationOtp = asyncHandler(async (req, res) => {
+  const result = await emailVerificationService.verifyEmailVerificationOtp(
+    req.user._id,
+    req.body,
+    req,
+    getRequestMeta(req)
+  );
+
+  return sendSuccess(res, {
+    message: result.message,
+    data: result
   });
 });
 
@@ -230,15 +334,25 @@ const removeWebAuthnDevice = asyncHandler(async (req, res) => {
 module.exports = {
   checkRegistrationAvailability,
   changePassword,
+  forgotPasswordStart,
+  resolveForgotPasswordAccount,
   getMe,
+  resetForgotPassword,
+  sendEmailVerificationOtp,
   getWebAuthnAuthenticationOptions,
   getWebAuthnDevices,
   getWebAuthnRegistrationOptions,
   login,
   logout,
   register,
+  registerStart,
+  resendRegisterOtp,
   removeWebAuthnDevice,
+  updateEmailVerificationEmail,
+  verifyEmailVerificationOtp,
+  verifyForgotPasswordOtp,
   verify,
+  verifyRegisterOtp,
   verifyWebAuthnAuthentication,
   verifyWebAuthnRegistration
 };

@@ -11,6 +11,7 @@ const {
   normalizeProgram
 } = require('../constants/appConstants');
 const { E164_PHONE_REGEX, normalizePhoneNumber } = require('../utils/phone');
+const { syncEmailVerificationFields } = require('../utils/emailVerificationState');
 const pickUser = require('../utils/pickUser');
 
 const BCRYPT_HASH_REGEX = /^\$2[aby]\$\d{2}\$/;
@@ -218,6 +219,47 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null
     },
+    emailVerified: {
+      type: Boolean,
+      default: false
+    },
+    isEmailVerified: {
+      type: Boolean,
+      default: false
+    },
+    emailVerifiedAt: {
+      type: Date,
+      default: null
+    },
+    pendingEmail: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      default: null
+    },
+    emailVerificationOtpHash: {
+      type: String,
+      select: false,
+      default: null
+    },
+    emailVerificationOtpExpiresAt: {
+      type: Date,
+      default: null
+    },
+    emailVerificationOtpSentAt: {
+      type: Date,
+      default: null
+    },
+    emailVerificationOtpAttempts: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    emailVerificationOtpResendCount: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
     isActive: {
       type: Boolean,
       default: true
@@ -255,6 +297,10 @@ userSchema.pre('validate', function syncLegacyFields(next) {
 
   if (this.email) {
     this.email = this.email.trim().toLowerCase();
+  }
+
+  if (this.pendingEmail) {
+    this.pendingEmail = this.pendingEmail.trim().toLowerCase();
   }
 
   if (this.phone) {
@@ -336,6 +382,7 @@ userSchema.pre('validate', function syncLegacyFields(next) {
   }
 
   this.hasBiometricCredentials = Array.isArray(this.webAuthnCredentials) && this.webAuthnCredentials.length > 0;
+  syncEmailVerificationFields(this);
 
   next();
 });

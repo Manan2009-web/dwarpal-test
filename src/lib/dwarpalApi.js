@@ -49,7 +49,7 @@ class ApiError extends Error {
 }
 
 function shouldLogAuthRequest(path = '') {
-  return path === '/auth/login' || path === '/auth/register'
+  return String(path || '').startsWith('/auth/')
 }
 
 function sanitizeAuthDebugBody(body) {
@@ -61,6 +61,26 @@ function sanitizeAuthDebugBody(body) {
 
   if ('password' in sanitizedBody) {
     sanitizedBody.password = '[redacted]'
+  }
+
+  if ('currentPassword' in sanitizedBody) {
+    sanitizedBody.currentPassword = '[redacted]'
+  }
+
+  if ('newPassword' in sanitizedBody) {
+    sanitizedBody.newPassword = '[redacted]'
+  }
+
+  if ('confirmPassword' in sanitizedBody) {
+    sanitizedBody.confirmPassword = '[redacted]'
+  }
+
+  if ('otp' in sanitizedBody) {
+    sanitizedBody.otp = '[redacted]'
+  }
+
+  if ('token' in sanitizedBody) {
+    sanitizedBody.token = '[redacted]'
   }
 
   return sanitizedBody
@@ -270,7 +290,7 @@ export function clearBiometricDeviceId() {
 
 function getDefaultErrorMessage(status, path) {
   if (status === 401 && path === '/auth/login') {
-    return 'Invalid credentials. Please check your email or ID and password.'
+    return 'Invalid credentials. Please check your enrollment number or employee ID and password.'
   }
 
   if (status === 404) {
@@ -359,9 +379,9 @@ async function parseApiResponse(response) {
   }
 }
 
-export function getApiErrorDetails(error, fallbackMessage = 'Request failed.') {
-  const normalizedErrors = Array.isArray(error?.payload?.errors)
-    ? error.payload.errors.reduce((errors, item) => {
+function normalizeApiErrors(items = []) {
+  return Array.isArray(items)
+    ? items.reduce((errors, item) => {
         const field = item?.field || item?.path || item?.param || ''
         const message = item?.message || item?.msg || ''
 
@@ -372,6 +392,63 @@ export function getApiErrorDetails(error, fallbackMessage = 'Request failed.') {
         return errors
       }, [])
     : []
+}
+
+function getApiErrorPayload(error) {
+  if (error?.payload && typeof error.payload === 'object' && !Array.isArray(error.payload)) {
+    return error.payload
+  }
+
+  if (error?.response?.data && typeof error.response.data === 'object' && !Array.isArray(error.response.data)) {
+    return error.response.data
+  }
+
+  if (error?.data && typeof error.data === 'object' && !Array.isArray(error.data)) {
+    return error.data
+  }
+
+  return null
+}
+
+function readApiErrorMessage(error) {
+  const payload = getApiErrorPayload(error)
+  const candidates = [
+    payload?.message,
+    payload?.error,
+    error?.response?.data?.message,
+    error?.response?.data?.error,
+    error?.data?.message,
+    error?.data?.error,
+    error?.error,
+    error?.message,
+  ]
+
+  for (const candidate of candidates) {
+    const message = typeof candidate === 'string' ? candidate.trim() : ''
+
+    if (message) {
+      return message
+    }
+  }
+
+  return ''
+}
+
+export function getApiErrorMessage(error, fallbackMessage = 'Request failed.') {
+  const payload = getApiErrorPayload(error)
+  const normalizedErrors = normalizeApiErrors(payload?.errors)
+  const resolvedMessage = readApiErrorMessage(error)
+
+  if (resolvedMessage && !GENERIC_API_MESSAGES.has(resolvedMessage)) {
+    return resolvedMessage
+  }
+
+  return normalizedErrors[0]?.message || resolvedMessage || fallbackMessage
+}
+
+export function getApiErrorDetails(error, fallbackMessage = 'Request failed.') {
+  const payload = getApiErrorPayload(error)
+  const normalizedErrors = normalizeApiErrors(payload?.errors)
 
   const fieldErrors = normalizedErrors.reduce((errors, item) => {
     if (!errors[item.field]) {
@@ -381,18 +458,20 @@ export function getApiErrorDetails(error, fallbackMessage = 'Request failed.') {
     return errors
   }, {})
 
-  const resolvedMessage =
-    error?.message && !GENERIC_API_MESSAGES.has(error.message)
-      ? error.message
-      : normalizedErrors[0]?.message || fallbackMessage
+  const resolvedMessage = getApiErrorMessage(error, fallbackMessage)
 
   return {
-    code: error?.payload?.code || '',
+    code: payload?.code || error?.code || '',
     errors: normalizedErrors,
     fieldErrors,
     message: resolvedMessage || fallbackMessage,
-    payload: error?.payload || null,
-    status: typeof error?.status === 'number' ? error.status : 500,
+    payload,
+    status:
+      typeof error?.status === 'number'
+        ? error.status
+        : typeof error?.response?.status === 'number'
+          ? error.response.status
+          : 500,
   }
 }
 
@@ -626,6 +705,11 @@ function toUiUser(user, session = null) {
     id: user.id,
     name: user.fullName,
     email: user.email,
+    emailVerified: user.emailVerified ?? user.isEmailVerified ?? false,
+    isEmailVerified: user.emailVerified ?? user.isEmailVerified ?? false,
+    emailVerifiedAt: user.emailVerifiedAt || null,
+    pendingEmail: user.pendingEmail || null,
+    verificationEmail: user.verificationEmail || user.pendingEmail || user.email || '',
     program: normalizeProgram(user.program),
     department: normalizeDepartment(user.department) || user.department || 'Not assigned',
     enrollment: user.enrollmentNo || '',
@@ -1370,6 +1454,187 @@ export async function registerUser(
   }
 }
 
+export async function startRegistration(
+  payload,
+  { signal, timeoutMs = DEFAULT_REGISTER_SEND_TIMEOUT_MS } = {},
+) {
+  const response = await apiRequest('/auth/register/start', {
+    method: 'POST',
+    signal,
+    timeoutMs,
+    body: {
+      ...buildRegistrationIdentityPayload(payload),
+      password: payload.password,
+    },
+  })
+
+  return {
+    message: response?.message || 'Verification OTP sent successfully.',
+    email: response?.data?.email || '',
+    cooldownSeconds: Number(response?.data?.cooldownSeconds || 45),
+    expiresInSeconds: Number(response?.data?.expiresInSeconds || 300),
+  }
+}
+
+export async function verifyRegistrationOtp(email, otp) {
+  const response = await apiRequest('/auth/register/verify-otp', {
+    method: 'POST',
+    timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
+    body: {
+      email,
+      otp,
+    },
+  })
+
+  return {
+    message: response?.message || 'Email verified successfully. Your account has been created.',
+    email: response?.data?.email || '',
+  }
+}
+
+export async function resendRegistrationOtp(email) {
+  const response = await apiRequest('/auth/register/resend-otp', {
+    method: 'POST',
+    timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
+    body: {
+      email,
+    },
+  })
+
+  return {
+    message: response?.message || 'A new verification OTP has been sent to your email.',
+    email: response?.data?.email || '',
+    cooldownSeconds: Number(response?.data?.cooldownSeconds || 45),
+    expiresInSeconds: Number(response?.data?.expiresInSeconds || 300),
+  }
+}
+
+export async function sendEmailVerificationOtp() {
+  const response = await apiRequest('/auth/email-verification/send-otp', {
+    method: 'POST',
+    timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
+  })
+
+  return {
+    message: response?.message || 'Verification OTP sent successfully.',
+    email: response?.data?.email || '',
+    verificationEmail: response?.data?.verificationEmail || response?.data?.email || '',
+    maskedVerificationEmail: response?.data?.maskedVerificationEmail || '',
+    cooldownSeconds: Number(response?.data?.cooldownSeconds || 45),
+    expiresInSeconds: Number(response?.data?.expiresInSeconds || 300),
+    user: toUiUser(response?.data?.user),
+  }
+}
+
+export async function updateEmailVerificationEmail(email) {
+  const response = await apiRequest('/auth/email-verification/email', {
+    method: 'PATCH',
+    timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
+    body: {
+      email,
+    },
+  })
+
+  return {
+    message: response?.message || 'Verification email updated successfully.',
+    email: response?.data?.email || '',
+    verificationEmail: response?.data?.verificationEmail || response?.data?.email || '',
+    maskedVerificationEmail: response?.data?.maskedVerificationEmail || '',
+    cooldownSeconds: Number(response?.data?.cooldownSeconds || 45),
+    expiresInSeconds: Number(response?.data?.expiresInSeconds || 300),
+    user: toUiUser(response?.data?.user),
+  }
+}
+
+export async function verifyCurrentUserEmailOtp(otp) {
+  const response = await apiRequest('/auth/email-verification/verify-otp', {
+    method: 'POST',
+    timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
+    body: {
+      otp,
+    },
+  })
+
+  return {
+    message: response?.message || 'Email verified successfully.',
+    email: response?.data?.email || '',
+    verificationEmail: response?.data?.verificationEmail || response?.data?.email || '',
+    maskedVerificationEmail: response?.data?.maskedVerificationEmail || '',
+    user: toUiUser(response?.data?.user),
+  }
+}
+
+export async function resolveForgotPasswordAccount(identifier) {
+  const response = await apiRequest('/auth/forgot-password/account', {
+    method: 'POST',
+    timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
+    body: {
+      identifier,
+    },
+  })
+
+  return {
+    message: response?.message || 'Registered email fetched successfully.',
+    email: response?.data?.email || '',
+    maskedEmail: response?.data?.maskedEmail || '',
+    identifier: response?.data?.identifier || identifier,
+  }
+}
+
+export async function startForgotPassword({ identifier, email }) {
+  const response = await apiRequest('/auth/forgot-password/start', {
+    method: 'POST',
+    timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
+    body: {
+      identifier,
+      email,
+    },
+  })
+
+  return {
+    message: response?.message || 'Password reset OTP sent successfully.',
+    email: response?.data?.email || '',
+    maskedEmail: response?.data?.maskedEmail || '',
+    identifier: response?.data?.identifier || identifier || '',
+    cooldownSeconds: Number(response?.data?.cooldownSeconds || 45),
+    expiresInSeconds: Number(response?.data?.expiresInSeconds || 300),
+  }
+}
+
+export async function verifyForgotPasswordOtp(email, otp) {
+  const response = await apiRequest('/auth/forgot-password/verify-otp', {
+    method: 'POST',
+    timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
+    body: {
+      email,
+      otp,
+    },
+  })
+
+  return {
+    message: response?.message || 'OTP verified successfully.',
+    email: response?.data?.email || '',
+  }
+}
+
+export async function resetForgotPassword(email, otp, newPassword, confirmPassword = '') {
+  const response = await apiRequest('/auth/forgot-password/reset', {
+    method: 'POST',
+    timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
+    body: {
+      email,
+      otp,
+      newPassword,
+      confirmPassword,
+    },
+  })
+
+  return {
+    message: response?.message || 'Password reset successful. You can now sign in with your new password.',
+    email: response?.data?.email || '',
+  }
+}
+
 export async function logoutUser() {
   try {
     await apiRequest('/auth/logout', { method: 'POST' })
@@ -1622,6 +1887,18 @@ export async function markAllNotificationsRead() {
     notificationIds: [],
     readAt: null,
   }
+}
+
+export async function saveNotificationDeviceToken({ token, device }) {
+  const response = await apiRequest('/notifications/save-token', {
+    method: 'POST',
+    body: {
+      token,
+      device,
+    },
+  })
+
+  return response?.data || null
 }
 
 export function createGatepassPayload(form) {

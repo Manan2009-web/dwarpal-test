@@ -1,5 +1,6 @@
 const asyncHandler = require('../utils/asyncHandler');
 const { sendSuccess } = require('../utils/apiResponse');
+const { saveDeviceToken } = require('../services/pushNotificationService');
 const {
   getNotificationsForUser,
   getUnreadNotificationCount,
@@ -49,9 +50,20 @@ const markAllRead = asyncHandler(async (req, res) => {
   });
 });
 
+const saveToken = asyncHandler(async (req, res) => {
+  const result = await saveDeviceToken(req.user._id, req.body.token, req.body.device || req.get('user-agent'));
+
+  return sendSuccess(res, {
+    statusCode: result ? 201 : 200,
+    message: 'Device token saved successfully',
+    data: result
+  });
+});
+
 module.exports = {
   getUnreadCount,
   listNotifications,
   markAllRead,
-  markRead
+  markRead,
+  saveToken
 };

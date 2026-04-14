@@ -15,16 +15,12 @@ async function updateProfile(user, payload, req, requestMeta) {
   }
 
   if (payload.email && payload.email.toLowerCase() !== currentUser.email) {
-    const emailExists = await User.findOne({
-      email: payload.email.toLowerCase(),
-      _id: { $ne: currentUser._id }
-    });
-
-    if (emailExists) {
-      throw new AppError('Email is already in use by another account', 409);
-    }
-
-    currentUser.email = payload.email.toLowerCase();
+    throw new AppError('Use the email verification flow to update your email address safely.', 400, [
+      {
+        field: 'email',
+        message: 'Use the email verification flow to update your email address safely.'
+      }
+    ]);
   }
 
   if (payload.fullName) {

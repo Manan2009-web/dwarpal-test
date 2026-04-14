@@ -1,5 +1,5 @@
 const express = require('express');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, requireVerifiedEmail } = require('../middleware/authMiddleware');
 const validateRequest = require('../middleware/validateRequest');
 const { profileUpload } = require('../middleware/uploadMiddleware');
 const dashboardController = require('../controllers/dashboardController');
@@ -9,7 +9,7 @@ const { dashboardQueryValidation } = require('../validators/queryValidators');
 
 const router = express.Router();
 
-router.use(protect);
+router.use(protect, requireVerifiedEmail);
 router.get('/dashboard-summary', dashboardQueryValidation, validateRequest, dashboardController.getSummary);
 router.get('/profile', userController.getProfile);
 router.put('/profile', updateProfileValidation, validateRequest, userController.updateProfile);

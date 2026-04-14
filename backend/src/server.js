@@ -3,6 +3,7 @@ const app = require('./app');
 const env = require('./config/env');
 const connectDatabase = require('./config/db');
 const Gatepass = require('./models/Gatepass');
+const User = require('./models/User');
 const { ensureRateLimitStorage } = require('./services/authRateLimitService');
 const { seedDefaultAdmins } = require('./services/adminService');
 const {
@@ -22,6 +23,58 @@ async function repairVerificationTokens() {
 
   if (result.modifiedCount > 0) {
     console.log(`[startup] Normalized ${result.modifiedCount} gatepass verification tokens.`);
+  }
+}
+
+async function repairUserEmailVerificationState() {
+  const [copiedLegacyFlags, copiedCurrentFlags, initializedMissingFlags] = await Promise.all([
+    User.updateMany(
+      {
+        emailVerified: { $exists: false },
+        isEmailVerified: { $exists: true }
+      },
+      [
+        {
+          $set: {
+            emailVerified: '$isEmailVerified'
+          }
+        }
+      ]
+    ),
+    User.updateMany(
+      {
+        emailVerified: { $exists: true },
+        isEmailVerified: { $exists: false }
+      },
+      [
+        {
+          $set: {
+            isEmailVerified: '$emailVerified'
+          }
+        }
+      ]
+    ),
+    User.updateMany(
+      {
+        emailVerified: { $exists: false },
+        isEmailVerified: { $exists: false }
+      },
+      {
+        $set: {
+          emailVerified: false,
+          isEmailVerified: false
+        }
+      }
+    )
+  ]);
+
+  const modifiedCount =
+    Number(copiedLegacyFlags.modifiedCount || 0) +
+    Number(copiedCurrentFlags.modifiedCount || 0) +
+    Number(initializedMissingFlags.modifiedCount || 0);
+
+  if (modifiedCount > 0) {
+    console.log(`[startup] Normalized email verification state for ${modifiedCount} user records.`);
   }
 }
 
@@ -79,10 +132,11 @@ async function runOptionalStartupTask(name, task) {
 function kickOffOptionalStartupTasks() {
   void (async () => {
     await runOptionalStartupTask('Auth rate-limit storage initialization', async () => {
-      await ensureRateLimitStorage();
-      console.log('[startup] Auth rate-limit storage ready.');
-    });
+    await ensureRateLimitStorage();
+    console.log('[startup] Auth rate-limit storage ready.');
+  });
 
+    await runOptionalStartupTask('User email-verification repair', repairUserEmailVerificationState);
     await runOptionalStartupTask('Gatepass verification-token repair', repairVerificationTokens);
     await runOptionalStartupTask('System-account bootstrap', ensureSystemAccounts);
   })();

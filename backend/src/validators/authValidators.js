@@ -24,6 +24,31 @@ function validatePhoneValue(value, message = 'Please enter a valid phone number.
   return true;
 }
 
+function emailValidation(field = 'email', message = 'Valid email is required') {
+  return body(field).trim().isEmail().withMessage(message).normalizeEmail();
+}
+
+function otpValidation(field = 'otp') {
+  return body(field)
+    .trim()
+    .matches(/^\d{6}$/)
+    .withMessage('OTP must be a 6-digit code');
+}
+
+function identifierValidation(field = 'identifier', message = 'Enrollment number or employee ID is required') {
+  return body(field)
+    .customSanitizer((value, { req }) => String(value || req.body.enrollment || req.body.employeeId || '').trim())
+    .notEmpty()
+    .withMessage(message)
+    .custom((value) => {
+      if (String(value || '').includes('@')) {
+        throw new Error('Email login is not allowed. Use your enrollment number or employee ID.');
+      }
+
+      return true;
+    });
+}
+
 const registerValidation = [
   body('fullName')
     .trim()
@@ -31,7 +56,7 @@ const registerValidation = [
     .withMessage('Full name is required')
     .isLength({ min: 2, max: 120 })
     .withMessage('Full name must be between 2 and 120 characters'),
-  body('email').trim().isEmail().withMessage('Valid email is required').normalizeEmail(),
+  emailValidation(),
   body('password')
     .isString()
     .withMessage('Password is required')
@@ -114,10 +139,7 @@ const registerValidation = [
 ];
 
 const loginValidation = [
-  body('identifier')
-    .customSanitizer((value, { req }) => String(value || req.body.email || req.body.enrollment || req.body.employeeId || '').trim())
-    .notEmpty()
-    .withMessage('Email, enrollment number, or employee ID is required'),
+  identifierValidation('identifier', 'Enter enrollment number or employee ID'),
   body('password').notEmpty().withMessage('Password is required')
 ];
 
@@ -142,7 +164,12 @@ const registrationAvailabilityValidation = [
 
       return true;
     }),
-  body('email').optional({ values: 'falsy' }).trim().isEmail().withMessage('Valid email is required').normalizeEmail(),
+  body('email')
+    .optional({ values: 'falsy' })
+    .trim()
+    .isEmail()
+    .withMessage('Valid email is required')
+    .normalizeEmail(),
   body('phone')
     .optional({ values: 'falsy' })
     .customSanitizer(normalizePhoneValue)
@@ -152,6 +179,55 @@ const registrationAvailabilityValidation = [
     .optional({ values: 'falsy' })
     .trim()
     .customSanitizer((value) => String(value || '').trim().toUpperCase())
+];
+
+const registerVerifyOtpValidation = [emailValidation(), otpValidation()];
+
+const registerResendOtpValidation = [emailValidation()];
+
+const forgotPasswordAccountValidation = [identifierValidation('identifier', 'Enter enrollment number or employee ID')];
+
+const forgotPasswordStartValidation = [
+  identifierValidation('identifier', 'Enter enrollment number or employee ID'),
+  body('email')
+    .optional({ values: 'falsy' })
+    .trim()
+    .isEmail()
+    .withMessage('Please enter a valid email address.')
+    .normalizeEmail()
+];
+
+const forgotPasswordVerifyOtpValidation = [emailValidation(), otpValidation()];
+
+const emailVerificationSendOtpValidation = [];
+
+const emailVerificationUpdateEmailValidation = [
+  body('email')
+    .trim()
+    .isEmail()
+    .withMessage('Please enter a valid email address.')
+    .normalizeEmail()
+];
+
+const emailVerificationVerifyOtpValidation = [otpValidation()];
+
+const forgotPasswordResetValidation = [
+  emailValidation(),
+  otpValidation(),
+  body('newPassword')
+    .matches(PASSWORD_REGEX)
+    .withMessage(
+      'New password must be at least 8 characters and include uppercase, lowercase, number, and special character'
+    ),
+  body('confirmPassword')
+    .optional()
+    .custom((value, { req }) => {
+      if (value !== undefined && value !== req.body.newPassword) {
+        throw new Error('Confirm password must match the new password');
+      }
+
+      return true;
+    })
 ];
 
 const webAuthnRegistrationOptionsValidation = [
@@ -205,9 +281,18 @@ const biometricDeviceIdParamValidation = [
 module.exports = {
   biometricDeviceIdParamValidation,
   changePasswordValidation,
+  emailVerificationSendOtpValidation,
+  emailVerificationUpdateEmailValidation,
+  emailVerificationVerifyOtpValidation,
+  forgotPasswordAccountValidation,
+  forgotPasswordResetValidation,
+  forgotPasswordStartValidation,
+  forgotPasswordVerifyOtpValidation,
   loginValidation,
   registrationAvailabilityValidation,
+  registerResendOtpValidation,
   registerValidation,
+  registerVerifyOtpValidation,
   webAuthnAuthenticationOptionsValidation,
   webAuthnAuthenticationVerifyValidation,
   webAuthnRegistrationOptionsValidation,

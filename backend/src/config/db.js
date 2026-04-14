@@ -265,6 +265,7 @@ async function connectDatabase() {
   }
 }
 
+
 connectDatabase.disconnectDatabase = disconnectDatabase;
 connectDatabase.getDatabaseState = getDatabaseState;
 

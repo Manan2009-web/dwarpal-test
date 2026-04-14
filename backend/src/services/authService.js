@@ -69,11 +69,15 @@ function escapeRegex(value) {
 }
 
 function extractLoginIdentifier(payload = {}) {
-  return normalizeIdentifier(payload.identifier || payload.email || payload.enrollment || payload.employeeId);
+  return normalizeIdentifier(payload.identifier || payload.enrollment || payload.employeeId);
 }
 
 function normalizeRateLimitIdentifier(identifier) {
   return normalizeIdentifier(identifier).toLowerCase();
+}
+
+function isEmailStyleIdentifier(identifier) {
+  return normalizeIdentifier(identifier).includes('@');
 }
 
 function isHashedPassword(value) {
@@ -261,10 +265,6 @@ async function findUserByIdentifier(identifier, selection = '+password') {
     return null;
   }
 
-  if (normalizedIdentifier.includes('@')) {
-    return User.findOne({ email: normalizedIdentifier.toLowerCase() }).select(selection);
-  }
-
   const employeeIdMatcher = new RegExp(`^${escapeRegex(normalizedIdentifier)}$`, 'i');
 
   return User.findOne({
@@ -434,6 +434,15 @@ async function checkRegistrationAvailability(payload) {
 
 async function loginUser(payload, req, requestMeta) {
   const identifier = extractLoginIdentifier(payload);
+
+  if (isEmailStyleIdentifier(identifier)) {
+    throw createFieldErrorResponse(
+      'identifier',
+      'Email login is not allowed. Use your enrollment number or employee ID.',
+      400
+    );
+  }
+
   // Failed-login buckets are keyed to the account plus client fingerprint so one
   // noisy shared-Wi-Fi user does not block everyone else on the same network.
   await assertLoginFailureBucketsAreOpen(identifier, req);
@@ -441,7 +450,10 @@ async function loginUser(payload, req, requestMeta) {
 
   if (!user) {
     await recordFailedLoginAttempt(identifier, req);
-    throw new AppError('Invalid credentials. Please check your email or ID and password and try again.', 401);
+    throw new AppError(
+      'Invalid credentials. Please check your enrollment number or employee ID and password and try again.',
+      401
+    );
   }
 
   if (!user.isActive) {
@@ -452,7 +464,10 @@ async function loginUser(payload, req, requestMeta) {
 
   if (!passwordMatches) {
     await recordFailedLoginAttempt(identifier, req);
-    throw new AppError('Invalid credentials. Please check your email or ID and password and try again.', 401);
+    throw new AppError(
+      'Invalid credentials. Please check your enrollment number or employee ID and password and try again.',
+      401
+    );
   }
 
   const normalizedRole = normalizeRole(user.role);
@@ -613,6 +628,15 @@ async function verifyWebAuthnRegistration(userId, payload, req, flowState, reque
 
 async function getWebAuthnAuthenticationOptions(payload, req) {
   const identifier = extractLoginIdentifier(payload);
+
+  if (isEmailStyleIdentifier(identifier)) {
+    throw createFieldErrorResponse(
+      'identifier',
+      'Use your enrollment number or employee ID for biometric login.',
+      400
+    );
+  }
+
   const user = await findUserByIdentifier(identifier);
 
   if (!user) {
@@ -808,6 +832,7 @@ module.exports = {
   buildSessionPayload,
   checkRegistrationAvailability,
   changePassword,
+  findUserByIdentifier,
   getCurrentUser,
   getWebAuthnAuthenticationOptions,
   getWebAuthnDevices,

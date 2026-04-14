@@ -4,6 +4,7 @@ const User = require('../models/User');
 const asyncHandler = require('../utils/asyncHandler');
 const AppError = require('../utils/appError');
 const { normalizeRole } = require('../constants/appConstants');
+const { isUserEmailVerified } = require('../utils/emailVerificationState');
 const { clearAuthCookie } = require('../utils/token');
 
 function getTokenFromRequest(req) {
@@ -78,6 +79,22 @@ const protect = asyncHandler(async (req, res, next) => {
   next();
 });
 
+function requireVerifiedEmail(req, res, next) {
+  if (isUserEmailVerified(req.user)) {
+    return next();
+  }
+
+  const error = new AppError('Your email is not verified. Please verify your email to continue.', 403, [
+    {
+      field: 'email',
+      message: 'Your email is not verified. Please verify your email to continue.'
+    }
+  ]);
+  error.code = 'EMAIL_VERIFICATION_REQUIRED';
+  return next(error);
+}
+
 module.exports = {
-  protect
+  protect,
+  requireVerifiedEmail
 };

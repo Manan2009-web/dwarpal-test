@@ -1,5 +1,5 @@
 const express = require('express');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, requireVerifiedEmail } = require('../middleware/authMiddleware');
 const validateRequest = require('../middleware/validateRequest');
 const authController = require('../controllers/authController');
 const createRateLimiter = require('../middleware/rateLimit');
@@ -7,9 +7,18 @@ const { getClientFingerprint, getClientIp } = require('../utils/request');
 const {
   biometricDeviceIdParamValidation,
   changePasswordValidation,
+  emailVerificationSendOtpValidation,
+  emailVerificationUpdateEmailValidation,
+  emailVerificationVerifyOtpValidation,
+  forgotPasswordAccountValidation,
+  forgotPasswordResetValidation,
+  forgotPasswordStartValidation,
+  forgotPasswordVerifyOtpValidation,
   loginValidation,
   registrationAvailabilityValidation,
+  registerResendOtpValidation,
   registerValidation,
+  registerVerifyOtpValidation,
   webAuthnAuthenticationOptionsValidation,
   webAuthnAuthenticationVerifyValidation,
   webAuthnRegistrationOptionsValidation,
@@ -29,6 +38,10 @@ function getLoginIdentifierKey(req) {
   return normalizeLookupValue(req.body?.identifier || req.body?.enrollment || req.body?.employeeId);
 }
 
+function getForgotPasswordIdentifierKey(req) {
+  return normalizeLookupValue(req.body?.identifier || req.body?.enrollment || req.body?.employeeId);
+}
+
 function getRegisterIdentityKey(req) {
   const normalizedRole = normalizeLookupValue(req.body?.role);
   const normalizedEmail = normalizeLookupValue(req.body?.email);
@@ -37,6 +50,14 @@ function getRegisterIdentityKey(req) {
     .toUpperCase();
 
   return [normalizedRole, normalizedEmail, primaryIdentifier].filter(Boolean).join('|');
+}
+
+function getEmailKey(req) {
+  return normalizeLookupValue(req.body?.email);
+}
+
+function getAuthenticatedUserKey(req) {
+  return normalizeLookupValue(req.user?._id);
 }
 
 const router = express.Router();
@@ -86,6 +107,94 @@ const registerIdentityRateLimit = createRateLimiter({
     `Too many account creation attempts for the same details. Please wait ${formatRetryWindow(result.retryAfterSeconds)} and try again.`,
   errorCode: 'AUTH_REGISTER_IDENTITY_RATE_LIMITED'
 });
+const registerOtpVerifyRateLimit = createRateLimiter({
+  scope: 'auth:register:verify-otp',
+  windowMs: 10 * 60 * 1000,
+  blockDurationMs: 10 * 60 * 1000,
+  max: 20,
+  keyGenerator: getEmailKey,
+  skip: (req) => !getEmailKey(req),
+  message: ({ result }) =>
+    `Too many verification attempts for this email. Please wait ${formatRetryWindow(result.retryAfterSeconds)} and try again.`,
+  errorCode: 'AUTH_REGISTER_OTP_RATE_LIMITED'
+});
+const registerOtpResendRateLimit = createRateLimiter({
+  scope: 'auth:register:resend-otp',
+  windowMs: 15 * 60 * 1000,
+  blockDurationMs: 15 * 60 * 1000,
+  max: 10,
+  keyGenerator: getEmailKey,
+  skip: (req) => !getEmailKey(req),
+  message: ({ result }) =>
+    `Too many OTP resend requests for this email. Please wait ${formatRetryWindow(result.retryAfterSeconds)} and try again.`,
+  errorCode: 'AUTH_REGISTER_RESEND_RATE_LIMITED'
+});
+const forgotPasswordStartRateLimit = createRateLimiter({
+  scope: 'auth:forgot-password:start',
+  windowMs: 15 * 60 * 1000,
+  blockDurationMs: 15 * 60 * 1000,
+  max: 8,
+  keyGenerator: getForgotPasswordIdentifierKey,
+  skip: (req) => !getForgotPasswordIdentifierKey(req),
+  message: ({ result }) =>
+    `Too many password reset requests for this account. Please wait ${formatRetryWindow(result.retryAfterSeconds)} and try again.`,
+  errorCode: 'AUTH_FORGOT_PASSWORD_START_RATE_LIMITED'
+});
+const emailVerificationSendRateLimit = createRateLimiter({
+  scope: 'auth:email-verification:send',
+  windowMs: 15 * 60 * 1000,
+  blockDurationMs: 15 * 60 * 1000,
+  max: 10,
+  keyGenerator: getAuthenticatedUserKey,
+  skip: (req) => !getAuthenticatedUserKey(req),
+  message: ({ result }) =>
+    `Too many email verification requests were made. Please wait ${formatRetryWindow(result.retryAfterSeconds)} and try again.`,
+  errorCode: 'AUTH_EMAIL_VERIFICATION_SEND_RATE_LIMITED'
+});
+const emailVerificationVerifyRateLimit = createRateLimiter({
+  scope: 'auth:email-verification:verify',
+  windowMs: 10 * 60 * 1000,
+  blockDurationMs: 10 * 60 * 1000,
+  max: 20,
+  keyGenerator: getAuthenticatedUserKey,
+  skip: (req) => !getAuthenticatedUserKey(req),
+  message: ({ result }) =>
+    `Too many email verification attempts were made. Please wait ${formatRetryWindow(result.retryAfterSeconds)} and try again.`,
+  errorCode: 'AUTH_EMAIL_VERIFICATION_VERIFY_RATE_LIMITED'
+});
+const emailVerificationEmailChangeRateLimit = createRateLimiter({
+  scope: 'auth:email-verification:update-email',
+  windowMs: 15 * 60 * 1000,
+  blockDurationMs: 15 * 60 * 1000,
+  max: 6,
+  keyGenerator: getAuthenticatedUserKey,
+  skip: (req) => !getAuthenticatedUserKey(req),
+  message: ({ result }) =>
+    `Too many verification email updates were requested. Please wait ${formatRetryWindow(result.retryAfterSeconds)} and try again.`,
+  errorCode: 'AUTH_EMAIL_VERIFICATION_UPDATE_RATE_LIMITED'
+});
+const forgotPasswordVerifyRateLimit = createRateLimiter({
+  scope: 'auth:forgot-password:verify-otp',
+  windowMs: 10 * 60 * 1000,
+  blockDurationMs: 10 * 60 * 1000,
+  max: 20,
+  keyGenerator: getEmailKey,
+  skip: (req) => !getEmailKey(req),
+  message: ({ result }) =>
+    `Too many password reset OTP attempts for this email. Please wait ${formatRetryWindow(result.retryAfterSeconds)} and try again.`,
+  errorCode: 'AUTH_FORGOT_PASSWORD_VERIFY_RATE_LIMITED'
+});
+const forgotPasswordResetRateLimit = createRateLimiter({
+  scope: 'auth:forgot-password:reset',
+  windowMs: 10 * 60 * 1000,
+  blockDurationMs: 10 * 60 * 1000,
+  max: 10,
+  keyGenerator: getEmailKey,
+  skip: (req) => !getEmailKey(req),
+  message: ({ result }) =>
+    `Too many password reset submissions for this email. Please wait ${formatRetryWindow(result.retryAfterSeconds)} and try again.`,
+  errorCode: 'AUTH_FORGOT_PASSWORD_RESET_RATE_LIMITED'
+});
 const biometricRateLimit = createRateLimiter({
   scope: 'auth:webauthn:client',
   windowMs: 10 * 60 * 1000,
@@ -105,6 +214,28 @@ router.post(
   authController.checkRegistrationAvailability
 );
 router.post(
+  '/register/start',
+  registerNetworkRateLimit,
+  registerIdentityRateLimit,
+  registerValidation,
+  validateRequest,
+  authController.registerStart
+);
+router.post(
+  '/register/verify-otp',
+  registerOtpVerifyRateLimit,
+  registerVerifyOtpValidation,
+  validateRequest,
+  authController.verifyRegisterOtp
+);
+router.post(
+  '/register/resend-otp',
+  registerOtpResendRateLimit,
+  registerResendOtpValidation,
+  validateRequest,
+  authController.resendRegisterOtp
+);
+router.post(
   '/register',
   registerNetworkRateLimit,
   registerIdentityRateLimit,
@@ -113,14 +244,67 @@ router.post(
   authController.register
 );
 router.post('/login', loginNetworkRateLimit, loginAccountRateLimit, loginValidation, validateRequest, authController.login);
+router.post(
+  '/forgot-password/account',
+  forgotPasswordStartRateLimit,
+  forgotPasswordAccountValidation,
+  validateRequest,
+  authController.resolveForgotPasswordAccount
+);
+router.post(
+  '/forgot-password/start',
+  forgotPasswordStartRateLimit,
+  forgotPasswordStartValidation,
+  validateRequest,
+  authController.forgotPasswordStart
+);
+router.post(
+  '/forgot-password/verify-otp',
+  forgotPasswordVerifyRateLimit,
+  forgotPasswordVerifyOtpValidation,
+  validateRequest,
+  authController.verifyForgotPasswordOtp
+);
+router.post(
+  '/forgot-password/reset',
+  forgotPasswordResetRateLimit,
+  forgotPasswordResetValidation,
+  validateRequest,
+  authController.resetForgotPassword
+);
+router.post(
+  '/email-verification/send-otp',
+  protect,
+  emailVerificationSendRateLimit,
+  emailVerificationSendOtpValidation,
+  validateRequest,
+  authController.sendEmailVerificationOtp
+);
+router.patch(
+  '/email-verification/email',
+  protect,
+  emailVerificationEmailChangeRateLimit,
+  emailVerificationUpdateEmailValidation,
+  validateRequest,
+  authController.updateEmailVerificationEmail
+);
+router.post(
+  '/email-verification/verify-otp',
+  protect,
+  emailVerificationVerifyRateLimit,
+  emailVerificationVerifyOtpValidation,
+  validateRequest,
+  authController.verifyEmailVerificationOtp
+);
 router.post('/logout', authController.logout);
 router.get('/me', protect, authController.getMe);
 router.get('/verify', protect, authController.verify);
-router.patch('/change-password', protect, changePasswordValidation, validateRequest, authController.changePassword);
-router.get('/webauthn/devices', protect, authController.getWebAuthnDevices);
+router.patch('/change-password', protect, requireVerifiedEmail, changePasswordValidation, validateRequest, authController.changePassword);
+router.get('/webauthn/devices', protect, requireVerifiedEmail, authController.getWebAuthnDevices);
 router.delete(
   '/webauthn/devices/:deviceId',
   protect,
+  requireVerifiedEmail,
   biometricDeviceIdParamValidation,
   validateRequest,
   authController.removeWebAuthnDevice
@@ -128,6 +312,7 @@ router.delete(
 router.post(
   '/webauthn/register/options',
   protect,
+  requireVerifiedEmail,
   webAuthnRegistrationOptionsValidation,
   validateRequest,
   authController.getWebAuthnRegistrationOptions
@@ -135,6 +320,7 @@ router.post(
 router.post(
   '/webauthn/register/verify',
   protect,
+  requireVerifiedEmail,
   webAuthnRegistrationVerifyValidation,
   validateRequest,
   authController.verifyWebAuthnRegistration

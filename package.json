@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@simplewebauthn/browser": "^13.3.0",
+    "firebase": "^11.10.0",
     "lucide-react": "^1.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

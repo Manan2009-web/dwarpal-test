@@ -1,5 +1,5 @@
 const express = require('express');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, requireVerifiedEmail } = require('../middleware/authMiddleware');
 const authorize = require('../middleware/authorize');
 const validateRequest = require('../middleware/validateRequest');
 const facultyLeaveController = require('../controllers/facultyLeaveController');
@@ -14,7 +14,7 @@ const { basePaginationQueryValidation } = require('../validators/queryValidators
 
 const router = express.Router();
 
-router.use(protect);
+router.use(protect, requireVerifiedEmail);
 
 router.post(
   '/',

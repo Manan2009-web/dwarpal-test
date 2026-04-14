@@ -110,6 +110,7 @@ async function cleanupLegacyBrowserState() {
     return
   }
 
+  const cachePrefixesToDelete = ['vite-', 'workbox-', 'dwarpal-legacy-']
   const cleanupTasks = []
 
   if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
@@ -119,7 +120,18 @@ async function cleanupLegacyBrowserState() {
           return undefined
         }
 
-        return Promise.allSettled(registrations.map((registration) => registration.unregister()))
+        const staleRegistrations = registrations.filter((registration) => {
+          const scriptUrl =
+            registration.active?.scriptURL || registration.waiting?.scriptURL || registration.installing?.scriptURL || ''
+
+          return !scriptUrl.includes('firebase-messaging-sw.js')
+        })
+
+        if (!staleRegistrations.length) {
+          return undefined
+        }
+
+        return Promise.allSettled(staleRegistrations.map((registration) => registration.unregister()))
       }),
     )
   }
@@ -127,11 +139,15 @@ async function cleanupLegacyBrowserState() {
   if ('caches' in window) {
     cleanupTasks.push(
       window.caches.keys().then((cacheKeys) => {
-        if (!cacheKeys.length) {
+        const staleCacheKeys = cacheKeys.filter((cacheKey) =>
+          cachePrefixesToDelete.some((prefix) => cacheKey.startsWith(prefix)),
+        )
+
+        if (!staleCacheKeys.length) {
           return undefined
         }
 
-        return Promise.allSettled(cacheKeys.map((cacheKey) => window.caches.delete(cacheKey)))
+        return Promise.allSettled(staleCacheKeys.map((cacheKey) => window.caches.delete(cacheKey)))
       }),
     )
   }

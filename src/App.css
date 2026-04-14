@@ -1165,6 +1165,138 @@ button {
   opacity: 0.48;
 }
 
+.auth-modal-card {
+  width: min(520px, 100%);
+}
+
+.verification-lock-modal {
+  width: min(540px, 100%);
+}
+
+.app-shell-lock-surface {
+  pointer-events: none;
+  user-select: none;
+}
+
+.auth-otp-modal,
+.auth-otp-step-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.auth-otp-modal label,
+.auth-otp-step-form label {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.auth-otp-modal input,
+.auth-otp-step-form input {
+  width: 100%;
+  border: 1px solid rgba(21, 50, 71, 0.12);
+  border-radius: 16px;
+  background: var(--bg-strong);
+  color: var(--text);
+  padding: 0.9rem 1rem;
+  font-size: 0.95rem;
+  outline: none;
+}
+
+.auth-otp-modal input:focus,
+.auth-otp-step-form input:focus {
+  border-color: var(--app-accent);
+  box-shadow: 0 0 0 4px var(--app-accent-soft-bg);
+}
+
+.auth-otp-modal input.field-invalid,
+.auth-otp-step-form input.field-invalid {
+  border-color: rgba(220, 38, 38, 0.7);
+  background: linear-gradient(180deg, rgba(220, 38, 38, 0.03), rgba(220, 38, 38, 0.01));
+}
+
+.auth-otp-modal input.field-invalid:focus,
+.auth-otp-step-form input.field-invalid:focus {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.14);
+}
+
+.auth-modal-email-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  padding: 0.7rem 1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(40, 114, 161, 0.18);
+  background: rgba(40, 114, 161, 0.08);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.auth-modal-inline-actions,
+.auth-modal-actions {
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.auth-modal-inline-actions {
+  justify-content: space-between;
+}
+
+.auth-modal-actions {
+  justify-content: flex-end;
+}
+
+.auth-readonly-field {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.auth-readonly-field input {
+  width: 100%;
+  border: 1px solid rgba(21, 50, 71, 0.12);
+  border-radius: 16px;
+  background: rgba(93, 113, 136, 0.08);
+  color: var(--text);
+  padding: 0.9rem 1rem;
+  font-size: 0.95rem;
+}
+
+.otp-code-input {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.otp-code-input-box {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(21, 50, 71, 0.12);
+  border-radius: 18px;
+  background: var(--bg-strong);
+  color: var(--text);
+  padding: 0.95rem 0;
+  font-size: 1.45rem;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  outline: none;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
+}
+
+.otp-code-input-box:focus {
+  border-color: var(--app-accent);
+  box-shadow: 0 0 0 4px var(--app-accent-soft-bg);
+}
+
+.otp-code-input-box:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .auth-divider {
   display: flex;
   align-items: center;
@@ -4297,6 +4429,28 @@ button {
 
   .permission-prompt-card {
     width: min(100%, calc(100vw - 1.7rem));
+  }
+
+  .auth-modal-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .auth-modal-actions .action-button {
+    width: 100%;
+  }
+
+  .auth-modal-inline-actions {
+    align-items: flex-start;
+  }
+
+  .otp-code-input {
+    gap: 0.45rem;
+  }
+
+  .otp-code-input-box {
+    padding: 0.85rem 0;
+    font-size: 1.15rem;
   }
 
   .notification-toast-stack {

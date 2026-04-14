@@ -7,7 +7,13 @@ import {
   getStoredAuthToken,
   markAllNotificationsRead as markAllNotificationsReadRequest,
   markNotificationRead as markNotificationReadRequest,
+  saveNotificationDeviceToken,
 } from '../lib/dwarpalApi'
+import {
+  getFirebaseMessagingToken,
+  isFirebaseMessagingConfigured,
+  subscribeToForegroundMessages,
+} from '../lib/firebase'
 import {
   formatNotificationTimestamp,
   getNotificationIcon,
@@ -76,12 +82,81 @@ function markAllNotificationsReadLocally(previousNotifications, readAt) {
   )
 }
 
-export function NotificationProvider({ children, currentUser }) {
+function normalizeBooleanValue(value, fallback = false) {
+  if (typeof value === 'boolean') {
+    return value
+  }
+
+  if (value === 'true') {
+    return true
+  }
+
+  if (value === 'false') {
+    return false
+  }
+
+  return fallback
+}
+
+function normalizeNotificationPayload(notification = {}) {
+  const normalizedNotification = {
+    id: String(notification.id || notification.notificationId || '').trim(),
+    recipientId: String(notification.recipientId || '').trim(),
+    senderId: String(notification.senderId || '').trim(),
+    senderRole: String(notification.senderRole || '').trim(),
+    title: String(notification.title || '').trim(),
+    message: String(notification.message || '').trim(),
+    type: String(notification.type || 'system').trim() || 'system',
+    status: String(notification.status || 'info').trim() || 'info',
+    recordType: String(notification.recordType || 'system').trim() || 'system',
+    relatedId: String(notification.relatedId || '').trim(),
+    relatedRoute: String(notification.relatedRoute || '/app/notifications').trim() || '/app/notifications',
+    referenceId: String(notification.referenceId || '').trim(),
+    detail: String(notification.detail || '').trim(),
+    isRead: normalizeBooleanValue(notification.isRead, false),
+    readAt: notification.readAt || null,
+    createdAt: notification.createdAt || new Date().toISOString(),
+    updatedAt: notification.updatedAt || notification.createdAt || new Date().toISOString(),
+    metadata:
+      notification.metadata && typeof notification.metadata === 'object' ? notification.metadata : {},
+  }
+
+  if (!normalizedNotification.id && !normalizedNotification.title && !normalizedNotification.message) {
+    return null
+  }
+
+  return normalizedNotification
+}
+
+function mapFirebaseMessageToNotification(payload = {}) {
+  const data = payload?.data || {}
+
+  return normalizeNotificationPayload({
+    id: data.notificationId || payload?.messageId || payload?.fcmMessageId || '',
+    recipientId: data.recipientId || '',
+    senderId: data.senderId || '',
+    senderRole: data.senderRole || '',
+    title: data.title || payload?.notification?.title || '',
+    message: data.message || payload?.notification?.body || '',
+    type: data.type || 'system',
+    status: data.status || 'info',
+    recordType: data.recordType || 'system',
+    relatedId: data.relatedId || '',
+    relatedRoute: data.relatedRoute || '/app/notifications',
+    referenceId: data.referenceId || '',
+    detail: data.detail || '',
+    isRead: false,
+    createdAt: data.createdAt || new Date().toISOString(),
+  })
+}
+
+export function NotificationProvider({ children, currentUser, notificationPermissionState = 'default' }) {
   const toast = useToast()
   const [notifications, setNotifications] = useState([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(false)
   const [socketConnected, setSocketConnected] = useState(false)
+  const [pushReady, setPushReady] = useState(false)
   const shownToastIdsRef = useRef(new Set())
   const notificationIdsRef = useRef(new Set())
   const notificationAudioContextRef = useRef(null)
@@ -182,7 +257,8 @@ export function NotificationProvider({ children, currentUser }) {
         typeof document !== 'undefined' &&
         document.visibilityState === 'hidden' &&
         typeof window.Notification !== 'undefined' &&
-        window.Notification.permission === 'granted'
+        window.Notification.permission === 'granted' &&
+        !pushReady
       ) {
         const browserNotification = new window.Notification(notification.title, {
           body: [notification.message, notification.referenceId].filter(Boolean).join(' | '),
@@ -201,7 +277,7 @@ export function NotificationProvider({ children, currentUser }) {
         }
       }
     },
-    [currentUser?.id, playNotificationSound, toast],
+    [currentUser?.id, playNotificationSound, pushReady, toast],
   )
 
   useEffect(() => {
@@ -342,6 +418,34 @@ export function NotificationProvider({ children, currentUser }) {
     }
   }, [notifications, refreshNotifications])
 
+  const handleIncomingNotification = useCallback(
+    (rawNotification) => {
+      const notification = normalizeNotificationPayload(rawNotification)
+
+      if (!notification) {
+        return
+      }
+
+      const isKnownNotification = notification.id ? notificationIdsRef.current.has(notification.id) : false
+
+      if (notification.id) {
+        notificationIdsRef.current.add(notification.id)
+        setNotifications((previousNotifications) => mergeNotificationLists(previousNotifications, notification))
+      } else {
+        setNotifications((previousNotifications) =>
+          sortNotifications([notification, ...previousNotifications]).slice(0, MAX_NOTIFICATIONS),
+        )
+      }
+
+      if (!notification.isRead && (!notification.id || !isKnownNotification)) {
+        setUnreadCount((previousCount) => previousCount + 1)
+      }
+
+      showRealtimeToast(notification)
+    },
+    [showRealtimeToast],
+  )
+
   useEffect(() => {
     notificationIdsRef.current = new Set()
     shownToastIdsRef.current = new Set()
@@ -351,6 +455,7 @@ export function NotificationProvider({ children, currentUser }) {
       setUnreadCount(0)
       setLoading(false)
       setSocketConnected(false)
+      setPushReady(false)
       return undefined
     }
 
@@ -393,15 +498,7 @@ export function NotificationProvider({ children, currentUser }) {
         return
       }
 
-      const isKnownNotification = notificationIdsRef.current.has(notification.id)
-      notificationIdsRef.current.add(notification.id)
-      setNotifications((previousNotifications) => mergeNotificationLists(previousNotifications, notification))
-
-      if (!notification.isRead && !isKnownNotification) {
-        setUnreadCount((previousCount) => previousCount + 1)
-      }
-
-      showRealtimeToast(notification)
+      handleIncomingNotification(notification)
     }
 
     function handleNotificationRead(event) {
@@ -466,19 +563,87 @@ export function NotificationProvider({ children, currentUser }) {
       socket.disconnect()
       setSocketConnected(false)
     }
-  }, [currentUser?.id, showRealtimeToast])
+  }, [currentUser?.id, handleIncomingNotification])
+
+  useEffect(() => {
+    let ignore = false
+    let unsubscribe = () => {}
+
+    async function setupPushNotifications() {
+      if (
+        !currentUser?.id ||
+        notificationPermissionState !== 'granted' ||
+        !isFirebaseMessagingConfigured()
+      ) {
+        setPushReady(false)
+        return
+      }
+
+      try {
+        const token = await getFirebaseMessagingToken()
+
+        if (!token || ignore) {
+          setPushReady(false)
+          return
+        }
+
+        await saveNotificationDeviceToken({
+          token,
+          device: navigator.userAgent || 'Web browser',
+        })
+
+        if (ignore) {
+          return
+        }
+
+        setPushReady(true)
+        unsubscribe = await subscribeToForegroundMessages((payload) => {
+          const notification = mapFirebaseMessageToNotification(payload)
+
+          if (notification) {
+            handleIncomingNotification(notification)
+          }
+        })
+      } catch (error) {
+        if (!ignore) {
+          setPushReady(false)
+
+          if (import.meta.env.DEV) {
+            console.warn('DwarPal push notification setup failed.', error)
+          }
+        }
+      }
+    }
+
+    void setupPushNotifications()
+
+    return () => {
+      ignore = true
+      unsubscribe?.()
+    }
+  }, [currentUser?.id, handleIncomingNotification, notificationPermissionState])
 
   const contextValue = useMemo(
     () => ({
       notifications,
       unreadCount,
       loading,
+      pushReady,
       socketConnected,
       refreshNotifications,
       markNotificationRead,
       markAllRead,
     }),
-    [loading, markAllRead, markNotificationRead, notifications, refreshNotifications, socketConnected, unreadCount],
+    [
+      loading,
+      markAllRead,
+      markNotificationRead,
+      notifications,
+      pushReady,
+      refreshNotifications,
+      socketConnected,
+      unreadCount,
+    ],
   )
 
   return <NotificationContext.Provider value={contextValue}>{children}</NotificationContext.Provider>

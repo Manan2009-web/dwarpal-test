@@ -7,6 +7,7 @@ const {
   emitNotificationCreated,
   emitNotificationsRead
 } = require('./realtimeService');
+const { sendPushNotification } = require('./pushNotificationService');
 
 function toId(value) {
   return value?._id?.toString?.() || value?.toString?.() || '';
@@ -153,6 +154,10 @@ function mapNotificationDocument(notification = {}, overrides = {}) {
     type: notification.type || 'system',
     status: normalizeStatus(notification.status || metadata.status),
     recordType,
+    relatedId:
+      toId(notification.gatepass) ||
+      toId(notification.facultyLeaveRequest) ||
+      String(referenceId || '').trim(),
     relatedRoute: buildRelatedRoute(recordType, referenceId, notification.relatedRoute),
     referenceId,
     detail: buildNotificationDetail({
@@ -289,6 +294,19 @@ async function persistNotification(notification, userMaps) {
 
   if (isNewRecord) {
     emitNotificationCreated(mappedNotification);
+    void sendPushNotification(mappedNotification.recipientId, mappedNotification.title, mappedNotification.message, {
+      notificationId: mappedNotification.id,
+      referenceId: mappedNotification.referenceId,
+      relatedId: mappedNotification.relatedId,
+      relatedRoute: mappedNotification.relatedRoute,
+      recordType: mappedNotification.recordType,
+      status: mappedNotification.status,
+      type: mappedNotification.type,
+      detail: mappedNotification.detail,
+      createdAt: mappedNotification.createdAt
+    }).catch((error) => {
+      console.warn(`[notifications] Push delivery failed: ${error.message || error}`);
+    });
   }
 
   return mappedNotification;

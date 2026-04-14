@@ -17,7 +17,7 @@ export function getNotificationPermissionMeta(status, supported = true) {
       tone: 'success',
       badge: 'Enabled',
       title: 'Browser notifications are enabled',
-      description: 'DwarPal is ready for future approval, rejection, and security workflow notifications on this device.',
+      description: 'DwarPal is ready for future browser and push-style workflow notifications on this device.',
       actionLabel: 'Review status',
     }
   }
@@ -37,7 +37,7 @@ export function getNotificationPermissionMeta(status, supported = true) {
       tone: 'info',
       badge: 'Later',
       title: 'Browser notifications are not enabled yet',
-      description: 'Turn them on when you want quicker updates for approvals, rejections, and gate verification activity.',
+      description: 'Turn them on when you want app-like updates for approvals, rejections, and gate verification activity.',
       actionLabel: 'Enable notifications',
     }
   }
@@ -45,11 +45,11 @@ export function getNotificationPermissionMeta(status, supported = true) {
   return {
     tone: 'info',
     badge: 'Available',
-    title: 'Browser notifications are available',
-    description: 'Enable them for smoother approval, rejection, and gate verification updates from DwarPal.',
-    actionLabel: 'Enable notifications',
+      title: 'Browser notifications are available',
+      description: 'Enable them for smoother push-style approval, rejection, and gate verification updates from DwarPal.',
+      actionLabel: 'Enable notifications',
+    }
   }
-}
 
 export function NotificationPermissionCard({
   status,
@@ -98,8 +98,8 @@ export default function NotificationPermissionPrompt({
         </div>
         <div className="permission-prompt-copy">
           <span className="eyebrow">Stay updated</span>
-          <h3>Allow DwarPal notifications?</h3>
-          <p>Get future browser alerts for approvals, rejections, forwarded requests, and important gate verification activity.</p>
+          <h3>Allow DwarPal push notifications?</h3>
+          <p>Get app-like alerts for approvals, rejections, forwarded requests, and important gate verification activity.</p>
         </div>
         <div className="permission-prompt-actions">
           <ActionButton type="button" tone="secondary" onClick={onMaybeLater}>

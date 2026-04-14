@@ -1,16 +1,18 @@
 const express = require('express');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, requireVerifiedEmail } = require('../middleware/authMiddleware');
 const validateRequest = require('../middleware/validateRequest');
 const { basePaginationQueryValidation } = require('../validators/queryValidators');
 const {
-  notificationIdParamValidation
+  notificationIdParamValidation,
+  saveNotificationTokenValidation
 } = require('../validators/notificationValidators');
 const notificationController = require('../controllers/notificationController');
 
 const router = express.Router();
 
-router.use(protect);
+router.use(protect, requireVerifiedEmail);
 
+router.post('/save-token', saveNotificationTokenValidation, validateRequest, notificationController.saveToken);
 router.get('/', basePaginationQueryValidation, validateRequest, notificationController.listNotifications);
 router.get('/unread-count', notificationController.getUnreadCount);
 router.patch('/read-all', notificationController.markAllRead);

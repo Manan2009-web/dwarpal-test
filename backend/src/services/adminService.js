@@ -141,6 +141,13 @@ function applySafeSystemAccountDefaults(user, account) {
   changed = assignIfMissing(user, 'phone', account.phone) || changed;
   changed = assignIfMissing(user, 'department', account.department) || changed;
 
+  if (user.emailVerified !== true || user.isEmailVerified !== true) {
+    user.emailVerified = true;
+    user.isEmailVerified = true;
+    user.emailVerifiedAt = user.emailVerifiedAt || new Date();
+    changed = true;
+  }
+
   if (['student', 'hod'].includes(account.role)) {
     changed = assignIfMissing(user, 'program', account.program) || changed;
   }
@@ -250,7 +257,10 @@ async function seedDefaultAdmins({
 
     const createdUser = await User.create({
       ...account,
-      password: env.seedAdminPassword
+      password: env.seedAdminPassword,
+      emailVerified: true,
+      isEmailVerified: true,
+      emailVerifiedAt: new Date()
     });
 
     created.push({

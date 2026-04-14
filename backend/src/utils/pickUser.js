@@ -1,5 +1,10 @@
 const { toPublicUrl } = require('./request');
 const { normalizeRole } = require('../constants/appConstants');
+const {
+  getPendingVerificationEmail,
+  getUserVerificationEmail,
+  isUserEmailVerified
+} = require('./emailVerificationState');
 
 function pickUser(user, req) {
   if (!user) {
@@ -8,6 +13,9 @@ function pickUser(user, req) {
 
   const source = typeof user.toObject === 'function' ? user.toObject() : user;
   const normalizedRole = normalizeRole(source.role) || source.role;
+  const emailVerified = isUserEmailVerified(source);
+  const pendingEmail = getPendingVerificationEmail(source) || null;
+  const verificationEmail = getUserVerificationEmail(source) || source.email || null;
 
   return {
     id: source._id?.toString?.() || source.id,
@@ -22,6 +30,11 @@ function pickUser(user, req) {
     phone: source.phone,
     profileImage: source.profileImage || null,
     profileImageUrl: req ? toPublicUrl(source.profileImage, req) : source.profileImage || null,
+    emailVerified,
+    isEmailVerified: emailVerified,
+    emailVerifiedAt: source.emailVerifiedAt || null,
+    pendingEmail,
+    verificationEmail,
     isActive: source.isActive,
     hasBiometricCredentials:
       typeof source.hasBiometricCredentials === 'boolean'

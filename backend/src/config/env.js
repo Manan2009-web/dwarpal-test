@@ -68,6 +68,31 @@ function parsePositiveIntegerEnv(value, fallbackValue) {
   return Number.isInteger(numericValue) && numericValue > 0 ? numericValue : fallbackValue;
 }
 
+function parseEmailIdentity(value) {
+  const normalizedValue = normalizeEnvString(value).replace(/^"+|"+$/g, '');
+
+  if (!normalizedValue) {
+    return {
+      email: '',
+      name: '',
+    };
+  }
+
+  const angleBracketMatch = normalizedValue.match(/^(?:"?([^"]*?)"?\s*)?<([^>]+)>$/);
+
+  if (angleBracketMatch) {
+    return {
+      name: normalizeEnvString(angleBracketMatch[1]),
+      email: normalizeEnvString(angleBracketMatch[2]).toLowerCase(),
+    };
+  }
+
+  return {
+    name: '',
+    email: normalizedValue.includes('@') ? normalizedValue.toLowerCase() : '',
+  };
+}
+
 const nodeEnv = normalizeEnvString(process.env.NODE_ENV) || 'development';
 const isProduction = nodeEnv === 'production';
 const isDevelopment = nodeEnv === 'development';
@@ -77,6 +102,7 @@ const legacyMongoUri = normalizeEnvString(process.env.MONGODB_URI);
 const mongoUri = configuredMongoUri || legacyMongoUri;
 const mongoUriSource = configuredMongoUri ? 'MONGO_URI' : legacyMongoUri ? 'MONGODB_URI' : null;
 const mongoUriConflict = Boolean(configuredMongoUri && legacyMongoUri && configuredMongoUri !== legacyMongoUri);
+const legacyEmailFrom = parseEmailIdentity(process.env.EMAIL_FROM);
 
 const defaultClientUrl = normalizeUrl(process.env.CLIENT_URL || 'http://localhost:5173');
 const defaultAllowedOrigins = Array.from(
@@ -155,6 +181,42 @@ const env = {
   defaultHodProgram: normalizeEnvString(process.env.DEFAULT_HOD_PROGRAM) || 'Degree',
   defaultHodDepartment: normalizeEnvString(process.env.DEFAULT_HOD_DEPARTMENT) || 'Computer Engineering',
   defaultCoordinatorSemester: parsePositiveIntegerEnv(process.env.DEFAULT_COORDINATOR_SEMESTER, 6),
+  otpSecret:
+    normalizeEnvString(process.env.OTP_SECRET) ||
+    normalizeEnvString(process.env.JWT_SECRET) ||
+    'dwarpal-dev-otp-secret',
+  registerOtpExpiryMinutes: parsePositiveIntegerEnv(process.env.REGISTER_OTP_EXPIRY_MINUTES, 5),
+  registerOtpResendCooldownSeconds: parsePositiveIntegerEnv(
+    process.env.REGISTER_OTP_RESEND_COOLDOWN_SECONDS,
+    45
+  ),
+  registerOtpResendLimit: parsePositiveIntegerEnv(process.env.REGISTER_OTP_RESEND_LIMIT, 5),
+  registerOtpVerifyAttemptLimit: parsePositiveIntegerEnv(
+    process.env.REGISTER_OTP_VERIFY_ATTEMPT_LIMIT,
+    5
+  ),
+  passwordResetOtpExpiryMinutes: parsePositiveIntegerEnv(process.env.PASSWORD_RESET_OTP_EXPIRY_MINUTES, 5),
+  passwordResetOtpResendCooldownSeconds: parsePositiveIntegerEnv(
+    process.env.PASSWORD_RESET_OTP_RESEND_COOLDOWN_SECONDS,
+    45
+  ),
+  passwordResetOtpVerifyAttemptLimit: parsePositiveIntegerEnv(
+    process.env.PASSWORD_RESET_OTP_VERIFY_ATTEMPT_LIMIT,
+    5
+  ),
+  smtpHost: normalizeEnvString(process.env.SMTP_HOST),
+  smtpPort: parsePositiveIntegerEnv(process.env.SMTP_PORT, 587),
+  smtpUser: normalizeEnvString(process.env.SMTP_USER),
+  smtpPass: normalizeEnvString(process.env.SMTP_PASS),
+  smtpSecure: parseBooleanEnv(process.env.SMTP_SECURE, false),
+  smtpFromName: normalizeEnvString(process.env.SMTP_FROM_NAME) || legacyEmailFrom.name || 'DwarPal',
+  smtpFromEmail: normalizeEnvString(process.env.SMTP_FROM_EMAIL) || legacyEmailFrom.email,
+  firebaseProjectId: normalizeEnvString(process.env.FIREBASE_PROJECT_ID),
+  firebaseClientEmail: normalizeEnvString(process.env.FIREBASE_CLIENT_EMAIL),
+  firebasePrivateKey: normalizeEnvString(process.env.FIREBASE_PRIVATE_KEY).replace(/\\n/g, '\n'),
+  firebaseStorageBucket: normalizeEnvString(process.env.FIREBASE_STORAGE_BUCKET),
+  firebaseServiceAccountJson: normalizeEnvString(process.env.FIREBASE_SERVICE_ACCOUNT_JSON),
+  firebaseServiceAccountBase64: normalizeEnvString(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64),
   qrSignSecret:
     normalizeEnvString(process.env.QR_SIGN_SECRET) ||
     normalizeEnvString(process.env.JWT_SECRET) ||
