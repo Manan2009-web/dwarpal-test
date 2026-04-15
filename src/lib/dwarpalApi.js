@@ -721,12 +721,31 @@ function toUiUser(user, session = null) {
     isActive: user.isActive ?? true,
     hasBiometricCredentials: Boolean(user.hasBiometricCredentials),
     gatepassApprovalEnabled: user.gatepassApprovalEnabled !== false,
+    isCoordinator: Boolean(user.isCoordinator || user.coordinatorAssignment?.isCoordinator || user.coordinatorScope?.isCoordinator),
     coordinatorAssignment: {
-      isCoordinator: Boolean(user.coordinatorAssignment?.isCoordinator),
-      program: normalizeProgram(user.coordinatorAssignment?.program),
-      department: normalizeDepartment(user.coordinatorAssignment?.department) || user.coordinatorAssignment?.department || null,
-      semester: user.coordinatorAssignment?.semester || null,
+      isCoordinator: Boolean(user.coordinatorAssignment?.isCoordinator || user.isCoordinator || user.coordinatorScope?.isCoordinator),
+      program: normalizeProgram(user.coordinatorAssignment?.program || user.coordinatorScope?.program),
+      department:
+        normalizeDepartment(user.coordinatorAssignment?.department || user.coordinatorScope?.department) ||
+        user.coordinatorAssignment?.department ||
+        user.coordinatorScope?.department ||
+        null,
+      semester: user.coordinatorAssignment?.semester || user.coordinatorScope?.semester || null,
     },
+    coordinatorScope: {
+      isCoordinator: Boolean(user.coordinatorScope?.isCoordinator || user.coordinatorAssignment?.isCoordinator || user.isCoordinator),
+      program: normalizeProgram(user.coordinatorScope?.program || user.coordinatorAssignment?.program),
+      department:
+        normalizeDepartment(user.coordinatorScope?.department || user.coordinatorAssignment?.department) ||
+        user.coordinatorScope?.department ||
+        user.coordinatorAssignment?.department ||
+        null,
+      semester: user.coordinatorScope?.semester || user.coordinatorAssignment?.semester || null,
+      division: user.coordinatorScope?.division || '',
+      academicYear: user.coordinatorScope?.academicYear || '',
+      assignedClasses: Array.isArray(user.coordinatorScope?.assignedClasses) ? user.coordinatorScope.assignedClasses : [],
+    },
+    permissions: Array.isArray(user.permissions) ? user.permissions : [],
     lastLoginAt: user.lastLoginAt || null,
     sessionAuthMethod: session?.authMethod || null,
     sessionExpiresAt: session?.expiresAt || null,
@@ -2174,6 +2193,108 @@ export async function verifyGatepassQr(rawValue) {
   })
 
   return mapGatepassVerificationResponse(payload, 'QR verification completed.')
+}
+
+function buildQueryString(params = {}) {
+  const searchParams = new URLSearchParams()
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') {
+      return
+    }
+
+    searchParams.set(key, String(value))
+  })
+
+  const queryString = searchParams.toString()
+  return queryString ? `?${queryString}` : ''
+}
+
+export async function fetchAdminExportOptions(params = {}, signal) {
+  const payload = await apiRequest(`/admin/export/options${buildQueryString(params)}`, { signal })
+  return payload?.data || null
+}
+
+export async function fetchAdminExportPreview(filters = {}, signal) {
+  const payload = await apiRequest('/admin/export/preview', {
+    method: 'POST',
+    body: filters,
+    signal,
+  })
+
+  return payload?.data || null
+}
+
+export async function fetchAdminExportHistory(params = {}, signal) {
+  const payload = await apiRequest(`/admin/export/history${buildQueryString(params)}`, { signal })
+  return {
+    history: Array.isArray(payload?.data) ? payload.data : [],
+    meta: payload?.meta || {},
+  }
+}
+
+function parseDownloadFilename(response, fallbackName) {
+  const contentDisposition = response.headers.get('content-disposition') || ''
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)
+  const plainMatch = contentDisposition.match(/filename="?([^";]+)"?/i)
+
+  try {
+    if (utf8Match?.[1]) {
+      return decodeURIComponent(utf8Match[1])
+    }
+  } catch {
+    // Fall back to the non-encoded filename below.
+  }
+
+  return plainMatch?.[1] || fallbackName
+}
+
+async function parseDownloadError(response, path) {
+  const rawText = await response.text().catch(() => '')
+
+  if (!rawText) {
+    return new ApiError(getDefaultErrorMessage(response.status, path), response.status, { path })
+  }
+
+  try {
+    const payload = JSON.parse(rawText)
+    return new ApiError(payload?.message || getDefaultErrorMessage(response.status, path), response.status, payload)
+  } catch {
+    return new ApiError(rawText || getDefaultErrorMessage(response.status, path), response.status, {
+      path,
+      responsePreview: rawText.slice(0, 240),
+    })
+  }
+}
+
+export async function downloadAdminExport(format, filters = {}) {
+  const normalizedFormat = format === 'pdf' ? 'pdf' : 'excel'
+  const path = `/admin/export/${normalizedFormat}`
+  const requestHeaders = buildHeaders()
+  requestHeaders.set('Content-Type', 'application/json')
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers: requestHeaders,
+    credentials: 'include',
+    body: JSON.stringify(filters),
+  })
+
+  if (!response.ok) {
+    throw await parseDownloadError(response, path)
+  }
+
+  const blob = await response.blob()
+  const fileName = parseDownloadFilename(
+    response,
+    normalizedFormat === 'pdf' ? 'dwarpal-report.pdf' : 'dwarpal-report.xlsx',
+  )
+
+  return {
+    blob,
+    fileName,
+    contentType: response.headers.get('content-type') || blob.type,
+  }
 }
 
 export { ApiError }

@@ -137,7 +137,7 @@ export function EmptyState({ title, description, action }) {
 }
 
 export function Sidebar({ currentUser, currentPage, onNavigate, onLogout, open, onClose, notificationCount = 0 }) {
-  const navItems = getNavItems(currentUser.role, notificationCount)
+  const navItems = getNavItems(currentUser, notificationCount)
 
   function handleNavigate(page) {
     onNavigate(page)
@@ -499,12 +499,27 @@ function formatNavBadge(value) {
   return value > 99 ? '99+' : String(value)
 }
 
-function getNavItems(role, notificationCount = 0) {
+function hasAdminPortalAccess(currentUser) {
+  const permissions = Array.isArray(currentUser?.permissions) ? currentUser.permissions : []
+  return (
+    ['principal', 'hod', 'cao', 'security'].includes(currentUser?.role) ||
+    Boolean(currentUser?.isCoordinator || currentUser?.coordinatorAssignment?.isCoordinator || currentUser?.coordinatorScope?.isCoordinator) ||
+    permissions.includes('admin:access') ||
+    permissions.includes('admin:*')
+  )
+}
+
+function getNavItems(currentUser, notificationCount = 0) {
+  const role = typeof currentUser === 'string' ? currentUser : currentUser?.role
   const base = [
     { key: 'dashboard', label: 'Dashboard', icon: Sparkles },
     { key: 'notifications', label: 'Notifications', icon: Bell, badge: notificationCount },
     { key: 'profile', label: 'Profile', icon: UserCircle2 },
   ]
+
+  if (typeof currentUser === 'object' && hasAdminPortalAccess(currentUser)) {
+    base.push({ key: 'admin-portal', label: 'Admin Portal', icon: ShieldCheck })
+  }
 
   if (role === 'student' || role === 'faculty') {
     return base

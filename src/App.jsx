@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import './App.css'
 import AppBrand from './components/AppBrand'
+import AdminPortal from './components/AdminPortal'
 import FacultyLeaveWizard from './components/FacultyLeaveWizard'
 import FeatureBoundary from './components/FeatureBoundary'
 import ForceEmailVerificationModal from './components/ForceEmailVerificationModal'
@@ -152,6 +153,39 @@ function getDashboardPathForRole(role) {
   return ROLE_DASHBOARD_PATHS[normalizeRole(role)] || '/app/dashboard'
 }
 
+function hasAdminPortalAccess(user) {
+  if (!user) return false
+
+  const role = normalizeRole(user.role)
+  const permissions = Array.isArray(user.permissions) ? user.permissions : []
+
+  if (['principal', 'hod', 'cao', 'security'].includes(role)) {
+    return true
+  }
+
+  return (
+    Boolean(user.isCoordinator || user.coordinatorAssignment?.isCoordinator || user.coordinatorScope?.isCoordinator) ||
+    permissions.includes('admin:access') ||
+    permissions.includes('admin:*')
+  )
+}
+
+function getLandingPathForUser(user) {
+  if (!user) return '/login'
+
+  if (hasAdminPortalAccess(user)) {
+    return '/admin/dashboard'
+  }
+
+  const role = normalizeRole(user.role)
+
+  if (role === 'student' || role === 'faculty') {
+    return '/user/dashboard'
+  }
+
+  return getDashboardPathForRole(role)
+}
+
 function logBootstrapDebug(event, details) {
   if (!import.meta.env.DEV) {
     return
@@ -178,6 +212,12 @@ function useRouteGuardDebug(label, authReady, currentUser) {
   }, [authReady, currentUser?.id, currentUser?.role, label, location.pathname])
 }
 const APP_PAGES = new Set(['dashboard', 'notifications', 'profile'])
+const USER_PAGE_ALIASES = {
+  gatepasses: 'dashboard',
+  'new-gatepass': 'dashboard',
+  history: 'dashboard',
+  'leave-adjustment': 'dashboard',
+}
 
 function getRequestLabel(request) {
   if (request?.requestKind === 'faculty_leave') {
@@ -830,7 +870,7 @@ function App() {
           ? 'Please verify your email to continue using DwarPal.'
           : `Welcome back to DwarPal, ${user.name}.`,
       })
-      return { ok: true, user, dashboardPath: getDashboardPathForRole(user?.role) }
+      return { ok: true, user, dashboardPath: getLandingPathForUser(user) }
     } catch (error) {
       console.error('[dwarpal-auth-ui] login request failed', {
         error,
@@ -867,7 +907,7 @@ function App() {
           ? 'Please verify your email to continue using DwarPal.'
           : `Signed in with ${mode === 'face' ? 'face recognition' : 'fingerprint'} successfully.`,
       })
-      return { ok: true, user, dashboardPath: getDashboardPathForRole(user?.role) }
+      return { ok: true, user, dashboardPath: getLandingPathForUser(user) }
     } catch (error) {
       if (error instanceof ApiError) {
         const errorDetails = resolveApiError(error, {
@@ -1431,6 +1471,31 @@ function App() {
     )
   }
 
+  function renderAdminRoute() {
+    return (
+      <AdminRoute currentUser={currentUser} authReady={authReady}>
+        <div className={requiresEmailVerification ? 'app-shell-lock-surface' : ''} aria-hidden={requiresEmailVerification}>
+          <AdminPortal currentUser={currentUser} onLogout={logout} />
+        </div>
+        <ForceEmailVerificationModal
+          open={requiresEmailVerification}
+          currentUser={currentUser}
+          onSendOtp={sendCurrentUserVerificationOtp}
+          onUpdateEmail={updateCurrentUserVerificationEmail}
+          onVerifyOtp={verifyCurrentUserEmailOtpCode}
+        />
+      </AdminRoute>
+    )
+  }
+
+  function renderUserRoute() {
+    return (
+      <UserRoute currentUser={currentUser} authReady={authReady}>
+        {renderAppShellRoute()}
+      </UserRoute>
+    )
+  }
+
   return (
     <BrowserRouter>
       <Routes>
@@ -1469,6 +1534,8 @@ function App() {
           path="/app/:page"
           element={renderAppShellRoute()}
         />
+        <Route path="/user/:page" element={renderUserRoute()} />
+        <Route path="/admin/*" element={renderAdminRoute()} />
         <Route path="/student/dashboard" element={renderAppShellRoute('student')} />
         <Route path="/faculty/dashboard" element={renderAppShellRoute('faculty')} />
         <Route path="/principal/dashboard" element={renderAppShellRoute('principal')} />
@@ -1497,6 +1564,33 @@ function ProtectedRoute({ currentUser, authReady, children }) {
   return children
 }
 
+function UserRoute({ currentUser, authReady, children }) {
+  useRouteGuardDebug('user-panel', authReady, currentUser)
+
+  if (!authReady) return <AuthBootstrapScreen />
+  if (!currentUser) return <Navigate to="/login" replace />
+
+  const role = normalizeRole(currentUser.role)
+  if (!['student', 'faculty'].includes(role)) {
+    return <Navigate to={getLandingPathForUser(currentUser)} replace />
+  }
+
+  return children
+}
+
+function AdminRoute({ currentUser, authReady, children }) {
+  useRouteGuardDebug('admin-panel', authReady, currentUser)
+
+  if (!authReady) return <AuthBootstrapScreen />
+  if (!currentUser) return <Navigate to="/login" replace />
+
+  if (!hasAdminPortalAccess(currentUser)) {
+    return <Navigate to={getDashboardPathForRole(currentUser.role)} replace />
+  }
+
+  return children
+}
+
 function RoleDashboardRoute({ currentUser, authReady, expectedRole, children }) {
   useRouteGuardDebug(`${expectedRole}-dashboard`, authReady, currentUser)
 
@@ -1505,7 +1599,7 @@ function RoleDashboardRoute({ currentUser, authReady, expectedRole, children }) 
 
   const normalizedCurrentRole = normalizeRole(currentUser.role)
   if (normalizedCurrentRole !== expectedRole) {
-    return <Navigate to={getDashboardPathForRole(normalizedCurrentRole)} replace />
+    return <Navigate to={getLandingPathForUser(currentUser)} replace />
   }
 
   return children
@@ -1517,7 +1611,7 @@ function PublicAuthRoute({ currentUser, authReady, children }) {
   // Login redirect protection: authenticated users are pushed away from public auth screens with replace
   // so the browser back button cannot reopen login/register as an active page.
   if (!authReady) return <AuthBootstrapScreen />
-  if (currentUser) return <Navigate to={getDashboardPathForRole(currentUser.role)} replace />
+  if (currentUser) return <Navigate to={getLandingPathForUser(currentUser)} replace />
   return children
 }
 
@@ -1525,7 +1619,7 @@ function DefaultRoute({ currentUser, authReady }) {
   useRouteGuardDebug('default', authReady, currentUser)
 
   if (!authReady) return <AuthBootstrapScreen />
-  return <Navigate to={currentUser ? getDashboardPathForRole(currentUser.role) : '/login'} replace />
+  return <Navigate to={currentUser ? getLandingPathForUser(currentUser) : '/login'} replace />
 }
 
 function AuthBootstrapScreen() {
@@ -1739,7 +1833,7 @@ function LoginScreen({
       console.info('[dwarpal-auth-ui] login submit completed successfully', {
         identifier: maskAuthIdentifier(form.identifier),
       })
-      const dashboardPath = result.dashboardPath || getDashboardPathForRole(result.user?.role)
+      const dashboardPath = result.dashboardPath || getLandingPathForUser(result.user)
       setSuccess('Login successful. Redirecting to your dashboard...')
       // Use replace so the previous login entry is not left as a reachable back-navigation target.
       navigate(dashboardPath, { replace: true })
@@ -1793,7 +1887,7 @@ function LoginScreen({
         return
       }
 
-      const dashboardPath = result.dashboardPath || getDashboardPathForRole(result.user?.role)
+      const dashboardPath = result.dashboardPath || getLandingPathForUser(result.user)
       setSuccess('Login successful. Redirecting to your dashboard...')
       navigate(dashboardPath, { replace: true })
     } catch (error) {
@@ -2926,7 +3020,7 @@ function AppShell({
     markAllRead,
   } = useNotifications()
   const requestedPage = location.pathname.split('/').pop() || 'dashboard'
-  const currentPage = APP_PAGES.has(requestedPage) ? requestedPage : 'dashboard'
+  const currentPage = APP_PAGES.has(requestedPage) ? requestedPage : USER_PAGE_ALIASES[requestedPage] || 'dashboard'
   const focusReference = useMemo(
     () => new URLSearchParams(location.search).get('focus')?.trim().toUpperCase() || '',
     [location.search],
@@ -2958,7 +3052,7 @@ function AppShell({
   }, [hasOpenModal, onRefreshData])
 
   useEffect(() => {
-    if (requestedPage === currentPage) {
+    if (requestedPage === currentPage || USER_PAGE_ALIASES[requestedPage]) {
       return
     }
 
@@ -3047,6 +3141,12 @@ function AppShell({
     setNavOpen(false)
     setNotificationsOpen(false)
     setQrPreviewGatepass(null)
+
+    if (page === 'admin-portal') {
+      navigate('/admin/dashboard', { replace: true })
+      return
+    }
+
     navigate(`/app/${page}`, { replace: true })
   }
 

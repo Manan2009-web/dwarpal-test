@@ -41,12 +41,25 @@ function pickUser(user, req) {
         ? source.hasBiometricCredentials
         : Array.isArray(source.webAuthnCredentials) && source.webAuthnCredentials.length > 0,
     gatepassApprovalEnabled: source.gatepassApprovalEnabled !== false,
+    isCoordinator: Boolean(source.isCoordinator || source.coordinatorAssignment?.isCoordinator || source.coordinatorScope?.isCoordinator),
     coordinatorAssignment: {
-      isCoordinator: Boolean(source.coordinatorAssignment?.isCoordinator),
-      program: source.coordinatorAssignment?.program || null,
-      department: source.coordinatorAssignment?.department || null,
-      semester: source.coordinatorAssignment?.semester || null
+      isCoordinator: Boolean(source.coordinatorAssignment?.isCoordinator || source.isCoordinator || source.coordinatorScope?.isCoordinator),
+      program: source.coordinatorAssignment?.program || source.coordinatorScope?.program || null,
+      department: source.coordinatorAssignment?.department || source.coordinatorScope?.department || null,
+      semester: source.coordinatorAssignment?.semester || source.coordinatorScope?.semester || null
     },
+    coordinatorScope: {
+      isCoordinator: Boolean(source.coordinatorScope?.isCoordinator || source.coordinatorAssignment?.isCoordinator || source.isCoordinator),
+      program: source.coordinatorScope?.program || source.coordinatorAssignment?.program || null,
+      department: source.coordinatorScope?.department || source.coordinatorAssignment?.department || null,
+      semester: source.coordinatorScope?.semester || source.coordinatorAssignment?.semester || null,
+      division: source.coordinatorScope?.division || '',
+      academicYear: source.coordinatorScope?.academicYear || '',
+      assignedClasses: Array.isArray(source.coordinatorScope?.assignedClasses)
+        ? source.coordinatorScope.assignedClasses
+        : []
+    },
+    permissions: Array.isArray(source.permissions) ? source.permissions : [],
     lastLoginAt: source.lastLoginAt || null,
     createdAt: source.createdAt,
     updatedAt: source.updatedAt

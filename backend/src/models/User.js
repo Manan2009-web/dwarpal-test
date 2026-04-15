@@ -88,6 +88,82 @@ const coordinatorAssignmentSchema = new mongoose.Schema(
   }
 );
 
+const coordinatorClassScopeSchema = new mongoose.Schema(
+  {
+    program: {
+      type: String,
+      trim: true,
+      default: null
+    },
+    department: {
+      type: String,
+      trim: true,
+      default: null
+    },
+    semester: {
+      type: Number,
+      default: null
+    },
+    division: {
+      type: String,
+      trim: true,
+      maxlength: 40,
+      default: ''
+    },
+    academicYear: {
+      type: String,
+      trim: true,
+      maxlength: 40,
+      default: ''
+    }
+  },
+  {
+    _id: false
+  }
+);
+
+const coordinatorScopeSchema = new mongoose.Schema(
+  {
+    isCoordinator: {
+      type: Boolean,
+      default: false
+    },
+    program: {
+      type: String,
+      trim: true,
+      default: null
+    },
+    department: {
+      type: String,
+      trim: true,
+      default: null
+    },
+    semester: {
+      type: Number,
+      default: null
+    },
+    division: {
+      type: String,
+      trim: true,
+      maxlength: 40,
+      default: ''
+    },
+    academicYear: {
+      type: String,
+      trim: true,
+      maxlength: 40,
+      default: ''
+    },
+    assignedClasses: {
+      type: [coordinatorClassScopeSchema],
+      default: []
+    }
+  },
+  {
+    _id: false
+  }
+);
+
 const userSchema = new mongoose.Schema(
   {
     fullName: {
@@ -276,9 +352,38 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true
     },
+    isCoordinator: {
+      type: Boolean,
+      default: false
+    },
     coordinatorAssignment: {
       type: coordinatorAssignmentSchema,
       default: () => ({})
+    },
+    coordinatorScope: {
+      type: coordinatorScopeSchema,
+      default: () => ({})
+    },
+    permissions: {
+      type: [String],
+      default: [],
+      set(values) {
+        if (!Array.isArray(values)) {
+          return [];
+        }
+
+        return Array.from(
+          new Set(
+            values
+              .map((value) =>
+                String(value || '')
+                  .trim()
+                  .toLowerCase()
+              )
+              .filter(Boolean)
+          )
+        );
+      }
     },
     webAuthnCredentials: {
       type: [webAuthnCredentialSchema],
@@ -357,24 +462,92 @@ userSchema.pre('validate', function syncLegacyFields(next) {
     };
   }
 
-  const assignment = this.coordinatorAssignment;
-  assignment.isCoordinator = Boolean(assignment.isCoordinator);
+  if (!this.coordinatorScope || typeof this.coordinatorScope !== 'object') {
+    this.coordinatorScope = {
+      isCoordinator: false,
+      program: null,
+      department: null,
+      semester: null,
+      division: '',
+      academicYear: '',
+      assignedClasses: []
+    };
+  }
 
-  if (!['faculty', 'hod'].includes(this.role) || !assignment.isCoordinator) {
+  const assignment = this.coordinatorAssignment;
+  const scope = this.coordinatorScope;
+  const hasCoordinatorRole = ['faculty', 'hod'].includes(this.role);
+  const requestedCoordinator = Boolean(this.isCoordinator || assignment.isCoordinator || scope.isCoordinator);
+
+  if (!hasCoordinatorRole || !requestedCoordinator) {
+    this.isCoordinator = false;
     assignment.program = null;
     assignment.department = null;
     assignment.semester = null;
+    assignment.isCoordinator = false;
+    scope.isCoordinator = false;
+    scope.program = null;
+    scope.department = null;
+    scope.semester = null;
+    scope.division = '';
+    scope.academicYear = '';
+    scope.assignedClasses = [];
   } else {
-    assignment.program = normalizeProgram(assignment.program) || null;
-    assignment.department = normalizeDepartment(assignment.department) || null;
-    assignment.semester = assignment.semester ? Number(assignment.semester) : null;
+    const normalizedProgram = normalizeProgram(scope.program || assignment.program) || null;
+    const normalizedDepartment = normalizeDepartment(scope.department || assignment.department) || null;
+    const normalizedSemester = Number(scope.semester || assignment.semester) || null;
 
-    if (!assignment.program || !assignment.department || !SEMESTERS.includes(assignment.semester)) {
+    if (!normalizedProgram || !normalizedDepartment || !SEMESTERS.includes(normalizedSemester)) {
+      this.isCoordinator = false;
       assignment.isCoordinator = false;
       assignment.program = null;
       assignment.department = null;
       assignment.semester = null;
+      scope.isCoordinator = false;
+      scope.program = null;
+      scope.department = null;
+      scope.semester = null;
+      scope.division = '';
+      scope.academicYear = '';
+      scope.assignedClasses = [];
+    } else {
+      this.isCoordinator = true;
+      assignment.isCoordinator = true;
+      assignment.program = normalizedProgram;
+      assignment.department = normalizedDepartment;
+      assignment.semester = normalizedSemester;
+      scope.isCoordinator = true;
+      scope.program = normalizedProgram;
+      scope.department = normalizedDepartment;
+      scope.semester = normalizedSemester;
+      scope.division = String(scope.division || '').trim();
+      scope.academicYear = String(scope.academicYear || '').trim();
+      scope.assignedClasses = Array.isArray(scope.assignedClasses)
+        ? scope.assignedClasses
+            .map((item) => ({
+              program: normalizeProgram(item.program || normalizedProgram) || normalizedProgram,
+              department: normalizeDepartment(item.department || normalizedDepartment) || normalizedDepartment,
+              semester: Number(item.semester || normalizedSemester) || normalizedSemester,
+              division: String(item.division || scope.division || '').trim(),
+              academicYear: String(item.academicYear || scope.academicYear || '').trim()
+            }))
+            .filter((item) => item.department && SEMESTERS.includes(item.semester))
+        : [];
     }
+  }
+
+  if (Array.isArray(this.permissions)) {
+    this.permissions = Array.from(
+      new Set(
+        this.permissions
+          .map((permission) =>
+            String(permission || '')
+              .trim()
+              .toLowerCase()
+          )
+          .filter(Boolean)
+      )
+    );
   }
 
   if (!['principal', 'hod'].includes(this.role)) {
@@ -426,6 +599,8 @@ userSchema.index({
   'coordinatorAssignment.department': 1,
   'coordinatorAssignment.semester': 1
 });
+userSchema.index({ role: 1, isActive: 1, isCoordinator: 1, 'coordinatorScope.department': 1 });
+userSchema.index({ permissions: 1, isActive: 1 });
 userSchema.index({ role: 1, createdAt: -1 });
 userSchema.index({ updatedAt: -1 });
 userSchema.index({ 'webAuthnCredentials.credentialId': 1 }, { unique: true, sparse: true });
