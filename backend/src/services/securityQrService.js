@@ -10,6 +10,7 @@ const {
   verifySignedQrPayload
 } = require('../utils/qrSecurity');
 const {
+  canGatepassBeMarkedIn,
   ensureApprovedGatepassQr,
   mapGatepassListItem
 } = require('./gatepassService');
@@ -141,6 +142,15 @@ function buildGatepassSecurityVerificationResult(gatepass) {
       message: 'Gatepass is valid and ready to be marked OUT by security.',
       gatepass: mapGatepassListItem(gatepass),
       nextAction: 'markOut'
+    };
+  }
+
+  if (!canGatepassBeMarkedIn(gatepass)) {
+    return {
+      valid: false,
+      message: 'This gatepass does not require return marking after being marked OUT.',
+      gatepass: mapGatepassListItem(gatepass),
+      nextAction: null
     };
   }
 

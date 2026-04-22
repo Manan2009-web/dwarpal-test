@@ -63,6 +63,7 @@ router.patch('/:id/cancel', authorize('student', 'faculty'), cancelGatepassValid
 router.put('/:id', authorize('student', 'faculty'), updateGatepassValidation, validateRequest, gatepassController.updateGatepass);
 router.patch('/:id', authorize('student', 'faculty'), updateGatepassValidation, validateRequest, gatepassController.updateGatepass);
 router.delete('/:id', authorize('student', 'faculty'), deleteGatepassValidation, validateRequest, gatepassController.deleteGatepass);
+router.get('/', basePaginationQueryValidation, validateRequest, gatepassController.getGatepassHistory);
 router.get('/:id', gatepassIdParamValidation, validateRequest, gatepassController.getGatepassById);
 
 module.exports = router;

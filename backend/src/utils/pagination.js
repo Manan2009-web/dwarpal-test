@@ -16,12 +16,15 @@ function getPagination(query, options = {}) {
 
 function buildPaginationMeta(total, page, limit) {
   const lastUpdated = new Date().toISOString();
+  const totalPages = Math.max(Math.ceil(total / limit), 1);
 
   return {
     total,
+    totalRecords: total,
     page,
+    currentPage: page,
     limit,
-    totalPages: Math.max(Math.ceil(total / limit), 1),
+    totalPages,
     lastUpdated
   };
 }

@@ -315,9 +315,8 @@ const qrPayloadSchema = new mongoose.Schema(
       default: undefined
     },
     returnTime: {
-      type: String,
-      trim: true,
-      default: undefined
+      type: Date,
+      default: null
     }
   },
   {

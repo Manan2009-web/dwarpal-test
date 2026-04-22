@@ -4,6 +4,8 @@ import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate 
 import {
   Bell,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   QrCode,
   ScanLine,
@@ -64,6 +66,7 @@ import {
   clearStoredAuthToken,
   createBiometricAuthenticationOptions,
   createBiometricRegistrationOptions,
+  DEFAULT_WORKSPACE_PAGE_SIZE,
   fetchWorkspace,
   getBiometricDevices,
   getApiErrorDetails,
@@ -127,6 +130,25 @@ const ROLE_DASHBOARD_PATHS = {
   hod: '/hod/dashboard',
   security: '/security/dashboard',
   cao: '/cao/dashboard',
+}
+
+const DEFAULT_WORKSPACE_REQUEST_OPTIONS = {
+  page: 1,
+  limit: DEFAULT_WORKSPACE_PAGE_SIZE,
+  searchTerm: '',
+  statusFilter: 'All',
+}
+
+function createEmptyGatepassMeta(overrides = {}) {
+  return {
+    page: 1,
+    currentPage: 1,
+    limit: DEFAULT_WORKSPACE_PAGE_SIZE,
+    total: 0,
+    totalRecords: 0,
+    totalPages: 1,
+    ...overrides,
+  }
 }
 
 function maskAuthIdentifier(value) {
@@ -439,6 +461,7 @@ function getRegistrationDepartmentOptions(role, program) {
 function App() {
   const toast = useToast()
   const [gatepasses, setGatepasses] = useState([])
+  const [gatepassMeta, setGatepassMeta] = useState(() => createEmptyGatepassMeta())
   const [summary, setSummary] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
   const [authReady, setAuthReady] = useState(false)
@@ -451,10 +474,12 @@ function App() {
   const refreshRequestRef = useRef(0)
   const refreshInFlightRef = useRef(false)
   const lastRefreshErrorToastAtRef = useRef(0)
+  const workspaceRequestOptionsRef = useRef(DEFAULT_WORKSPACE_REQUEST_OPTIONS)
   const requiresEmailVerification = currentUser?.emailVerified === false
 
   const resetWorkspace = useCallback(() => {
     setGatepasses([])
+    setGatepassMeta(createEmptyGatepassMeta())
     setSummary(null)
   }, [])
 
@@ -707,11 +732,11 @@ function App() {
   }, [refreshNotificationPermissionState])
 
   const loadWorkspace = useCallback(
-    async (role, signal) => {
+    async (role, signal, requestOptions = workspaceRequestOptionsRef.current) => {
       if (!role) return
 
       const requestId = ++refreshRequestRef.current
-      const workspace = await fetchWorkspace(role, signal)
+      const workspace = await fetchWorkspace(role, signal, requestOptions)
 
       if (signal?.aborted || requestId !== refreshRequestRef.current) {
         return
@@ -719,22 +744,29 @@ function App() {
 
       setSummary(workspace.summary)
       setGatepasses(workspace.gatepasses)
+      setGatepassMeta(createEmptyGatepassMeta(workspace.gatepassesMeta))
     },
     [],
   )
 
   const refreshAppData = useCallback(
-    async (signal, { force = false } = {}) => {
+    async (signal, { force = false, requestOptions = null } = {}) => {
       if (!currentUser?.role || currentUser?.emailVerified === false) return
 
       if (!force && refreshInFlightRef.current) {
         return
       }
 
+      const resolvedRequestOptions = {
+        ...workspaceRequestOptionsRef.current,
+        ...(requestOptions || {}),
+      }
+      workspaceRequestOptionsRef.current = resolvedRequestOptions
+
       refreshInFlightRef.current = true
 
       try {
-        await loadWorkspace(currentUser.role, signal)
+        await loadWorkspace(currentUser.role, signal, resolvedRequestOptions)
       } catch (error) {
         if (signal?.aborted || error?.name === 'AbortError') {
           return
@@ -837,6 +869,7 @@ function App() {
   useEffect(() => {
     if (!currentUser?.role || currentUser?.emailVerified === false) {
       refreshRequestRef.current += 1
+      workspaceRequestOptionsRef.current = DEFAULT_WORKSPACE_REQUEST_OPTIONS
       resetWorkspace()
       return undefined
     }
@@ -1432,6 +1465,7 @@ function App() {
             currentUser={currentUser}
             summary={summary}
             gatepasses={gatepasses}
+            gatepassMeta={gatepassMeta}
             onLogout={logout}
             onAddGatepass={addGatepass}
             onCurrentUserPatch={patchCurrentUser}
@@ -2860,6 +2894,7 @@ function AppShell({
   currentUser,
   summary,
   gatepasses,
+  gatepassMeta,
   onCurrentUserPatch,
   onUpdateCurrentUserProfile,
   onLogout,
@@ -2894,17 +2929,65 @@ function AppShell({
   )
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
+  const [currentServerPage, setCurrentServerPage] = useState(1)
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [rejectRequest, setRejectRequest] = useState(null)
   const [navOpen, setNavOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [qrPreviewGatepass, setQrPreviewGatepass] = useState(null)
   const notificationWrapperRef = useRef(null)
+  const hasSyncedInitialWorkspaceQueryRef = useRef(false)
   const hasOpenModal =
     modalOpen || Boolean(rejectRequest) || Boolean(qrPreviewGatepass) || notificationPromptOpen
 
   useEffect(() => {
-    if (hasOpenModal) return undefined
+    const debounceId = window.setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm.trim())
+    }, 220)
+
+    return () => window.clearTimeout(debounceId)
+  }, [searchTerm])
+
+  useEffect(() => {
+    setSearchTerm('')
+    setStatusFilter('All')
+    setDebouncedSearchTerm('')
+    setCurrentServerPage(1)
+    hasSyncedInitialWorkspaceQueryRef.current = false
+  }, [currentUser?.id])
+
+  useEffect(() => {
+    if (currentPage !== 'dashboard') {
+      return undefined
+    }
+
+    if (!hasSyncedInitialWorkspaceQueryRef.current) {
+      hasSyncedInitialWorkspaceQueryRef.current = true
+
+      if (!focusReference) {
+        return undefined
+      }
+    }
+
+    const controller = new AbortController()
+    const requestSearchTerm = debouncedSearchTerm || focusReference
+
+    onRefreshData(controller.signal, {
+      force: true,
+      requestOptions: {
+        page: currentServerPage,
+        limit: DEFAULT_WORKSPACE_PAGE_SIZE,
+        searchTerm: requestSearchTerm,
+        statusFilter,
+      },
+    })
+
+    return () => controller.abort()
+  }, [currentPage, currentServerPage, debouncedSearchTerm, focusReference, statusFilter, onRefreshData])
+
+  useEffect(() => {
+    if (currentPage !== 'dashboard' || hasOpenModal) return undefined
 
     // Dashboard auto-refresh: pull the latest backend queue every 10 seconds.
     const intervalId = window.setInterval(() => {
@@ -2912,11 +2995,20 @@ function AppShell({
         return
       }
 
-      onRefreshData()
+      const requestSearchTerm = debouncedSearchTerm || focusReference
+
+      onRefreshData(undefined, {
+        requestOptions: {
+          page: currentServerPage,
+          limit: DEFAULT_WORKSPACE_PAGE_SIZE,
+          searchTerm: requestSearchTerm,
+          statusFilter,
+        },
+      })
     }, DASHBOARD_REFRESH_MS)
 
     return () => window.clearInterval(intervalId)
-  }, [hasOpenModal, onRefreshData])
+  }, [currentPage, currentServerPage, debouncedSearchTerm, focusReference, hasOpenModal, onRefreshData, statusFilter])
 
   useEffect(() => {
     if (requestedPage === currentPage || USER_PAGE_ALIASES[requestedPage]) {
@@ -2961,31 +3053,19 @@ function AppShell({
     return () => window.clearTimeout(promptTimer)
   }, [currentPage, hasOpenModal, notificationPermissionState, notificationsSupported, onOpenNotificationPrompt])
 
+  useEffect(() => {
+    const totalPages = Math.max(Number(gatepassMeta?.totalPages) || 1, 1)
+
+    if (currentServerPage > totalPages) {
+      setCurrentServerPage(totalPages)
+    }
+  }, [currentServerPage, gatepassMeta?.totalPages])
+
   const scopedGatepasses = useMemo(() => getRoleScopedGatepasses(currentUser, gatepasses), [currentUser, gatepasses])
 
   const filteredGatepasses = useMemo(
     () => {
-      const matchingGatepasses = scopedGatepasses.filter((gatepass) => {
-        const matchesStatus = statusFilter === 'All' || gatepass.status === statusFilter
-        const haystack = [
-          gatepass.id,
-          gatepass.name,
-          gatepass.enrollment,
-          gatepass.program,
-          gatepass.department,
-          gatepass.status,
-          gatepass.reason,
-          gatepass.leaveType,
-          gatepass.workloadStage,
-          gatepass.shortLeaveStage,
-          gatepass.instituteName,
-          gatepass.vehicleNumber,
-        ]
-          .join(' ')
-          .toLowerCase()
-        const matchesSearch = haystack.includes(searchTerm.trim().toLowerCase())
-        return matchesStatus && matchesSearch
-      })
+      const matchingGatepasses = [...scopedGatepasses]
 
       if (!focusReference) {
         return matchingGatepasses
@@ -2999,7 +3079,7 @@ function AppShell({
 
       return [focusedGatepass, ...matchingGatepasses]
     },
-    [focusReference, scopedGatepasses, searchTerm, statusFilter],
+    [focusReference, scopedGatepasses],
   )
 
   const stats = getRoleStats(currentUser, summary, scopedGatepasses)
@@ -3028,6 +3108,38 @@ function AppShell({
 
   function handleOpenQrPreview(gatepass) {
     setQrPreviewGatepass(gatepass)
+  }
+
+  function clearDashboardFocus() {
+    if (!focusReference) {
+      return
+    }
+
+    const searchParams = new URLSearchParams(location.search)
+    searchParams.delete('focus')
+    const nextSearch = searchParams.toString()
+
+    navigate(`${location.pathname}${nextSearch ? `?${nextSearch}` : ''}`, { replace: true })
+  }
+
+  function handleSearchTermChange(nextValue) {
+    clearDashboardFocus()
+    setCurrentServerPage(1)
+    setSearchTerm(nextValue)
+  }
+
+  function handleStatusFilterChange(nextValue) {
+    clearDashboardFocus()
+    setCurrentServerPage(1)
+    setStatusFilter(nextValue)
+  }
+
+  function handleServerPageChange(nextPage) {
+    clearDashboardFocus()
+    const totalPages = Math.max(Number(gatepassMeta?.totalPages) || 1, 1)
+    const normalizedPage = Math.min(Math.max(Number(nextPage) || 1, 1), totalPages)
+
+    setCurrentServerPage(normalizedPage)
   }
 
   async function handleDashboardGatepassAction(request, action) {
@@ -3081,6 +3193,7 @@ function AppShell({
     }
 
     setNotificationsOpen(false)
+    setCurrentServerPage(1)
     setSearchTerm('')
     setStatusFilter('All')
 
@@ -3149,11 +3262,14 @@ function AppShell({
               currentUser={currentUser}
               stats={stats}
               gatepasses={filteredGatepasses}
+              gatepassMeta={gatepassMeta}
+              currentServerPage={currentServerPage}
               onUpdateCurrentUserProfile={onUpdateCurrentUserProfile}
               searchTerm={searchTerm}
-              onSearchTermChange={setSearchTerm}
+              onSearchTermChange={handleSearchTermChange}
               statusFilter={statusFilter}
-              onStatusFilterChange={setStatusFilter}
+              onStatusFilterChange={handleStatusFilterChange}
+              onPageChange={handleServerPageChange}
               onOpenModal={() => setModalOpen(true)}
               onGatepassAction={handleDashboardGatepassAction}
               focusReference={focusReference}
@@ -3359,11 +3475,14 @@ function DashboardPage({
   currentUser,
   stats,
   gatepasses,
+  gatepassMeta,
+  currentServerPage,
   onUpdateCurrentUserProfile,
   searchTerm,
   onSearchTermChange,
   statusFilter,
   onStatusFilterChange,
+  onPageChange,
   onOpenModal,
   onGatepassAction,
   focusReference,
@@ -3507,7 +3626,106 @@ function DashboardPage({
             action={isRequester ? <ActionButton onClick={onOpenModal}>New Gatepass</ActionButton> : null}
           />
         )}
+
+        {Number(gatepassMeta?.totalRecords || 0) ? (
+          <PaginationControls
+            currentPage={currentServerPage}
+            pageSize={gatepassMeta?.limit}
+            totalPages={gatepassMeta?.totalPages}
+            totalRecords={gatepassMeta?.totalRecords}
+            onPageChange={onPageChange}
+          />
+        ) : null}
       </section>
+    </div>
+  )
+}
+
+function buildPaginationSequence(currentPage, totalPages) {
+  const safeCurrentPage = Math.min(Math.max(Number(currentPage) || 1, 1), Math.max(Number(totalPages) || 1, 1))
+  const safeTotalPages = Math.max(Number(totalPages) || 1, 1)
+
+  if (safeTotalPages <= 5) {
+    return Array.from({ length: safeTotalPages }, (_, index) => index + 1)
+  }
+
+  const anchorPages = new Set([1, safeTotalPages, safeCurrentPage - 1, safeCurrentPage, safeCurrentPage + 1])
+  const pages = [...anchorPages].filter((page) => page >= 1 && page <= safeTotalPages).sort((left, right) => left - right)
+  const sequence = []
+
+  pages.forEach((page, index) => {
+    const previousPage = pages[index - 1]
+
+    if (index > 0 && previousPage !== page - 1) {
+      sequence.push(`gap-${previousPage}-${page}`)
+    }
+
+    sequence.push(page)
+  })
+
+  return sequence
+}
+
+function PaginationControls({ currentPage, pageSize, totalPages, totalRecords, onPageChange }) {
+  const safeTotalPages = Math.max(Number(totalPages) || 1, 1)
+  const safeCurrentPage = Math.min(Math.max(Number(currentPage) || 1, 1), safeTotalPages)
+  const safePageSize = Math.max(Number(pageSize) || DEFAULT_WORKSPACE_PAGE_SIZE, 1)
+  const paginationSequence = buildPaginationSequence(safeCurrentPage, safeTotalPages)
+  const firstRecordIndex = totalRecords ? (safeCurrentPage - 1) * safePageSize + 1 : 0
+  const lastRecordIndex = totalRecords ? Math.min(safeCurrentPage * safePageSize, totalRecords) : 0
+
+  return (
+    <div className="workspace-pagination" aria-label="Gatepass history pagination">
+      <div className="pagination-meta">
+        <strong>
+          Page {safeCurrentPage} of {safeTotalPages}
+        </strong>
+        <span>
+          Showing {firstRecordIndex}-{lastRecordIndex} of {totalRecords}
+        </span>
+      </div>
+
+      <div className="pagination-controls">
+        <button
+          type="button"
+          className="pagination-button"
+          onClick={() => onPageChange(safeCurrentPage - 1)}
+          disabled={safeCurrentPage <= 1}
+        >
+          <ChevronLeft size={16} />
+          <span>Previous</span>
+        </button>
+
+        <div className="pagination-pages">
+          {paginationSequence.map((entry) =>
+            typeof entry === 'number' ? (
+              <button
+                key={entry}
+                type="button"
+                className={`pagination-page ${entry === safeCurrentPage ? 'active' : ''}`}
+                aria-current={entry === safeCurrentPage ? 'page' : undefined}
+                onClick={() => onPageChange(entry)}
+              >
+                {entry}
+              </button>
+            ) : (
+              <span key={entry} className="pagination-ellipsis" aria-hidden="true">
+                ...
+              </span>
+            ),
+          )}
+        </div>
+
+        <button
+          type="button"
+          className="pagination-button"
+          onClick={() => onPageChange(safeCurrentPage + 1)}
+          disabled={safeCurrentPage >= safeTotalPages}
+        >
+          <span>Next</span>
+          <ChevronRight size={16} />
+        </button>
+      </div>
     </div>
   )
 }
@@ -3952,6 +4170,14 @@ function getSummaryCards(role, stats) {
   ]
 }
 
+function canSecurityMarkIn(gatepass) {
+  if (!gatepass) {
+    return false
+  }
+
+  return Boolean(gatepass.canMarkIn ?? gatepass.returnTime ?? gatepass.expectedReturnTime)
+}
+
 function getAvailableActions(role, gatepass, onGatepassAction) {
   function handleAction(action) {
     return async () => {
@@ -3965,7 +4191,7 @@ function getAvailableActions(role, gatepass, onGatepassAction) {
         return [{ label: 'Mark Out', tone: 'security-out', onClick: handleAction('markOut') }]
       }
 
-      if (gatepass.status === 'Out') {
+      if (gatepass.status === 'Out' && canSecurityMarkIn(gatepass)) {
         return [{ label: 'Mark Return', tone: 'secondary', onClick: handleAction('markIn') }]
       }
     }
@@ -4028,7 +4254,7 @@ function getAvailableActions(role, gatepass, onGatepassAction) {
     if (gatepass.status === 'Approved') {
       return [{ label: 'Mark Out', tone: 'security-out', onClick: handleAction('markOut') }]
     }
-    if (gatepass.status === 'Out') {
+    if (gatepass.status === 'Out' && canSecurityMarkIn(gatepass)) {
       return [{ label: 'Mark Return', tone: 'secondary', onClick: handleAction('markIn') }]
     }
   }

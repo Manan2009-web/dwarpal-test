@@ -10,12 +10,14 @@ export const AUTH_TOKEN_KEY = 'dwarpal-auth-token'
 export const AUTH_USER_KEY = 'dwarpal-auth-user'
 export const BIOMETRIC_DEVICE_KEY = 'dwarpal-biometric-device-id'
 const DEFAULT_PHONE_COUNTRY_CODE = '+91'
+export const DEFAULT_WORKSPACE_PAGE_SIZE = 10
 const DEFAULT_API_TIMEOUT_MS = Number(import.meta.env.VITE_API_REQUEST_TIMEOUT_MS) || 15000
 const DEFAULT_AUTH_TIMEOUT_MS = Number(import.meta.env.VITE_AUTH_REQUEST_TIMEOUT_MS) || 25000
 const DEFAULT_REGISTER_SEND_TIMEOUT_MS =
   Number(import.meta.env.VITE_REGISTER_SEND_TIMEOUT_MS) || Math.max(DEFAULT_AUTH_TIMEOUT_MS, 35000)
 const DEFAULT_BACKEND_WARMUP_TIMEOUT_MS = Number(import.meta.env.VITE_BACKEND_WARMUP_TIMEOUT_MS) || 8000
 const BACKEND_WARMUP_CACHE_MS = 2 * 60 * 1000
+const MAX_WORKSPACE_COLLECTION_PAGE_SIZE = 50
 let lastBackendWarmupAt = 0
 
 const APPROVED_GATEPASS_STATUSES = new Set([
@@ -1034,17 +1036,20 @@ function buildFacultyTimeline(gatepass) {
 
 function buildSecurityTimeline(baseTimeline, gatepass) {
   const timeline = [...baseTimeline]
+  const canMarkIn = Boolean(gatepass.canMarkIn ?? gatepass.returnTime)
 
   if (gatepass.status === 'checked_out_by_security') {
-    timeline.push(
-      {
-        label: 'Marked OUT',
-        note: 'Exited campus gate',
-        at: gatepass.security?.checkedOutAt || gatepass.updatedAt,
-        tone: 'done',
-      },
-      { label: 'Marked IN', note: 'Pending return entry', at: null, tone: 'current' },
-    )
+    timeline.push({
+      label: 'Marked OUT',
+      note: 'Exited campus gate',
+      at: gatepass.security?.checkedOutAt || gatepass.updatedAt,
+      tone: 'done',
+    })
+
+    if (canMarkIn) {
+      timeline.push({ label: 'Marked IN', note: 'Pending return entry', at: null, tone: 'current' })
+    }
+
     return timeline
   }
 
@@ -1098,6 +1103,7 @@ export function toUiGatepass(gatepass) {
   const gatepassId = gatepass.gatepassId || gatepass.passNumber || gatepass.id
   const recordId = gatepass.recordId || gatepass.id || gatepass._id || ''
   const outDateTime = combineDateAndTime(gatepass.outDate, gatepass.outTime)
+  const returnTime = gatepass.returnTime || combineDateAndTime(gatepass.expectedReturnDate, gatepass.expectedReturnTime)
   const expectedReturnTime = gatepass.expectedReturnDate
     ? combineDateAndTime(gatepass.expectedReturnDate, gatepass.expectedReturnTime)
     : ''
@@ -1123,6 +1129,8 @@ export function toUiGatepass(gatepass) {
     vehicleNumber: gatepass.vehicleNumber || '',
     outTime: outDateTime,
     expectedReturnTime,
+    returnTime: returnTime || null,
+    canMarkIn: Boolean(gatepass.canMarkIn ?? returnTime),
     status: getDisplayStatus(gatepass.status),
     stage: getCurrentStage(gatepass),
     submittedAt: gatepass.createdAt,
@@ -1173,6 +1181,8 @@ export function toUiGatepass(gatepass) {
   mapped.timeline = buildTimeline({
     ...gatepass,
     applicantType: mapped.applicantType,
+    canMarkIn: mapped.canMarkIn,
+    returnTime: mapped.returnTime,
     actions: mapped.actions,
     security: mapped.security,
   })
@@ -1776,89 +1786,360 @@ function sortRequestsByLatestActivity(requests = []) {
   })
 }
 
-async function fetchWorkspaceRequests(role, signal) {
+function normalizeWorkspaceRequestOptions(requestOptions = {}) {
+  return {
+    page: Math.max(Number(requestOptions.page) || 1, 1),
+    limit: Math.max(Number(requestOptions.limit) || DEFAULT_WORKSPACE_PAGE_SIZE, 1),
+    searchTerm: String(requestOptions.searchTerm || '').trim(),
+    statusFilter: String(requestOptions.statusFilter || 'All').trim() || 'All',
+  }
+}
+
+function buildWorkspaceQueryString(params = {}) {
+  const searchParams = new URLSearchParams()
+
+  searchParams.set('sortBy', 'updatedAt')
+  searchParams.set('order', 'desc')
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') {
+      return
+    }
+
+    searchParams.set(key, String(value))
+  })
+
+  return `?${searchParams.toString()}`
+}
+
+function buildWorkspaceMeta(meta = {}, { page, limit } = {}) {
+  const totalRecords = Number(meta?.totalRecords ?? meta?.total ?? 0)
+  const totalPages = Math.max(Number(meta?.totalPages) || Math.ceil(totalRecords / Math.max(limit || 1, 1)) || 1, 1)
+  const currentPage = Math.min(Number(meta?.currentPage ?? meta?.page ?? page ?? 1) || 1, totalPages)
+
+  return {
+    page: currentPage,
+    currentPage,
+    limit: Number(meta?.limit ?? limit ?? DEFAULT_WORKSPACE_PAGE_SIZE),
+    total: totalRecords,
+    totalRecords,
+    totalPages,
+  }
+}
+
+function buildEmptyWorkspaceCollectionMeta(requestOptions) {
+  return buildWorkspaceMeta({ totalRecords: 0 }, requestOptions)
+}
+
+function buildGatepassStatusQuery(statusFilter, role = '') {
+  if (!statusFilter || statusFilter === 'All') {
+    return role === 'security'
+      ? [...APPROVED_GATEPASS_STATUSES, 'checked_out_by_security', 'completed'].join(',')
+      : ''
+  }
+
+  if (statusFilter === 'Pending') {
+    return [...PENDING_GATEPASS_STATUSES].join(',')
+  }
+
+  if (statusFilter === 'Approved') {
+    return [...APPROVED_GATEPASS_STATUSES].join(',')
+  }
+
+  if (statusFilter === 'Rejected') {
+    return [...REJECTED_GATEPASS_STATUSES].join(',')
+  }
+
+  if (statusFilter === 'Out') {
+    return 'checked_out_by_security'
+  }
+
+  if (statusFilter === 'Returned') {
+    return 'completed'
+  }
+
+  if (statusFilter === 'Cancelled') {
+    return 'cancelled'
+  }
+
+  return ''
+}
+
+function buildFacultyStatusQuery(statusFilter, role = '') {
+  if (!statusFilter || statusFilter === 'All') {
+    return role === 'security' ? 'approved,out,returned' : ''
+  }
+
+  if (statusFilter === 'Pending') return 'pending'
+  if (statusFilter === 'Approved') return 'approved'
+  if (statusFilter === 'Rejected') return 'rejected'
+  if (statusFilter === 'Out') return 'out'
+  if (statusFilter === 'Returned') return 'returned'
+  if (statusFilter === 'Cancelled') return '__none__'
+  return ''
+}
+
+async function fetchWorkspaceSourceWindow({
+  endpoint,
+  signal,
+  mapper,
+  requestOptions,
+  extraParams = {},
+  statusParam = '',
+  swallowUnauthorized = false,
+}) {
+  if (statusParam === '__none__') {
+    return {
+      items: [],
+      totalRecords: 0,
+    }
+  }
+
+  const neededRecords = requestOptions.page * requestOptions.limit
+  const chunkLimit = Math.min(MAX_WORKSPACE_COLLECTION_PAGE_SIZE, Math.max(neededRecords, requestOptions.limit))
+  const items = []
+  let totalPages = 1
+  let totalRecords = 0
+  let sourcePage = 1
+
+  while (items.length < neededRecords && sourcePage <= totalPages) {
+    const queryString = buildWorkspaceQueryString({
+      page: sourcePage,
+      limit: chunkLimit,
+      q: requestOptions.searchTerm || undefined,
+      status: statusParam || undefined,
+      ...extraParams,
+    })
+
+    let payload
+
+    try {
+      payload = await apiRequest(`${endpoint}${queryString}`, { signal })
+    } catch (error) {
+      if (swallowUnauthorized && error instanceof ApiError && (error.status === 400 || error.status === 403)) {
+        return {
+          items: [],
+          totalRecords: 0,
+        }
+      }
+
+      throw error
+    }
+
+    const sourceMeta = buildWorkspaceMeta(payload?.meta, {
+      page: sourcePage,
+      limit: chunkLimit,
+    })
+    const nextItems = Array.isArray(payload?.data) ? payload.data.map(mapper).filter(Boolean) : []
+
+    totalPages = sourceMeta.totalPages
+    totalRecords = sourceMeta.totalRecords
+    items.push(...nextItems)
+
+    if (!nextItems.length) {
+      break
+    }
+
+    sourcePage += 1
+  }
+
+  return {
+    items: items.slice(0, neededRecords),
+    totalRecords,
+  }
+}
+
+async function fetchSingleWorkspaceCollection({
+  endpoint,
+  signal,
+  mapper,
+  requestOptions,
+  extraParams = {},
+  statusParam = '',
+  swallowUnauthorized = false,
+}) {
+  if (statusParam === '__none__') {
+    return {
+      items: [],
+      meta: buildEmptyWorkspaceCollectionMeta(requestOptions),
+    }
+  }
+
+  const queryString = buildWorkspaceQueryString({
+    page: requestOptions.page,
+    limit: requestOptions.limit,
+    q: requestOptions.searchTerm || undefined,
+    status: statusParam || undefined,
+    ...extraParams,
+  })
+
+  let payload
+
+  try {
+    payload = await apiRequest(`${endpoint}${queryString}`, { signal })
+  } catch (error) {
+    if (swallowUnauthorized && error instanceof ApiError && (error.status === 400 || error.status === 403)) {
+      return {
+        items: [],
+        meta: buildEmptyWorkspaceCollectionMeta(requestOptions),
+      }
+    }
+
+    throw error
+  }
+
+  return {
+    items: Array.isArray(payload?.data) ? payload.data.map(mapper).filter(Boolean) : [],
+    meta: buildWorkspaceMeta(payload?.meta, requestOptions),
+  }
+}
+
+function mergeWorkspaceSourceResults(sourceResults = [], requestOptions) {
+  const totalRecords = sourceResults.reduce((sum, result) => sum + Number(result?.totalRecords || 0), 0)
+  const mergedItems = sortRequestsByLatestActivity(sourceResults.flatMap((result) => result.items || []))
+  const offset = (requestOptions.page - 1) * requestOptions.limit
+
+  return {
+    items: mergedItems.slice(offset, offset + requestOptions.limit),
+    meta: buildWorkspaceMeta(
+      {
+        totalRecords,
+      },
+      requestOptions,
+    ),
+  }
+}
+
+async function fetchWorkspaceRequests(role, signal, requestOptions = {}) {
   const normalizedRole = normalizeRole(role)
+  const normalizedRequestOptions = normalizeWorkspaceRequestOptions(requestOptions)
 
   if (normalizedRole === 'student') {
-    const payload = await apiRequest('/gatepasses/my?sortBy=updatedAt&order=desc&page=1&limit=50', { signal })
-    return Array.isArray(payload.data) ? payload.data.map(toUiGatepass) : []
+    return fetchSingleWorkspaceCollection({
+      endpoint: '/gatepasses/my',
+      signal,
+      mapper: toUiGatepass,
+      requestOptions: normalizedRequestOptions,
+      statusParam: buildGatepassStatusQuery(normalizedRequestOptions.statusFilter, normalizedRole),
+    })
   }
 
   if (normalizedRole === 'faculty') {
-    const [facultyPayload, coordinatorPayload] = await Promise.all([
-      apiRequest('/faculty-leaves/my?sortBy=updatedAt&order=desc&page=1&limit=50', { signal }),
-      apiRequest('/gatepasses/pending/coordinator?sortBy=updatedAt&order=desc&page=1&limit=50', { signal }).catch(
-        (error) => {
-          if (error instanceof ApiError && (error.status === 400 || error.status === 403)) {
-            return { data: [] }
-          }
-          throw error
-        },
-      ),
+    const [facultyLeaves, coordinatorGatepasses] = await Promise.all([
+      fetchWorkspaceSourceWindow({
+        endpoint: '/faculty-leaves/my',
+        signal,
+        mapper: toUiFacultyLeaveRequest,
+        requestOptions: normalizedRequestOptions,
+        statusParam: buildFacultyStatusQuery(normalizedRequestOptions.statusFilter, normalizedRole),
+      }),
+      fetchWorkspaceSourceWindow({
+        endpoint: '/gatepasses/pending/coordinator',
+        signal,
+        mapper: toUiGatepass,
+        requestOptions: normalizedRequestOptions,
+        statusParam: buildGatepassStatusQuery(normalizedRequestOptions.statusFilter, normalizedRole),
+        swallowUnauthorized: true,
+      }),
     ])
 
-    return sortRequestsByLatestActivity([
-      ...(Array.isArray(facultyPayload.data) ? facultyPayload.data.map(toUiFacultyLeaveRequest) : []),
-      ...(Array.isArray(coordinatorPayload.data) ? coordinatorPayload.data.map(toUiGatepass) : []),
-    ])
+    return mergeWorkspaceSourceResults([facultyLeaves, coordinatorGatepasses], normalizedRequestOptions)
   }
 
   if (normalizedRole === 'principal') {
-    const [studentPayload, facultyPayload] = await Promise.all([
-      apiRequest('/gatepasses/history?applicantType=student&sortBy=updatedAt&order=desc&page=1&limit=50', { signal }),
-      apiRequest('/faculty-leaves/history?sortBy=updatedAt&order=desc&page=1&limit=50', { signal }),
+    const [studentGatepasses, facultyLeaves] = await Promise.all([
+      fetchWorkspaceSourceWindow({
+        endpoint: '/gatepasses',
+        signal,
+        mapper: toUiGatepass,
+        requestOptions: normalizedRequestOptions,
+        extraParams: { applicantType: 'student' },
+        statusParam: buildGatepassStatusQuery(normalizedRequestOptions.statusFilter, normalizedRole),
+      }),
+      fetchWorkspaceSourceWindow({
+        endpoint: '/faculty-leaves/history',
+        signal,
+        mapper: toUiFacultyLeaveRequest,
+        requestOptions: normalizedRequestOptions,
+        statusParam: buildFacultyStatusQuery(normalizedRequestOptions.statusFilter, normalizedRole),
+      }),
     ])
 
-    return sortRequestsByLatestActivity([
-      ...(Array.isArray(studentPayload.data) ? studentPayload.data.map(toUiGatepass) : []),
-      ...(Array.isArray(facultyPayload.data) ? facultyPayload.data.map(toUiFacultyLeaveRequest) : []),
-    ])
+    return mergeWorkspaceSourceResults([studentGatepasses, facultyLeaves], normalizedRequestOptions)
   }
 
   if (normalizedRole === 'hod') {
-    const [studentPayload, facultyPayload] = await Promise.all([
-      apiRequest('/gatepasses/history?applicantType=student&sortBy=updatedAt&order=desc&page=1&limit=50', { signal }),
-      apiRequest('/faculty-leaves/history?sortBy=updatedAt&order=desc&page=1&limit=50', { signal }),
+    const [studentGatepasses, facultyLeaves] = await Promise.all([
+      fetchWorkspaceSourceWindow({
+        endpoint: '/gatepasses',
+        signal,
+        mapper: toUiGatepass,
+        requestOptions: normalizedRequestOptions,
+        extraParams: { applicantType: 'student' },
+        statusParam: buildGatepassStatusQuery(normalizedRequestOptions.statusFilter, normalizedRole),
+      }),
+      fetchWorkspaceSourceWindow({
+        endpoint: '/faculty-leaves/history',
+        signal,
+        mapper: toUiFacultyLeaveRequest,
+        requestOptions: normalizedRequestOptions,
+        statusParam: buildFacultyStatusQuery(normalizedRequestOptions.statusFilter, normalizedRole),
+      }),
     ])
 
-    return sortRequestsByLatestActivity([
-      ...(Array.isArray(studentPayload.data) ? studentPayload.data.map(toUiGatepass) : []),
-      ...(Array.isArray(facultyPayload.data) ? facultyPayload.data.map(toUiFacultyLeaveRequest) : []),
-    ])
+    return mergeWorkspaceSourceResults([studentGatepasses, facultyLeaves], normalizedRequestOptions)
   }
 
   if (normalizedRole === 'cao') {
-    const payload = await apiRequest('/faculty-leaves/history?sortBy=updatedAt&order=desc&page=1&limit=50', { signal })
-    return Array.isArray(payload.data) ? payload.data.map(toUiFacultyLeaveRequest) : []
+    return fetchSingleWorkspaceCollection({
+      endpoint: '/faculty-leaves/history',
+      signal,
+      mapper: toUiFacultyLeaveRequest,
+      requestOptions: normalizedRequestOptions,
+      statusParam: buildFacultyStatusQuery(normalizedRequestOptions.statusFilter, normalizedRole),
+    })
   }
 
   if (normalizedRole === 'security') {
-    const [studentPayload, facultyPayload] = await Promise.all([
-      apiRequest('/gatepasses/history?sortBy=updatedAt&order=desc&page=1&limit=50', { signal }),
-      apiRequest('/faculty-leaves/history?sortBy=updatedAt&order=desc&page=1&limit=50', { signal }),
+    const [studentGatepasses, facultyLeaves] = await Promise.all([
+      fetchWorkspaceSourceWindow({
+        endpoint: '/gatepasses',
+        signal,
+        mapper: toUiGatepass,
+        requestOptions: normalizedRequestOptions,
+        statusParam: buildGatepassStatusQuery(normalizedRequestOptions.statusFilter, normalizedRole),
+      }),
+      fetchWorkspaceSourceWindow({
+        endpoint: '/faculty-leaves/history',
+        signal,
+        mapper: toUiFacultyLeaveRequest,
+        requestOptions: normalizedRequestOptions,
+        statusParam: buildFacultyStatusQuery(normalizedRequestOptions.statusFilter, normalizedRole),
+      }),
     ])
 
-    return sortRequestsByLatestActivity([
-      ...(Array.isArray(studentPayload.data) ? studentPayload.data.map(toUiGatepass).filter((item) => item.status !== 'Approved') : []),
-      ...(Array.isArray(facultyPayload.data)
-        ? facultyPayload.data.map(toUiFacultyLeaveRequest).filter((item) => item.status !== 'Approved')
-        : []),
-    ])
+    return mergeWorkspaceSourceResults([studentGatepasses, facultyLeaves], normalizedRequestOptions)
   }
 
-  const payload = await apiRequest('/gatepasses/history?sortBy=updatedAt&order=desc&page=1&limit=50', { signal })
-  return Array.isArray(payload.data) ? payload.data.map(toUiGatepass) : []
+  return fetchSingleWorkspaceCollection({
+    endpoint: '/gatepasses',
+    signal,
+    mapper: toUiGatepass,
+    requestOptions: normalizedRequestOptions,
+    statusParam: buildGatepassStatusQuery(normalizedRequestOptions.statusFilter, normalizedRole),
+  })
 }
 
-export async function fetchWorkspace(role, signal) {
+export async function fetchWorkspace(role, signal, requestOptions = {}) {
   const [summaryPayload, requests] = await Promise.all([
     apiRequest('/dashboard/summary', { signal }),
-    fetchWorkspaceRequests(role, signal),
+    fetchWorkspaceRequests(role, signal, requestOptions),
   ])
 
   return {
     summary: summaryPayload.data,
-    gatepasses: requests,
+    gatepasses: requests.items,
+    gatepassesMeta: requests.meta,
   }
 }
 

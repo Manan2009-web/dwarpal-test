@@ -600,8 +600,28 @@ function buildSearchFilter(searchTerm) {
 }
 
 function applyListFilters(filter, query = {}) {
-  if (query.status && ['pending', 'approved', 'rejected'].includes(query.status)) {
-    filter.overallStatus = query.status;
+  const requestedStatuses = String(query.status || '')
+    .split(',')
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (requestedStatuses.length) {
+    const lifecycleStatuses = requestedStatuses.filter((value) => ['pending', 'approved', 'rejected'].includes(value));
+    const includesOut = requestedStatuses.includes('out');
+    const includesReturned = requestedStatuses.includes('returned');
+
+    if (lifecycleStatuses.length) {
+      filter.overallStatus = lifecycleStatuses.length === 1 ? lifecycleStatuses[0] : { $in: lifecycleStatuses };
+    }
+
+    if (includesOut && includesReturned) {
+      filter['securityAction.checkedOutAt'] = { $ne: null };
+    } else if (includesReturned) {
+      filter['securityAction.checkedInAt'] = { $ne: null };
+    } else if (includesOut) {
+      filter['securityAction.checkedOutAt'] = { $ne: null };
+      filter['securityAction.checkedInAt'] = null;
+    }
   }
 
   if (query.department) {

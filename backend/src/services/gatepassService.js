@@ -89,6 +89,7 @@ const listProjection = [
   'outTime',
   'expectedReturnDate',
   'expectedReturnTime',
+  'returnTime',
   'vehicleNumber',
   'status',
   'currentApprovalLevel',
@@ -131,6 +132,37 @@ const SECURITY_BLOCKED_REJECTED_STATUSES = new Set([
   'rejected_by_coordinator',
   'rejected_by_cao'
 ]);
+
+function resolveGatepassReturnTime(gatepass) {
+  if (gatepass?.returnTime) {
+    const directDate = new Date(gatepass.returnTime);
+
+    if (!Number.isNaN(directDate.getTime())) {
+      return directDate;
+    }
+  }
+
+  if (!gatepass?.expectedReturnDate) {
+    return null;
+  }
+
+  const derivedDate = new Date(gatepass.expectedReturnDate);
+
+  if (Number.isNaN(derivedDate.getTime())) {
+    return null;
+  }
+
+  if (gatepass.expectedReturnTime) {
+    const [hours = '00', minutes = '00'] = String(gatepass.expectedReturnTime).split(':');
+    derivedDate.setHours(Number(hours), Number(minutes), 0, 0);
+  }
+
+  return derivedDate;
+}
+
+function canGatepassBeMarkedIn(gatepass) {
+  return Boolean(resolveGatepassReturnTime(gatepass));
+}
 const AUTO_ESCALATION_TIMEOUT_MS = Math.max(1, Number(env.gatepassEscalationTimeoutMinutes || 5)) * 60 * 1000;
 const AUTO_ESCALATION_SWEEP_INTERVAL_MS = Math.max(10000, Number(env.gatepassEscalationSweepIntervalMs || 60000));
 let escalationSweepRunning = false;
@@ -208,6 +240,7 @@ function resolveGatepassApprovedBy(gatepass) {
 
 function mapGatepassListItem(gatepass) {
   const applicant = gatepass.applicantSnapshot || {};
+  const resolvedReturnTime = resolveGatepassReturnTime(gatepass);
 
   return {
     id: toId(gatepass._id || gatepass.id),
@@ -232,6 +265,8 @@ function mapGatepassListItem(gatepass) {
     outTime: gatepass.outTime,
     expectedReturnDate: gatepass.expectedReturnDate || null,
     expectedReturnTime: gatepass.expectedReturnTime || '',
+    returnTime: resolvedReturnTime ? resolvedReturnTime.toISOString() : null,
+    canMarkIn: canGatepassBeMarkedIn(gatepass),
     vehicleNumber: gatepass.vehicleNumber || '',
     status: gatepass.status,
     currentApprovalLevel: gatepass.currentApprovalLevel || null,
@@ -302,6 +337,25 @@ function createApplicantSnapshot(user) {
     employeeId: user.employeeId || null,
     phone: user.phone
   };
+}
+
+function resolvePayloadReturnTime(payload = {}) {
+  if (!payload?.expectedReturnDate) {
+    return null;
+  }
+
+  const resolvedDate = new Date(payload.expectedReturnDate);
+
+  if (Number.isNaN(resolvedDate.getTime())) {
+    return null;
+  }
+
+  if (payload.expectedReturnTime) {
+    const [hours = '00', minutes = '00'] = String(payload.expectedReturnTime).split(':');
+    resolvedDate.setHours(Number(hours), Number(minutes), 0, 0);
+  }
+
+  return resolvedDate;
 }
 
 function getStudentRoutingSnapshot(source = {}) {
@@ -621,6 +675,7 @@ function buildSecurityVerificationResult(gatepass, messages = {}) {
     invalidQrMessage: 'Gatepass is invalid or expired.',
     readyToMarkOutMessage: 'Gatepass is valid and ready to be marked OUT by security.',
     readyToMarkInMessage: 'Gatepass already used for OUT marking and is ready to be marked IN.',
+    noReturnMarkingMessage: 'This gatepass does not require return marking after being marked OUT.',
     ...messages
   };
 
@@ -679,6 +734,15 @@ function buildSecurityVerificationResult(gatepass, messages = {}) {
         message: resolvedMessages.readyToMarkOutMessage,
         gatepass,
         nextAction: 'markOut'
+      };
+    }
+
+    if (!canGatepassBeMarkedIn(gatepass)) {
+      return {
+        valid: false,
+        message: resolvedMessages.noReturnMarkingMessage,
+        gatepass,
+        nextAction: null
       };
     }
 
@@ -1277,6 +1341,7 @@ async function createGatepass(actor, payload, requestMeta) {
     outTime: payload.outTime,
     expectedReturnDate: payload.expectedReturnDate || null,
     expectedReturnTime: payload.expectedReturnTime || '',
+    returnTime: resolvePayloadReturnTime(payload),
     vehicleNumber: normalizeVehicleNumber(payload.vehicleNumber),
     status: initialState.status,
     currentApprovalLevel: initialState.currentApprovalLevel,
@@ -1426,6 +1491,7 @@ async function updateGatepass(gatepassId, actor, payload, requestMeta) {
   gatepass.outTime = payload.outTime;
   gatepass.expectedReturnDate = payload.expectedReturnDate || null;
   gatepass.expectedReturnTime = payload.expectedReturnTime || '';
+  gatepass.returnTime = resolvePayloadReturnTime(payload);
   gatepass.vehicleNumber = normalizeVehicleNumber(payload.vehicleNumber);
   await gatepass.save();
 
@@ -2385,6 +2451,10 @@ async function checkOutGatepass(gatepassId, actor, payload, requestMeta) {
     throw new AppError('Verification token does not match this gatepass', 400);
   }
 
+  if (!gatepass.returnTime) {
+    gatepass.returnTime = resolveGatepassReturnTime(gatepass);
+  }
+
   gatepass.status = 'checked_out_by_security';
   gatepass.currentApprovalLevel = 'security';
   gatepass.isCancelled = false;
@@ -2437,6 +2507,10 @@ async function checkInGatepass(gatepassId, actor, payload, requestMeta) {
 
   if (gatepass.status !== 'checked_out_by_security') {
     throw new AppError('Only checked-out gatepasses can be marked as completed', 400);
+  }
+
+  if (!canGatepassBeMarkedIn(gatepass)) {
+    throw new AppError('This gatepass does not require return marking.', 400);
   }
 
   gatepass.status = 'completed';
@@ -2498,6 +2572,7 @@ async function getSecurityReadyGatepasses(actor, query = {}) {
 
 module.exports = {
   approveGatepass,
+  canGatepassBeMarkedIn,
   cancelGatepass,
   checkInGatepass,
   checkOutGatepass,
@@ -2514,6 +2589,7 @@ module.exports = {
   processPendingStudentEscalations,
   repairStudentGatepassRoutingRecords,
   rejectGatepass,
+  resolveGatepassReturnTime,
   startGatepassEscalationScheduler,
   stopGatepassEscalationScheduler,
   updateGatepass,

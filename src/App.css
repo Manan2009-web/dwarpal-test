@@ -1622,7 +1622,9 @@ button {
 }
 
 .auth-panel {
-  width: min(100%, 460px);
+  width: min(100%, 400px);
+  max-width: 400px;
+  margin: auto;
   gap: 1.25rem;
   border-radius: 28px;
   padding: 2rem;
@@ -3020,6 +3022,94 @@ button {
 
 .gatepass-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.workspace-pagination,
+.pagination-controls,
+.pagination-pages,
+.pagination-button,
+.pagination-page {
+  display: flex;
+  align-items: center;
+}
+
+.workspace-pagination {
+  justify-content: space-between;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+  margin-top: 0.25rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid rgba(40, 114, 161, 0.12);
+}
+
+.pagination-meta {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.pagination-meta strong {
+  color: var(--app-shell-text);
+  font-size: 0.92rem;
+}
+
+.pagination-meta span {
+  color: var(--app-shell-muted);
+  font-size: 0.82rem;
+}
+
+.pagination-controls,
+.pagination-pages {
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.pagination-button,
+.pagination-page {
+  gap: 0.35rem;
+  justify-content: center;
+  border: 1px solid rgba(40, 114, 161, 0.14);
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--app-shell-text);
+  border-radius: 14px;
+  min-height: 2.5rem;
+  padding: 0.65rem 0.9rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  transition: transform 180ms ease, border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
+}
+
+.pagination-page {
+  min-width: 2.5rem;
+  padding-inline: 0.75rem;
+}
+
+.pagination-button:hover,
+.pagination-page:hover {
+  transform: translateY(-1px);
+  border-color: rgba(40, 114, 161, 0.24);
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+}
+
+.pagination-button:disabled,
+.pagination-page:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+  transform: none;
+  box-shadow: none;
+}
+
+.pagination-page.active {
+  background: linear-gradient(135deg, #2d7dae, #184b6b);
+  border-color: rgba(31, 90, 128, 0.22);
+  color: var(--app-primary-text);
+  box-shadow: 0 12px 24px rgba(24, 75, 107, 0.22);
+}
+
+.pagination-ellipsis {
+  min-width: 2rem;
+  text-align: center;
+  color: var(--app-shell-muted);
+  font-weight: 700;
 }
 
 .gatepass-card {
@@ -5309,14 +5399,37 @@ button {
   }
 
   .auth-shell {
-    align-items: flex-start;
-    justify-content: flex-start;
-    padding-bottom: max(8rem, calc(env(safe-area-inset-bottom) + 7rem));
+    min-height: 100vh;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
 
   .auth-panel {
     width: 100%;
-    padding: 1.35rem;
+    max-width: 400px;
+    margin: auto;
+    padding: 1rem;
+  }
+
+  .workspace-pagination {
+    align-items: stretch;
+  }
+
+  .pagination-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .pagination-pages {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .pagination-button {
+    min-width: 0;
+    flex: 0 1 auto;
   }
 }
 

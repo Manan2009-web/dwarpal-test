@@ -61,6 +61,14 @@ function getGatepassIdentifier(gatepass) {
   return gatepass?.gatepassId || gatepass?.requestNumber || gatepass?.id || 'Not available'
 }
 
+function canSecurityMarkIn(gatepass) {
+  if (!gatepass) {
+    return false
+  }
+
+  return Boolean(gatepass.canMarkIn ?? gatepass.returnTime ?? gatepass.expectedReturnTime)
+}
+
 function getNextSecurityAction(gatepass) {
   if (!gatepass) {
     return null
@@ -71,7 +79,7 @@ function getNextSecurityAction(gatepass) {
   }
 
   if (gatepass.security?.checkedOutAt || gatepass.status === 'Out') {
-    return 'markIn'
+    return canSecurityMarkIn(gatepass) ? 'markIn' : null
   }
 
   if (gatepass.status === 'Approved') {
@@ -95,6 +103,7 @@ function buildOptimisticGatepassAfterAction(gatepass, action) {
 
   return {
     ...gatepass,
+    canMarkIn: canSecurityMarkIn(gatepass),
     status: action === 'markOut' ? 'Out' : 'Returned',
     updatedAt: now,
     security: nextSecurity,
@@ -108,6 +117,13 @@ function getVerificationStateMeta(result) {
     return {
       tone: 'completed',
       label: 'Completed',
+    }
+  }
+
+  if (gatepass?.status === 'Out' && !result?.nextAction) {
+    return {
+      tone: 'completed',
+      label: 'OUT recorded',
     }
   }
 
@@ -181,7 +197,9 @@ export default function SecurityVerificationPanel({
       { label: 'Out Time', value: formatVerificationValue(gatepass.outTime, 'Not scheduled') },
       {
         label: 'Return Time',
-        value: gatepass.expectedReturnTime ? formatVerificationValue(gatepass.expectedReturnTime) : 'One way',
+        value: gatepass.returnTime || gatepass.expectedReturnTime
+          ? formatVerificationValue(gatepass.returnTime || gatepass.expectedReturnTime)
+          : 'One way',
       },
       { label: 'Workflow Stage', value: getWorkflowLabel(gatepass) },
       { label: 'Approval Status', value: gatepass.status || 'Pending' },
