@@ -21,6 +21,8 @@ router.patch('/users/:id/status', protect, requireVerifiedEmail, authorize('prin
 router.get('/export/options', requireAuth, requireVerifiedEmail, allowAdminAccess, scopeFilterMiddleware, exportController.getOptions);
 router.get('/export/preview', requireAuth, requireVerifiedEmail, allowAdminAccess, scopeFilterMiddleware, exportController.getPreview);
 router.post('/export/preview', requireAuth, requireVerifiedEmail, allowAdminAccess, scopeFilterMiddleware, exportController.getPreview);
+router.get('/export/records', requireAuth, requireVerifiedEmail, allowAdminAccess, scopeFilterMiddleware, exportController.getRecords);
+router.post('/export/records', requireAuth, requireVerifiedEmail, allowAdminAccess, scopeFilterMiddleware, exportController.getRecords);
 router.post('/export/excel', requireAuth, requireVerifiedEmail, allowAdminAccess, allowExportAccess, scopeFilterMiddleware, exportController.exportExcel);
 router.post('/export/pdf', requireAuth, requireVerifiedEmail, allowAdminAccess, allowExportAccess, scopeFilterMiddleware, exportController.exportPdf);
 router.get('/export/history', requireAuth, requireVerifiedEmail, allowAdminAccess, scopeFilterMiddleware, exportController.getHistory);

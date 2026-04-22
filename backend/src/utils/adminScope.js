@@ -10,9 +10,8 @@ const {
 } = require('../constants/appConstants');
 
 const ADMIN_PORTAL_ROLES = new Set(['principal', 'hod', 'cao', 'security']);
-const FULL_ADMIN_ROLES = new Set(['principal']);
+const FULL_ADMIN_ROLES = new Set(['principal', 'cao']);
 const DEPARTMENT_ADMIN_ROLES = new Set(['hod']);
-const FACULTY_ADMIN_ROLES = new Set(['cao']);
 const SECURITY_EXPORT_REPORTS = new Set([
   'all_gatepasses',
   'out_returned_status',
@@ -20,18 +19,6 @@ const SECURITY_EXPORT_REPORTS = new Set([
   'custom_date_range',
   'pending_requests',
   'approval_report'
-]);
-const CAO_REPORTS = new Set([
-  'faculty_report',
-  'leave_report',
-  'load_adjustment_report',
-  'individual_faculty_history',
-  'approval_report',
-  'pending_requests',
-  'rejected_requests',
-  'daily_report',
-  'monthly_report',
-  'custom_date_range'
 ]);
 const COORDINATOR_REPORTS = new Set([
   'all_gatepasses',
@@ -182,10 +169,6 @@ function canExportReport(user, reportType) {
     return true;
   }
 
-  if (FACULTY_ADMIN_ROLES.has(role)) {
-    return CAO_REPORTS.has(normalizedReportType);
-  }
-
   if (isCoordinator(user)) {
     return COORDINATOR_REPORTS.has(normalizedReportType);
   }
@@ -302,12 +285,6 @@ function buildGatepassScopeFilter(user) {
     };
   }
 
-  if (role === 'cao') {
-    return {
-      applicantType: 'faculty'
-    };
-  }
-
   if (isCoordinator(user)) {
     const scope = getCoordinatorScope(user);
     const classFilters = buildCoordinatorGatepassOr(scope);
@@ -334,7 +311,7 @@ function buildGatepassScopeFilter(user) {
 function buildFacultyLeaveScopeFilter(user) {
   const role = normalizeRole(user?.role);
 
-  if (FULL_ADMIN_ROLES.has(role) || role === 'cao') {
+  if (FULL_ADMIN_ROLES.has(role)) {
     return {};
   }
 
@@ -359,7 +336,7 @@ function buildUserScopeFilter(user, roleFilter = null) {
     filter.role = roleFilter;
   }
 
-  if (FULL_ADMIN_ROLES.has(role) || role === 'cao') {
+  if (FULL_ADMIN_ROLES.has(role)) {
     return filter;
   }
 
@@ -392,7 +369,7 @@ function buildUserScopeFilter(user, roleFilter = null) {
   }
 
   if (role === 'security') {
-    return roleFilter ? { ...filter, role: roleFilter } : filter;
+    return impossibleFilter();
   }
 
   return impossibleFilter();

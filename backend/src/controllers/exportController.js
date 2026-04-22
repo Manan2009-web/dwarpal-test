@@ -3,7 +3,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const { sendSuccess } = require('../utils/apiResponse');
 const { getPagination, buildPaginationMeta } = require('../utils/pagination');
 const { buildExportFileName, parseReportFilters, publicFilterSummary } = require('../utils/reportFilters');
-const { fetchReportDataset, getExportOptions, getReportPreview } = require('../services/reportService');
+const { fetchReportDataset, getExportOptions, getExportRecords, getReportPreview } = require('../services/reportService');
 const { generateExcelBuffer } = require('../services/excelExportService');
 const { generatePdfBuffer } = require('../services/pdfExportService');
 const { getAdminAccessProfile, hasPermission, normalizeReportType } = require('../utils/adminScope');
@@ -69,6 +69,21 @@ const getPreview = asyncHandler(async (req, res) => {
   });
 });
 
+const getRecords = asyncHandler(async (req, res) => {
+  const result = await getExportRecords(req.user, req.method === 'GET' ? req.query : req.body);
+  return sendSuccess(res, {
+    message: 'Export records fetched successfully',
+    data: {
+      access: result.access,
+      filters: result.filters,
+      rows: result.rows,
+      totals: result.totals,
+      summary: result.summary
+    },
+    meta: result.meta
+  });
+});
+
 async function sendExport(req, res, format) {
   const filters = parseReportFilters(req.body || {});
   const generatedAt = new Date();
@@ -107,7 +122,11 @@ const exportPdf = asyncHandler(async (req, res) => {
 const getHistory = asyncHandler(async (req, res) => {
   const { page, limit, skip } = getPagination(req.query, { defaultLimit: 20, maxLimit: 100 });
   const role = String(req.user?.role || '').toLowerCase();
-  const canViewAll = role === 'principal' || hasPermission(req.user, 'export:history:all') || hasPermission(req.user, 'admin:history');
+  const canViewAll =
+    role === 'principal' ||
+    role === 'cao' ||
+    hasPermission(req.user, 'export:history:all') ||
+    hasPermission(req.user, 'admin:history');
   const filter = canViewAll ? {} : { generatedBy: req.user._id };
   const reportType = normalizeReportType(req.query.reportType || '');
 
@@ -141,5 +160,6 @@ module.exports = {
   exportPdf,
   getHistory,
   getOptions,
+  getRecords,
   getPreview
 };

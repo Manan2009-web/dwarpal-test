@@ -2203,6 +2203,15 @@ function buildQueryString(params = {}) {
       return
     }
 
+    if (Array.isArray(value)) {
+      value
+        .filter((item) => item !== undefined && item !== null && item !== '')
+        .forEach((item) => {
+          searchParams.append(key, String(item))
+        })
+      return
+    }
+
     searchParams.set(key, String(value))
   })
 
@@ -2223,6 +2232,23 @@ export async function fetchAdminExportPreview(filters = {}, signal) {
   })
 
   return payload?.data || null
+}
+
+export async function fetchAdminExportRecords(filters = {}, signal) {
+  const payload = await apiRequest('/admin/export/records', {
+    method: 'POST',
+    body: filters,
+    signal,
+  })
+
+  return {
+    rows: Array.isArray(payload?.data?.rows) ? payload.data.rows : [],
+    summary: payload?.data?.summary || null,
+    totals: payload?.data?.totals || {},
+    access: payload?.data?.access || null,
+    filters: payload?.data?.filters || null,
+    meta: payload?.meta || payload?.data?.meta || {},
+  }
 }
 
 export async function fetchAdminExportHistory(params = {}, signal) {

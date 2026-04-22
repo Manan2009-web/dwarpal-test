@@ -19,7 +19,7 @@ const {
   getStatusBucketFilter,
   impossibleFilter
 } = require('../utils/adminScope');
-const { dateMatch, parseReportFilters, publicFilterSummary } = require('../utils/reportFilters');
+const { createdDateMatch, dateMatch, parseReportFilters, publicFilterSummary } = require('../utils/reportFilters');
 const AppError = require('../utils/appError');
 
 const MAX_EXPORT_RECORDS = 10000;
@@ -54,11 +54,70 @@ function regex(value) {
   return escaped ? new RegExp(escaped, 'i') : null;
 }
 
-function includeGatepasses(reportType) {
+function exactRegex(value) {
+  const searchRegex = regex(value);
+  return searchRegex ? new RegExp(`^${searchRegex.source}$`, 'i') : null;
+}
+
+function getSelectedStudentIds(filters) {
+  return filters.studentId ? [filters.studentId] : filters.selectedStudentIds || [];
+}
+
+function getSelectedFacultyIds(filters) {
+  return filters.facultyId ? [filters.facultyId] : filters.selectedFacultyIds || [];
+}
+
+function buildSelectedApplicantFilter(filters) {
+  const selectedStudentIds = getSelectedStudentIds(filters);
+  const selectedFacultyIds = getSelectedFacultyIds(filters);
+
+  if (!selectedStudentIds.length && !selectedFacultyIds.length) {
+    return {};
+  }
+
+  if (selectedStudentIds.length && selectedFacultyIds.length) {
+    return {
+      $or: [
+        { applicantType: 'student', createdBy: { $in: selectedStudentIds } },
+        { applicantType: 'faculty', createdBy: { $in: selectedFacultyIds } }
+      ]
+    };
+  }
+
+  if (selectedStudentIds.length) {
+    return {
+      applicantType: 'student',
+      createdBy: { $in: selectedStudentIds }
+    };
+  }
+
+  return {
+    applicantType: 'faculty',
+    createdBy: { $in: selectedFacultyIds }
+  };
+}
+
+function isCoordinatorScopedUser(user) {
+  return Boolean(user?.isCoordinator || user?.coordinatorAssignment?.isCoordinator || user?.coordinatorScope?.isCoordinator);
+}
+
+function includeGatepasses(reportType, partition = 'mixed') {
+  if (partition === 'students') {
+    return !['leave_report', 'load_adjustment_report', 'individual_faculty_history'].includes(reportType);
+  }
+
+  if (partition === 'faculty') {
+    return !['leave_report', 'load_adjustment_report'].includes(reportType);
+  }
+
   return !['leave_report', 'load_adjustment_report', 'individual_faculty_history'].includes(reportType);
 }
 
-function includeFacultyLeaves(reportType) {
+function includeFacultyLeaves(reportType, partition = 'mixed') {
+  if (partition === 'students') {
+    return false;
+  }
+
   return ![
     'all_gatepasses',
     'student_report',
@@ -70,12 +129,23 @@ function includeFacultyLeaves(reportType) {
 
 function buildGatepassFilter(filters, actor) {
   const filterParts = [buildGatepassScopeFilter(actor)];
+  const selectedApplicantFilter = buildSelectedApplicantFilter(filters);
 
-  if (filters.reportType === 'student_report' || filters.reportType === 'individual_student_history') {
-    filterParts.push({ applicantType: 'student' });
+  if (filters.exportScope === 'selected' && !hasKeys(selectedApplicantFilter)) {
+    return impossibleFilter();
   }
 
-  if (filters.reportType === 'faculty_report' || filters.reportType === 'individual_faculty_history') {
+  if (hasKeys(selectedApplicantFilter)) {
+    filterParts.push(selectedApplicantFilter);
+  } else if (filters.reportType === 'student_report' || filters.reportType === 'individual_student_history') {
+    filterParts.push({ applicantType: 'student' });
+  } else if (filters.reportType === 'faculty_report' || filters.reportType === 'individual_faculty_history') {
+    filterParts.push({ applicantType: 'faculty' });
+  }
+
+  if (filters.recordPartition === 'students') {
+    filterParts.push({ applicantType: 'student' });
+  } else if (filters.recordPartition === 'faculty') {
     filterParts.push({ applicantType: 'faculty' });
   }
 
@@ -92,6 +162,7 @@ function buildGatepassFilter(filters, actor) {
   }
 
   filterParts.push(dateMatch('outDate', filters));
+  filterParts.push(createdDateMatch('createdAt', filters));
 
   if (filters.department) {
     filterParts.push({
@@ -122,14 +193,6 @@ function buildGatepassFilter(filters, actor) {
         { division: filters.division }
       ]
     });
-  }
-
-  if (filters.studentId) {
-    filterParts.push({ applicantType: 'student', createdBy: filters.studentId });
-  }
-
-  if (filters.facultyId) {
-    filterParts.push({ applicantType: 'faculty', createdBy: filters.facultyId });
   }
 
   if (filters.gatepassType) {
@@ -164,6 +227,27 @@ function buildGatepassFilter(filters, actor) {
         { 'securityAction.checkedOutBy': { $in: approvedByIds } },
         { 'securityAction.checkedInBy': { $in: approvedByIds } }
       ]
+    });
+  }
+
+  const nameRegex = regex(filters.name);
+  if (nameRegex) {
+    filterParts.push({
+      $or: [{ 'applicantSnapshot.fullName': nameRegex }]
+    });
+  }
+
+  const enrollmentRegex = exactRegex(filters.enrollmentNo);
+  if (enrollmentRegex) {
+    filterParts.push({
+      $or: [{ 'applicantSnapshot.enrollmentNo': enrollmentRegex }]
+    });
+  }
+
+  const employeeIdRegex = exactRegex(filters.employeeId);
+  if (employeeIdRegex) {
+    filterParts.push({
+      $or: [{ 'applicantSnapshot.employeeId': employeeIdRegex }]
     });
   }
 
@@ -212,6 +296,11 @@ function buildFacultyLeaveDateFilter(filters) {
 
 function buildFacultyLeaveFilter(filters, actor) {
   const filterParts = [buildFacultyLeaveScopeFilter(actor), buildFacultyLeaveDateFilter(filters)];
+  const selectedFacultyIds = getSelectedFacultyIds(filters);
+
+  if (filters.exportScope === 'selected' && !selectedFacultyIds.length) {
+    return impossibleFilter();
+  }
 
   if (filters.reportType === 'pending_requests') {
     filterParts.push({ overallStatus: 'pending' });
@@ -225,12 +314,16 @@ function buildFacultyLeaveFilter(filters, actor) {
     filterParts.push({ 'facultyDetails.department': filters.department });
   }
 
-  if (filters.facultyId) {
-    filterParts.push({ createdBy: filters.facultyId });
+  if (selectedFacultyIds.length) {
+    filterParts.push({ createdBy: { $in: selectedFacultyIds } });
   }
 
   if (filters.status) {
     filterParts.push(getStatusBucketFilter(filters.status, false));
+  }
+
+  if (filters.createdFrom || filters.createdTo) {
+    filterParts.push(createdDateMatch('createdAt', filters));
   }
 
   if (filters.leaveType) {
@@ -259,6 +352,16 @@ function buildFacultyLeaveFilter(filters, actor) {
     });
   }
 
+  const nameRegex = regex(filters.name);
+  if (nameRegex) {
+    filterParts.push({ 'facultyDetails.name': nameRegex });
+  }
+
+  const employeeIdRegex = exactRegex(filters.employeeId);
+  if (employeeIdRegex) {
+    filterParts.push({ 'facultyDetails.employeeId': employeeIdRegex });
+  }
+
   const searchRegex = regex(filters.personSearch);
   if (searchRegex) {
     filterParts.push({
@@ -278,25 +381,71 @@ function buildFacultyLeaveFilter(filters, actor) {
 
 function buildUserFilter(filters, actor, role) {
   const filterParts = [buildUserScopeFilter(actor, role)];
+  const selectedStudentIds = getSelectedStudentIds(filters);
+  const selectedFacultyIds = getSelectedFacultyIds(filters);
+  const isStudentRole = role === 'student';
+
+  if (filters.exportScope === 'selected' && isStudentRole && !selectedStudentIds.length) {
+    filterParts.push(impossibleFilter());
+  }
+
+  if (filters.exportScope === 'selected' && !isStudentRole && !selectedFacultyIds.length) {
+    filterParts.push(impossibleFilter());
+  }
 
   if (filters.department) {
     filterParts.push({ department: filters.department });
   }
 
-  if (filters.program && role === 'student') {
+  if (filters.roleType) {
+    if (isStudentRole && filters.roleType !== 'student') {
+      filterParts.push(impossibleFilter());
+    }
+
+    if (!isStudentRole && filters.roleType !== 'student') {
+      filterParts.push({ role: filters.roleType });
+    }
+
+    if (!isStudentRole && filters.roleType === 'student') {
+      filterParts.push(impossibleFilter());
+    }
+  }
+
+  if (filters.program && isStudentRole) {
     filterParts.push({ program: filters.program });
   }
 
-  if (filters.semester && role === 'student') {
+  if (filters.semester && isStudentRole) {
     filterParts.push({ semester: filters.semester });
   }
 
-  if (role === 'student' && filters.studentId) {
-    filterParts.push({ _id: filters.studentId });
+  if (isStudentRole && selectedStudentIds.length) {
+    filterParts.push({ _id: { $in: selectedStudentIds } });
   }
 
-  if (role !== 'student' && filters.facultyId) {
-    filterParts.push({ _id: filters.facultyId });
+  if (!isStudentRole && selectedFacultyIds.length) {
+    filterParts.push({ _id: { $in: selectedFacultyIds } });
+  }
+
+  if (filters.coordinatorOnly && !isStudentRole) {
+    filterParts.push({
+      $or: [{ isCoordinator: true }, { 'coordinatorAssignment.isCoordinator': true }, { 'coordinatorScope.isCoordinator': true }]
+    });
+  }
+
+  const nameRegex = regex(filters.name);
+  if (nameRegex) {
+    filterParts.push({ fullName: nameRegex });
+  }
+
+  const enrollmentRegex = exactRegex(filters.enrollmentNo);
+  if (enrollmentRegex && isStudentRole) {
+    filterParts.push({ enrollmentNo: enrollmentRegex });
+  }
+
+  const employeeIdRegex = exactRegex(filters.employeeId);
+  if (employeeIdRegex && !isStudentRole) {
+    filterParts.push({ employeeId: employeeIdRegex });
   }
 
   const searchRegex = regex(filters.personSearch);
@@ -427,6 +576,8 @@ function summarizeStudent(user, gatepasses, facultyLeaves = []) {
 
   return {
     user,
+    userType: 'student',
+    roleType: 'student',
     name: getUserDisplayName(user) || gatepasses[0]?.applicantSnapshot?.fullName || 'Unknown student',
     enrollmentNo: user?.enrollmentNo || gatepasses[0]?.applicantSnapshot?.enrollmentNo || '',
     department: user?.department || gatepasses[0]?.applicantSnapshot?.department || '',
@@ -434,6 +585,7 @@ function summarizeStudent(user, gatepasses, facultyLeaves = []) {
     semester: user?.semester || gatepasses[0]?.applicantSnapshot?.semester || '',
     division: user?.division || gatepasses[0]?.applicantSnapshot?.division || '',
     phone: user?.phone || gatepasses[0]?.applicantSnapshot?.phone || '',
+    email: user?.email || gatepasses[0]?.applicantSnapshot?.email || '',
     totalGatepasses: gatepasses.length,
     approvedCount,
     rejectedCount,
@@ -444,21 +596,31 @@ function summarizeStudent(user, gatepasses, facultyLeaves = []) {
     totalLeaveRequests: facultyLeaves.length,
     totalLoadAdjustments: 0,
     lastGatepassDate: lastGatepass?.outDate || lastGatepass?.createdAt || null,
+    lastActivityDate: lastGatepass?.updatedAt || lastGatepass?.createdAt || null,
     mostCommonReason: getMostCommonReason(gatepasses),
     coordinatorName: ''
   };
 }
 
 function summarizeFaculty(user, gatepasses, leaveRequests) {
+  const gatepassApprovedCount = gatepasses.filter((item) => isApprovedGatepass(item.status)).length;
+  const gatepassRejectedCount = gatepasses.filter((item) => isRejectedGatepass(item.status)).length;
+  const gatepassPendingCount = gatepasses.filter((item) => isPendingGatepass(item.status)).length;
+  const leaveApprovedCount = leaveRequests.filter((item) => item.overallStatus === 'approved').length;
+  const leaveRejectedCount = leaveRequests.filter((item) => item.overallStatus === 'rejected').length;
+  const leavePendingCount = leaveRequests.filter((item) => item.overallStatus === 'pending').length;
+  const outCount =
+    gatepasses.filter((item) => isOutGatepass(item.status)).length +
+    leaveRequests.filter((item) => item.securityAction?.checkedOutAt && !item.securityAction?.checkedInAt).length;
+  const returnedCount =
+    gatepasses.filter((item) => isReturnedGatepass(item.status)).length +
+    leaveRequests.filter((item) => item.securityAction?.checkedInAt).length;
   const approvedCount =
-    gatepasses.filter((item) => isApprovedGatepass(item.status)).length +
-    leaveRequests.filter((item) => item.overallStatus === 'approved').length;
+    gatepassApprovedCount + leaveApprovedCount;
   const rejectedCount =
-    gatepasses.filter((item) => isRejectedGatepass(item.status)).length +
-    leaveRequests.filter((item) => item.overallStatus === 'rejected').length;
+    gatepassRejectedCount + leaveRejectedCount;
   const pendingCount =
-    gatepasses.filter((item) => isPendingGatepass(item.status)).length +
-    leaveRequests.filter((item) => item.overallStatus === 'pending').length;
+    gatepassPendingCount + leavePendingCount;
   const lastRequest = [...gatepasses, ...leaveRequests].sort(
     (left, right) => new Date(right.updatedAt || right.createdAt || 0).getTime() - new Date(left.updatedAt || left.createdAt || 0).getTime()
   )[0];
@@ -466,19 +628,41 @@ function summarizeFaculty(user, gatepasses, leaveRequests) {
 
   return {
     user,
+    userType: 'faculty',
     name: getUserDisplayName(user) || firstLeave?.facultyDetails?.name || gatepasses[0]?.applicantSnapshot?.fullName || 'Unknown faculty',
     employeeId: user?.employeeId || firstLeave?.facultyDetails?.employeeId || gatepasses[0]?.applicantSnapshot?.employeeId || '',
     department: user?.department || firstLeave?.facultyDetails?.department || gatepasses[0]?.applicantSnapshot?.department || '',
     role: user?.role || 'faculty',
+    roleType: user?.role || 'faculty',
+    phone:
+      user?.phone ||
+      firstLeave?.facultyDetails?.contactNumber ||
+      gatepasses[0]?.applicantSnapshot?.phone ||
+      '',
+    email:
+      user?.email ||
+      firstLeave?.facultyDetails?.emailId ||
+      gatepasses[0]?.applicantSnapshot?.email ||
+      '',
     isCoordinator: Boolean(user?.isCoordinator || user?.coordinatorAssignment?.isCoordinator || user?.coordinatorScope?.isCoordinator),
     assignedScope: user?.coordinatorScope || user?.coordinatorAssignment || null,
     totalGatepasses: gatepasses.length,
+    totalRequests: gatepasses.length + leaveRequests.length,
     approvedCount,
     rejectedCount,
     pendingCount,
+    gatepassApprovedCount,
+    gatepassRejectedCount,
+    gatepassPendingCount,
+    leaveApprovedCount,
+    leaveRejectedCount,
+    leavePendingCount,
+    outCount,
+    returnedCount,
     leaveRequestsCount: leaveRequests.length,
     loadAdjustmentCount: leaveRequests.reduce((count, item) => count + (Array.isArray(item.workloadAdjustments) ? item.workloadAdjustments.length : 0), 0),
-    lastRequestDate: lastRequest?.updatedAt || lastRequest?.createdAt || null
+    lastRequestDate: lastRequest?.updatedAt || lastRequest?.createdAt || null,
+    lastActivityDate: lastRequest?.updatedAt || lastRequest?.createdAt || null
   };
 }
 
@@ -663,6 +847,176 @@ function buildInsights(studentSummaries, departmentAnalytics, gatepasses, facult
   };
 }
 
+function sortOverviewRows(rows = []) {
+  return [...rows].sort((left, right) => {
+    const leftTime = new Date(left.lastActivityAt || 0).getTime();
+    const rightTime = new Date(right.lastActivityAt || 0).getTime();
+
+    if (rightTime !== leftTime) {
+      return rightTime - leftTime;
+    }
+
+    return String(left.name || '').localeCompare(String(right.name || ''));
+  });
+}
+
+function buildStudentOverviewRows(dataset) {
+  return sortOverviewRows(
+    dataset.studentSummaries.map((item) => ({
+      rowKey: `student:${String(item.user?._id || item.enrollmentNo || item.name)}`,
+      id: String(item.user?._id || ''),
+      userType: 'student',
+      roleType: item.roleType || 'student',
+      name: item.name,
+      primaryId: item.enrollmentNo,
+      displayId: item.enrollmentNo,
+      department: item.department,
+      program: item.program,
+      semester: item.semester,
+      phone: item.phone,
+      email: item.email,
+      totalGatepasses: item.totalGatepasses,
+      totalRequests: item.totalGatepasses,
+      approvedCount: item.approvedCount,
+      rejectedCount: item.rejectedCount,
+      pendingCount: item.pendingCount,
+      outCount: item.outCount,
+      returnedCount: item.returnedCount,
+      leaveRequestsCount: item.totalLeaveRequests,
+      loadAdjustmentCount: item.totalLoadAdjustments,
+      lastActivityAt: item.lastActivityDate || item.lastGatepassDate
+    }))
+  );
+}
+
+function buildFacultyOverviewRows(dataset) {
+  return sortOverviewRows(
+    dataset.facultySummaries.map((item) => ({
+      rowKey: `faculty:${String(item.user?._id || item.employeeId || item.name)}`,
+      id: String(item.user?._id || ''),
+      userType: 'faculty',
+      roleType: item.roleType || item.role || 'faculty',
+      name: item.name,
+      primaryId: item.employeeId,
+      displayId: item.employeeId,
+      department: item.department,
+      program: '',
+      semester: '',
+      phone: item.phone,
+      email: item.email,
+      totalGatepasses: item.totalGatepasses,
+      totalRequests: item.totalRequests || item.totalGatepasses + item.leaveRequestsCount,
+      approvedCount: item.approvedCount,
+      rejectedCount: item.rejectedCount,
+      pendingCount: item.pendingCount,
+      outCount: item.outCount,
+      returnedCount: item.returnedCount,
+      leaveRequestsCount: item.leaveRequestsCount,
+      loadAdjustmentCount: item.loadAdjustmentCount,
+      assignedScope: item.assignedScope,
+      isCoordinator: item.isCoordinator,
+      lastActivityAt: item.lastActivityDate || item.lastRequestDate
+    }))
+  );
+}
+
+function buildCombinedOverviewRows(dataset) {
+  return sortOverviewRows([...buildStudentOverviewRows(dataset), ...buildFacultyOverviewRows(dataset)]);
+}
+
+function getGatepassStageLabel(item) {
+  return item.currentApprovalLevel || item.forwardedToRole || item.status || 'pending';
+}
+
+function getFacultyStageLabel(item) {
+  return [item.workloadStatus, item.shortLeaveStatus].filter(Boolean).join(' / ') || item.overallStatus || 'pending';
+}
+
+function buildDetailedActivityRows(dataset) {
+  const gatepassRows = dataset.gatepasses.map((item) => ({
+    rowKey: `gatepass:${String(item._id)}`,
+    userType: item.applicantType === 'student' ? 'student' : 'faculty',
+    requestType: item.applicantType === 'student' ? 'Student Gatepass' : 'Faculty Gatepass',
+    userId: String(item.createdBy?._id || item.createdBy || ''),
+    name: item.applicantSnapshot?.fullName || item.createdBy?.fullName || '',
+    primaryId: item.applicantSnapshot?.enrollmentNo || item.applicantSnapshot?.employeeId || '',
+    department: item.applicantSnapshot?.department || item.routingSnapshot?.department || '',
+    program: item.applicantSnapshot?.program || item.routingSnapshot?.program || '',
+    semester: item.applicantSnapshot?.semester || item.routingSnapshot?.semester || '',
+    phone: item.applicantSnapshot?.phone || item.createdBy?.phone || '',
+    email: item.applicantSnapshot?.email || item.createdBy?.email || '',
+    gatepassId: item.gatepassId || item.passNumber || '',
+    requestNumber: item.gatepassId || item.passNumber || '',
+    gatepassDate: item.outDate || item.createdAt || null,
+    outTime: item.outTime || '',
+    returnTime: item.expectedReturnTime || '',
+    actualReturnTime: item.securityAction?.checkedInAt || null,
+    reason: item.reason || '',
+    destination: item.destination || '',
+    vehicleNumber: item.vehicleNumber || '',
+    approvalStatus: item.status || '',
+    actionBy: getLatestApprovedBy(item),
+    rejectionReason: item.rejectionReason || '',
+    currentWorkflowStage: getGatepassStageLabel(item),
+    createdAt: item.createdAt || null,
+    updatedAt: item.updatedAt || null
+  }));
+
+  const facultyRows = dataset.facultyLeaves.map((item) => ({
+    rowKey: `faculty-leave:${String(item._id)}`,
+    userType: 'faculty',
+    requestType: 'Faculty Leave',
+    userId: String(item.createdBy?._id || item.createdBy || ''),
+    name: item.facultyDetails?.name || item.createdBy?.fullName || '',
+    primaryId: item.facultyDetails?.employeeId || item.createdBy?.employeeId || '',
+    department: item.facultyDetails?.department || item.createdBy?.department || '',
+    program: '',
+    semester: '',
+    phone: item.facultyDetails?.contactNumber || item.createdBy?.phone || '',
+    email: item.facultyDetails?.emailId || item.createdBy?.email || '',
+    gatepassId: item.requestNumber || '',
+    requestNumber: item.requestNumber || '',
+    gatepassDate: item.leaveDetails?.leaveFrom || item.shortLeave?.leaveDate || item.createdAt || null,
+    outTime: item.shortLeave?.requestedFrom || '',
+    returnTime: item.shortLeave?.requestedTo || (item.leaveDetails?.leaveTo ? new Date(item.leaveDetails.leaveTo).toISOString().slice(0, 10) : ''),
+    actualReturnTime: item.securityAction?.checkedInAt || null,
+    reason: item.leaveDetails?.reason || item.shortLeave?.reason || '',
+    destination: item.shortLeave?.instituteName || '',
+    vehicleNumber: '',
+    approvalStatus: item.overallStatus || '',
+    actionBy: getLatestFacultyApprover(item),
+    rejectionReason: item.rejectionReason || '',
+    currentWorkflowStage: getFacultyStageLabel(item),
+    createdAt: item.createdAt || null,
+    updatedAt: item.updatedAt || null
+  }));
+
+  return [...gatepassRows, ...facultyRows].sort(
+    (left, right) => new Date(right.updatedAt || right.createdAt || 0).getTime() - new Date(left.updatedAt || left.createdAt || 0).getTime()
+  );
+}
+
+function buildUserExportSections(dataset) {
+  const detailedRows = buildDetailedActivityRows(dataset);
+  const groupedDetails = detailedRows.reduce((map, row) => {
+    if (!row.userId) {
+      return map;
+    }
+
+    if (!map.has(row.userId)) {
+      map.set(row.userId, []);
+    }
+
+    map.get(row.userId).push(row);
+    return map;
+  }, new Map());
+
+  return buildCombinedOverviewRows(dataset).map((overviewRow) => ({
+    ...overviewRow,
+    details: groupedDetails.get(overviewRow.id) || []
+  }));
+}
+
 function toActorSnapshot(user) {
   return {
     id: String(user?._id || user?.id || ''),
@@ -688,8 +1042,12 @@ async function fetchReportDataset(actor, inputFilters = {}) {
     throw new AppError('You do not have permission to export this report.', 403);
   }
 
-  const gatepassFilter = includeGatepasses(filters.reportType) ? buildGatepassFilter(filters, actor) : impossibleFilter();
-  const facultyLeaveFilter = includeFacultyLeaves(filters.reportType) ? buildFacultyLeaveFilter(filters, actor) : impossibleFilter();
+  const gatepassFilter = includeGatepasses(filters.reportType, filters.recordPartition)
+    ? buildGatepassFilter(filters, actor)
+    : impossibleFilter();
+  const facultyLeaveFilter = includeFacultyLeaves(filters.reportType, filters.recordPartition)
+    ? buildFacultyLeaveFilter(filters, actor)
+    : impossibleFilter();
   const studentFilter = buildUserFilter(filters, actor, 'student');
   const facultyFilter = buildUserFilter(filters, actor, getFacultyRoleFilter());
   const gatepassPopulateFields = [
@@ -705,15 +1063,15 @@ async function fetchReportDataset(actor, inputFilters = {}) {
     { path: 'securityAction.checkedInBy', select: 'fullName role employeeId' }
   ];
 
-  const [gatepasses, facultyLeaves, students, faculty] = await Promise.all([
-    includeGatepasses(filters.reportType)
+  const [rawGatepasses, rawFacultyLeaves, rawStudents, rawFaculty] = await Promise.all([
+    includeGatepasses(filters.reportType, filters.recordPartition)
       ? Gatepass.find(gatepassFilter)
           .populate(gatepassPopulateFields)
           .sort({ outDate: -1, createdAt: -1 })
           .limit(MAX_EXPORT_RECORDS)
           .lean()
       : [],
-    includeFacultyLeaves(filters.reportType)
+    includeFacultyLeaves(filters.reportType, filters.recordPartition)
       ? FacultyLeaveRequest.find(facultyLeaveFilter)
           .populate([
             {
@@ -742,8 +1100,40 @@ async function fetchReportDataset(actor, inputFilters = {}) {
       .lean()
   ]);
 
+  const students = filters.recordPartition === 'faculty' ? [] : rawStudents;
+  const facultyBase = filters.recordPartition === 'students' ? [] : rawFaculty;
+  const faculty = filters.coordinatorOnly ? facultyBase.filter(isCoordinatorScopedUser) : facultyBase;
+  const allowedFacultyIds = new Set(faculty.map((item) => String(item._id)));
+  const restrictFacultyRecords =
+    Boolean(filters.coordinatorOnly) ||
+    Boolean(filters.roleType && filters.roleType !== 'student');
+  const gatepasses = filters.coordinatorOnly || restrictFacultyRecords
+    ? rawGatepasses.filter((item) => {
+          if (item.applicantType !== 'faculty') {
+            return true;
+          }
+
+          const userId = String(item.createdBy?._id || item.createdBy || '');
+          return allowedFacultyIds.has(userId);
+      })
+      : rawGatepasses;
+  const facultyLeaves =
+    filters.coordinatorOnly || restrictFacultyRecords
+      ? rawFacultyLeaves.filter((item) => allowedFacultyIds.has(String(item.createdBy?._id || item.createdBy || '')))
+      : rawFacultyLeaves;
+
   const studentSummaries = buildStudentSummaries(students, gatepasses);
   const facultySummaries = buildFacultySummaries(faculty, gatepasses, facultyLeaves);
+  const studentOverviewRows = buildStudentOverviewRows({ studentSummaries });
+  const facultyOverviewRows = buildFacultyOverviewRows({ facultySummaries });
+  const mixedOverviewRows = buildCombinedOverviewRows({ studentSummaries, facultySummaries });
+  const detailedActivityRows = buildDetailedActivityRows({ gatepasses, facultyLeaves });
+  const userRecordCount =
+    filters.recordPartition === 'students'
+      ? studentOverviewRows.length
+      : filters.recordPartition === 'faculty'
+        ? facultyOverviewRows.length
+        : mixedOverviewRows.length;
   const departmentAnalytics = buildDepartmentAnalytics(students, faculty, gatepasses);
   const monthlyTrend = buildMonthlyTrend(gatepasses, facultyLeaves);
   const dashboardSummary = buildDashboardSummary(gatepasses, facultyLeaves, filters, actor);
@@ -762,11 +1152,16 @@ async function fetchReportDataset(actor, inputFilters = {}) {
     faculty,
     studentSummaries,
     facultySummaries,
+    studentOverviewRows,
+    facultyOverviewRows,
+    mixedOverviewRows,
+    detailedActivityRows,
     dashboardSummary,
     departmentAnalytics,
     monthlyTrend,
     insights,
-    recordCount: gatepasses.length + facultyLeaves.length
+    recordCount: detailedActivityRows.length,
+    userRecordCount
   };
 }
 
@@ -777,6 +1172,12 @@ async function getReportPreview(actor, inputFilters = {}) {
     access: dataset.access,
     filters: dataset.publicFilters,
     recordCount: dataset.recordCount,
+    userRecordCount: dataset.userRecordCount,
+    userCounts: {
+      students: dataset.studentOverviewRows.length,
+      faculty: dataset.facultyOverviewRows.length,
+      mixed: dataset.mixedOverviewRows.length
+    },
     summary: dataset.dashboardSummary,
     topStudents: dataset.insights.topGatepassUsers.slice(0, 5),
     busiestDepartment: dataset.insights.busiestDepartment,
@@ -785,13 +1186,50 @@ async function getReportPreview(actor, inputFilters = {}) {
   };
 }
 
+async function getExportRecords(actor, input = {}) {
+  const dataset = await fetchReportDataset(actor, input);
+  const page = Math.max(Number(input.page) || 1, 1);
+  const limit = Math.min(Math.max(Number(input.limit) || 12, 1), 100);
+  const rows =
+    dataset.filters.recordPartition === 'students'
+      ? dataset.studentOverviewRows
+      : dataset.filters.recordPartition === 'faculty'
+        ? dataset.facultyOverviewRows
+        : dataset.mixedOverviewRows;
+  const startIndex = (page - 1) * limit;
+  const pagedRows = rows.slice(startIndex, startIndex + limit);
+
+  return {
+    access: dataset.access,
+    filters: dataset.publicFilters,
+    rows: pagedRows,
+    totals: {
+      students: dataset.studentOverviewRows.length,
+      faculty: dataset.facultyOverviewRows.length,
+      mixed: dataset.mixedOverviewRows.length,
+      details: dataset.detailedActivityRows.length
+    },
+    summary: dataset.dashboardSummary,
+    meta: {
+      page,
+      limit,
+      total: rows.length,
+      totalPages: rows.length ? Math.ceil(rows.length / limit) : 1,
+      hasNextPage: startIndex + limit < rows.length,
+      hasPrevPage: page > 1
+    }
+  };
+}
+
 async function getExportOptions(actor, query = {}) {
   const access = getAdminAccessProfile(actor);
   const q = String(query.q || '').trim();
   const filters = parseReportFilters({
     reportType: query.reportType || 'all_gatepasses',
+    recordPartition: query.recordPartition || query.partition || 'mixed',
     department: query.department,
     semester: query.semester,
+    coordinatorOnly: query.coordinatorOnly,
     personSearch: q
   });
   const studentFilter = buildUserFilter(filters, actor, 'student');
@@ -837,7 +1275,11 @@ async function getExportOptions(actor, query = {}) {
       statuses: ['all', 'pending', 'approved', 'rejected', 'out', 'returned'],
       datePresets: ['today', 'this_week', 'this_month', 'last_month', 'custom'],
       exportModes: ['summary', 'individual', 'per_student'],
-      vehicleModes: ['all', 'vehicle', 'no_vehicle']
+      vehicleModes: ['all', 'vehicle', 'no_vehicle'],
+      recordPartitions: ['students', 'faculty', 'mixed'],
+      detailLevels: ['summary_detailed', 'detailed_only', 'summary_only'],
+      exportScopes: ['filtered', 'selected', 'bulk'],
+      roleTypes: ['student', 'faculty', 'principal', 'hod', 'cao']
     },
     people: {
       students: students.map((student) => ({
@@ -859,7 +1301,13 @@ async function getExportOptions(actor, query = {}) {
 }
 
 module.exports = {
+  buildCombinedOverviewRows,
+  buildDetailedActivityRows,
+  buildFacultyOverviewRows,
+  buildStudentOverviewRows,
+  buildUserExportSections,
   fetchReportDataset,
+  getExportRecords,
   getExportOptions,
   getLatestApprovedBy,
   getLatestFacultyApprover,

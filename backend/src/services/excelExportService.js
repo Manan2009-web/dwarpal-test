@@ -1,5 +1,11 @@
 const ExcelJS = require('exceljs');
-const { getLatestApprovedBy, getLatestFacultyApprover, isLateReturn } = require('./reportService');
+const {
+  buildCombinedOverviewRows,
+  buildDetailedActivityRows,
+  buildFacultyOverviewRows,
+  buildStudentOverviewRows,
+  buildUserExportSections
+} = require('./reportService');
 
 const STATUS_FILLS = {
   approved: 'D8F3DC',
@@ -56,6 +62,7 @@ function applyHeaderStyle(row) {
 
 function styleWorksheet(sheet) {
   sheet.views = [{ state: 'frozen', ySplit: 1 }];
+
   sheet.eachRow((row) => {
     row.eachCell((cell) => {
       cell.border = {
@@ -72,10 +79,17 @@ function styleWorksheet(sheet) {
     let maxLength = 12;
     column.eachCell({ includeEmpty: true }, (cell) => {
       const value = cell.value instanceof Date ? '00/00/0000 00:00' : stringify(cell.value);
-      maxLength = Math.max(maxLength, Math.min(value.length + 2, 46));
+      maxLength = Math.max(maxLength, Math.min(value.length + 2, 44));
     });
     column.width = maxLength;
   });
+
+  if (sheet.rowCount > 1 && sheet.columnCount > 1) {
+    sheet.autoFilter = {
+      from: { row: 1, column: 1 },
+      to: { row: 1, column: sheet.columnCount }
+    };
+  }
 }
 
 function statusTone(value) {
@@ -83,8 +97,8 @@ function statusTone(value) {
   if (status.includes('approved')) return 'approved';
   if (status.includes('rejected')) return 'rejected';
   if (status.includes('pending') || status.includes('forwarded')) return 'pending';
-  if (status.includes('checked_out')) return 'out';
-  if (status.includes('completed') || status.includes('returned')) return 'returned';
+  if (status.includes('out')) return 'out';
+  if (status.includes('returned') || status.includes('completed')) return 'returned';
   return '';
 }
 
@@ -102,24 +116,23 @@ function colorStatusCell(cell) {
   cell.font = { bold: true, color: { argb: 'FF173449' } };
 }
 
-function addRowsSheet(workbook, name, headers, rows) {
+function addRowsSheet(workbook, name, columns, rows) {
   const sheet = workbook.addWorksheet(safeSheetName(name));
-  sheet.addRow(headers);
+  sheet.addRow(columns.map((column) => column.header));
   applyHeaderStyle(sheet.getRow(1));
 
   rows.forEach((row) => {
-    const values = headers.map((header) => row[header] ?? '');
-    const addedRow = sheet.addRow(values);
-    headers.forEach((header, index) => {
-      if (/status/i.test(header)) {
-        colorStatusCell(addedRow.getCell(index + 1));
+    const addedRow = sheet.addRow(columns.map((column) => row[column.key] ?? ''));
+
+    columns.forEach((column, index) => {
+      const cell = addedRow.getCell(index + 1);
+
+      if (column.type === 'date' && cell.value instanceof Date) {
+        cell.numFmt = 'dd-mmm-yyyy hh:mm';
       }
 
-      if (/date|time|created|updated|generated/i.test(header)) {
-        const cell = addedRow.getCell(index + 1);
-        if (cell.value instanceof Date) {
-          cell.numFmt = 'dd-mmm-yyyy hh:mm';
-        }
+      if (column.status) {
+        colorStatusCell(cell);
       }
     });
   });
@@ -145,6 +158,7 @@ function addKeyValueSheet(workbook, name, title, entries) {
   entries.forEach(([label, value]) => {
     const row = sheet.addRow([label, value]);
     row.getCell(1).font = { bold: true };
+
     if (row.getCell(2).value instanceof Date) {
       row.getCell(2).numFmt = 'dd-mmm-yyyy hh:mm';
     }
@@ -155,245 +169,172 @@ function addKeyValueSheet(workbook, name, title, entries) {
   return sheet;
 }
 
-function toStudentSummaryRows(dataset) {
-  return dataset.studentSummaries.map((item, index) => ({
-    'Sr No': index + 1,
-    'Student Name': item.name,
-    'Enrollment No': item.enrollmentNo,
-    Department: item.department,
-    Semester: item.semester,
-    'Division/Class': item.division,
-    Contact: item.phone,
-    'Total Gatepasses': item.totalGatepasses,
-    'Approved Count': item.approvedCount,
-    'Rejected Count': item.rejectedCount,
-    'Pending Count': item.pendingCount,
-    'Out Count': item.outCount,
-    'Returned Count': item.returnedCount,
-    'Late Return Count': item.lateReturnCount,
-    'Total Leave Requests': item.totalLeaveRequests,
-    'Total Load Adjustments': item.totalLoadAdjustments,
-    'Last Gatepass Date': formatDate(item.lastGatepassDate),
-    'Most Common Reason': item.mostCommonReason,
-    'Coordinator/Class Incharge': item.coordinatorName
-  }));
-}
-
-function toGatepassDetailRows(dataset) {
-  return dataset.gatepasses.map((item, index) => ({
-    'Sr No': index + 1,
-    'Gatepass ID': item.gatepassId || item.passNumber,
-    'Student Name': item.applicantSnapshot?.fullName || item.createdBy?.fullName || '',
-    'Enrollment No': item.applicantSnapshot?.enrollmentNo || item.createdBy?.enrollmentNo || item.applicantSnapshot?.employeeId || '',
-    Department: item.applicantSnapshot?.department || item.routingSnapshot?.department || '',
-    Semester: item.applicantSnapshot?.semester || item.routingSnapshot?.semester || '',
-    Division: item.applicantSnapshot?.division || '',
-    Date: formatDate(item.outDate),
-    'Out Time': item.outTime || '',
-    'Return Time': item.expectedReturnTime || '',
-    'Actual Return Time': formatDate(item.securityAction?.checkedInAt),
-    Reason: item.reason || '',
-    Destination: item.destination || '',
-    'Vehicle Number': item.vehicleNumber || '',
-    Status: item.status || '',
-    'Approved By': getLatestApprovedBy(item),
-    'Approval Level': item.currentApprovalLevel || '',
-    'Rejection Reason': item.rejectionReason || '',
-    'Created At': formatDate(item.createdAt),
-    'Updated At': formatDate(item.updatedAt)
-  }));
-}
-
 function describeScope(scope) {
   if (!scope) return '';
   const assigned = Array.isArray(scope.assignedClasses)
-    ? scope.assignedClasses.map((item) => [item.department, item.semester ? `Sem ${item.semester}` : '', item.division].filter(Boolean).join(' ')).join('; ')
+    ? scope.assignedClasses
+        .map((item) => [item.department, item.semester ? `Sem ${item.semester}` : '', item.division].filter(Boolean).join(' '))
+        .join('; ')
     : '';
   return assigned || [scope.department, scope.semester ? `Sem ${scope.semester}` : '', scope.division].filter(Boolean).join(' ');
 }
 
-function toFacultySummaryRows(dataset) {
-  return dataset.facultySummaries.map((item, index) => ({
-    'Sr No': index + 1,
-    'Faculty Name': item.name,
-    'Employee ID': item.employeeId,
-    Department: item.department,
-    Role: item.role,
-    'Is Coordinator': item.isCoordinator ? 'Yes' : 'No',
-    'Assigned Class/Scope': describeScope(item.assignedScope),
-    'Total Gatepasses': item.totalGatepasses,
-    'Approved Count': item.approvedCount,
-    'Rejected Count': item.rejectedCount,
-    'Pending Count': item.pendingCount,
-    'Leave Requests Count': item.leaveRequestsCount,
-    'Load Adjustment Count': item.loadAdjustmentCount,
-    'Last Request Date': formatDate(item.lastRequestDate)
+function toStudentRows(dataset) {
+  return buildStudentOverviewRows(dataset).map((item, index) => ({
+    srNo: index + 1,
+    fullName: item.name,
+    enrollmentNo: item.primaryId,
+    department: item.department,
+    program: item.program,
+    semester: item.semester,
+    phone: item.phone,
+    email: item.email,
+    totalGatepasses: item.totalGatepasses,
+    approvedCount: item.approvedCount,
+    rejectedCount: item.rejectedCount,
+    pendingCount: item.pendingCount,
+    outCount: item.outCount,
+    returnedCount: item.returnedCount,
+    lastActivityAt: formatDate(item.lastActivityAt)
   }));
 }
 
-function toFacultyDetailRows(dataset) {
-  return dataset.facultyLeaves.map((item, index) => ({
-    'Sr No': index + 1,
-    'Request ID': item.requestNumber,
-    'Faculty Name': item.facultyDetails?.name || item.createdBy?.fullName || '',
-    'Employee ID': item.facultyDetails?.employeeId || item.createdBy?.employeeId || '',
-    Department: item.facultyDetails?.department || item.createdBy?.department || '',
-    'Request Type': 'Faculty Leave / Workload Adjustment',
-    Date: formatDate(item.leaveDetails?.leaveFrom || item.shortLeave?.leaveDate),
-    Time: item.shortLeave?.requestedFrom && item.shortLeave?.requestedTo ? `${item.shortLeave.requestedFrom} - ${item.shortLeave.requestedTo}` : '',
-    Reason: item.leaveDetails?.reason || item.shortLeave?.reason || '',
-    'Leave Type': item.leaveDetails?.leaveType || '',
-    'Adjustment Details': (item.workloadAdjustments || [])
-      .map((adjustment) => `${adjustment.date ? new Date(adjustment.date).toISOString().slice(0, 10) : ''} ${adjustment.time || ''} ${adjustment.subjectOrCourseCode || ''} ${adjustment.classOrSemester || ''} -> ${adjustment.adjustedFacultyName || ''}`)
-      .join('; '),
-    Status: item.overallStatus || '',
-    'Approved By': getLatestFacultyApprover(item),
-    'Rejection Reason': item.rejectionReason || '',
-    'Created At': formatDate(item.createdAt)
+function toFacultyRows(dataset) {
+  return buildFacultyOverviewRows(dataset).map((item, index) => ({
+    srNo: index + 1,
+    fullName: item.name,
+    employeeId: item.primaryId,
+    department: item.department,
+    roleType: item.roleType,
+    coordinator: item.isCoordinator ? 'Yes' : 'No',
+    phone: item.phone,
+    email: item.email,
+    totalRequests: item.totalRequests,
+    totalGatepasses: item.totalGatepasses,
+    leaveRequestsCount: item.leaveRequestsCount,
+    approvedCount: item.approvedCount,
+    rejectedCount: item.rejectedCount,
+    pendingCount: item.pendingCount,
+    outCount: item.outCount,
+    returnedCount: item.returnedCount,
+    loadAdjustmentCount: item.loadAdjustmentCount,
+    lastActivityAt: formatDate(item.lastActivityAt)
   }));
 }
 
-function toDepartmentRows(dataset) {
-  return dataset.departmentAnalytics.map((item) => ({
-    Department: item.department,
-    'Total Students': item.totalStudents,
-    'Total Faculty': item.totalFaculty,
-    'Total Gatepasses': item.totalGatepasses,
-    'Total Approved': item.totalApproved,
-    'Total Rejected': item.totalRejected,
-    'Total Pending': item.totalPending,
-    'Total Out': item.totalOut,
-    'Total Returned': item.totalReturned,
-    'Avg Gatepasses per Student': Number(item.avgGatepassesPerStudent.toFixed(2)),
-    'Avg Gatepasses per Faculty': Number(item.avgGatepassesPerFaculty.toFixed(2))
+function toMixedRows(dataset) {
+  return buildCombinedOverviewRows(dataset).map((item, index) => ({
+    srNo: index + 1,
+    userType: item.userType,
+    roleType: item.roleType,
+    fullName: item.name,
+    primaryId: item.primaryId,
+    department: item.department,
+    program: item.program,
+    semester: item.semester,
+    phone: item.phone,
+    email: item.email,
+    totalRequests: item.totalRequests,
+    approvedCount: item.approvedCount,
+    rejectedCount: item.rejectedCount,
+    pendingCount: item.pendingCount,
+    outCount: item.outCount,
+    returnedCount: item.returnedCount,
+    lastActivityAt: formatDate(item.lastActivityAt)
   }));
 }
 
-function toMonthlyRows(dataset) {
-  return dataset.monthlyTrend.map((item) => ({
-    Month: item.month,
-    'Student Gatepasses': item.studentGatepasses,
-    'Faculty Gatepasses': item.facultyGatepasses,
-    'Leave Requests': item.leaveRequests,
-    'Load Adjustments': item.loadAdjustments,
-    Approved: item.approved,
-    Rejected: item.rejected,
-    Pending: item.pending
+function toDetailedRows(dataset) {
+  return buildDetailedActivityRows(dataset).map((item, index) => ({
+    srNo: index + 1,
+    requestType: item.requestType,
+    userType: item.userType,
+    fullName: item.name,
+    primaryId: item.primaryId,
+    department: item.department,
+    program: item.program,
+    semester: item.semester,
+    phone: item.phone,
+    email: item.email,
+    gatepassId: item.gatepassId,
+    gatepassDate: formatDate(item.gatepassDate),
+    outTime: item.outTime,
+    returnTime: item.returnTime,
+    actualReturnTime: formatDate(item.actualReturnTime),
+    reason: item.reason,
+    destination: item.destination,
+    vehicleNumber: item.vehicleNumber,
+    approvalStatus: item.approvalStatus,
+    actionBy: item.actionBy,
+    rejectionReason: item.rejectionReason,
+    currentWorkflowStage: item.currentWorkflowStage,
+    createdAt: formatDate(item.createdAt),
+    updatedAt: formatDate(item.updatedAt)
   }));
 }
 
-function getGatepassesForSummary(summary, dataset) {
-  if (summary.user?._id) {
-    const id = String(summary.user._id);
-    return dataset.gatepasses.filter((item) => String(item.createdBy?._id || item.createdBy) === id);
-  }
-
-  return dataset.gatepasses.filter((item) => item.applicantSnapshot?.enrollmentNo === summary.enrollmentNo);
-}
-
-function getFacultyRequestsForSummary(summary, dataset) {
-  if (summary.user?._id) {
-    const id = String(summary.user._id);
-    return {
-      gatepasses: dataset.gatepasses.filter((item) => String(item.createdBy?._id || item.createdBy) === id),
-      leaves: dataset.facultyLeaves.filter((item) => String(item.createdBy?._id || item.createdBy) === id)
-    };
-  }
-
-  return {
-    gatepasses: dataset.gatepasses.filter((item) => item.applicantSnapshot?.employeeId === summary.employeeId),
-    leaves: dataset.facultyLeaves.filter((item) => item.facultyDetails?.employeeId === summary.employeeId)
-  };
-}
-
-function addIndividualStudentSheet(workbook, summary, dataset, index = 0) {
-  const baseName = summary.enrollmentNo || summary.name || `Student ${index + 1}`;
-  const sheet = workbook.addWorksheet(safeSheetName(baseName, `Student ${index + 1}`));
-  sheet.mergeCells('A1:H1');
-  sheet.getCell('A1').value = `DwarPal Student History - ${summary.name}`;
+function addUserSectionSheet(workbook, section, index = 0) {
+  const sheet = workbook.addWorksheet(safeSheetName(section.primaryId || section.name, `Record ${index + 1}`));
+  sheet.mergeCells('A1:F1');
+  sheet.getCell('A1').value = `DwarPal Detailed Record - ${section.name}`;
   sheet.getCell('A1').font = { bold: true, size: 15, color: { argb: 'FF173449' } };
   sheet.addRow([]);
-  sheet.addRow(['Name', summary.name, 'Enrollment', summary.enrollmentNo, 'Department', summary.department, 'Semester', summary.semester]);
-  sheet.addRow(['Total Gatepasses', summary.totalGatepasses, 'Approved', summary.approvedCount, 'Rejected', summary.rejectedCount, 'Late Returns', summary.lateReturnCount]);
+  sheet.addRow(['User Type', section.userType, 'Role Type', section.roleType, 'Primary ID', section.primaryId]);
+  sheet.addRow(['Department', section.department, 'Program', section.program, 'Semester', section.semester]);
+  sheet.addRow(['Phone', section.phone, 'Email', section.email, 'Coordinator', section.isCoordinator ? 'Yes' : 'No']);
+  sheet.addRow(['Total Requests', section.totalRequests, 'Approved', section.approvedCount, 'Rejected', section.rejectedCount]);
+  sheet.addRow(['Pending', section.pendingCount, 'Out', section.outCount, 'Returned', section.returnedCount]);
+  if (section.assignedScope) {
+    sheet.addRow(['Assigned Scope', describeScope(section.assignedScope)]);
+  }
   sheet.addRow([]);
-  const monthStartRow = sheet.rowCount + 1;
-  sheet.addRow(['Month', 'Gatepasses', 'Approved', 'Rejected', 'Pending']);
-  applyHeaderStyle(sheet.getRow(monthStartRow));
-  const gatepasses = getGatepassesForSummary(summary, dataset);
-  const monthly = new Map();
-  gatepasses.forEach((gatepass) => {
-    const date = gatepass.outDate ? new Date(gatepass.outDate) : new Date(gatepass.createdAt || Date.now());
-    const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-    if (!monthly.has(month)) {
-      monthly.set(month, { month, total: 0, approved: 0, rejected: 0, pending: 0 });
-    }
-    const item = monthly.get(month);
-    item.total += 1;
-    if (String(gatepass.status || '').includes('approved')) item.approved += 1;
-    if (String(gatepass.status || '').includes('rejected')) item.rejected += 1;
-    if (String(gatepass.status || '').includes('pending') || String(gatepass.status || '').includes('forwarded')) item.pending += 1;
-  });
-  Array.from(monthly.values()).forEach((item) => sheet.addRow([item.month, item.total, item.approved, item.rejected, item.pending]));
-  sheet.addRow([]);
-  const detailStartRow = sheet.rowCount + 1;
-  const detailHeaders = ['Gatepass ID', 'Date', 'Out Time', 'Actual Return Time', 'Reason', 'Vehicle Number', 'Status', 'Approved By'];
+
+  const detailHeaders = [
+    'Request Type',
+    'Gatepass ID',
+    'Date',
+    'Out Time',
+    'Return Time',
+    'Actual Return Time',
+    'Reason',
+    'Destination',
+    'Vehicle Number',
+    'Status',
+    'Actioned By',
+    'Rejection Reason',
+    'Workflow Stage',
+    'Created At',
+    'Updated At'
+  ];
+  const headerRowIndex = sheet.rowCount + 1;
   sheet.addRow(detailHeaders);
-  applyHeaderStyle(sheet.getRow(detailStartRow));
-  gatepasses.forEach((gatepass) => {
-    const row = sheet.addRow([
-      gatepass.gatepassId || gatepass.passNumber,
-      formatDate(gatepass.outDate),
-      gatepass.outTime || '',
-      formatDate(gatepass.securityAction?.checkedInAt),
-      gatepass.reason || '',
-      gatepass.vehicleNumber || '',
-      gatepass.status || '',
-      getLatestApprovedBy(gatepass)
-    ]);
-    colorStatusCell(row.getCell(7));
-  });
-  styleWorksheet(sheet);
-}
+  applyHeaderStyle(sheet.getRow(headerRowIndex));
 
-function addIndividualFacultySheet(workbook, summary, dataset, index = 0) {
-  const baseName = summary.employeeId || summary.name || `Faculty ${index + 1}`;
-  const sheet = workbook.addWorksheet(safeSheetName(baseName, `Faculty ${index + 1}`));
-  const { gatepasses, leaves } = getFacultyRequestsForSummary(summary, dataset);
-  sheet.mergeCells('A1:H1');
-  sheet.getCell('A1').value = `DwarPal Faculty History - ${summary.name}`;
-  sheet.getCell('A1').font = { bold: true, size: 15, color: { argb: 'FF173449' } };
-  sheet.addRow([]);
-  sheet.addRow(['Name', summary.name, 'Employee ID', summary.employeeId, 'Department', summary.department, 'Role', summary.role]);
-  sheet.addRow(['Gatepasses', gatepasses.length, 'Leave Requests', leaves.length, 'Load Adjustments', summary.loadAdjustmentCount, 'Coordinator', summary.isCoordinator ? 'Yes' : 'No']);
-  sheet.addRow([]);
-  const detailStartRow = sheet.rowCount + 1;
-  const headers = ['Request ID', 'Request Type', 'Date', 'Reason', 'Status', 'Approved By', 'Rejection Reason'];
-  sheet.addRow(headers);
-  applyHeaderStyle(sheet.getRow(detailStartRow));
-  gatepasses.forEach((gatepass) => {
+  section.details.forEach((detail) => {
     const row = sheet.addRow([
-      gatepass.gatepassId || gatepass.passNumber,
-      'Gatepass',
-      formatDate(gatepass.outDate),
-      gatepass.reason || '',
-      gatepass.status || '',
-      getLatestApprovedBy(gatepass),
-      gatepass.rejectionReason || ''
+      detail.requestType,
+      detail.gatepassId,
+      formatDate(detail.gatepassDate),
+      detail.outTime,
+      detail.returnTime,
+      formatDate(detail.actualReturnTime),
+      detail.reason,
+      detail.destination,
+      detail.vehicleNumber,
+      detail.approvalStatus,
+      detail.actionBy,
+      detail.rejectionReason,
+      detail.currentWorkflowStage,
+      formatDate(detail.createdAt),
+      formatDate(detail.updatedAt)
     ]);
-    colorStatusCell(row.getCell(5));
+    colorStatusCell(row.getCell(10));
   });
-  leaves.forEach((request) => {
-    const row = sheet.addRow([
-      request.requestNumber,
-      request.leaveDetails?.leaveType || 'Leave',
-      formatDate(request.leaveDetails?.leaveFrom || request.shortLeave?.leaveDate),
-      request.leaveDetails?.reason || request.shortLeave?.reason || '',
-      request.overallStatus || '',
-      getLatestFacultyApprover(request),
-      request.rejectionReason || ''
-    ]);
-    colorStatusCell(row.getCell(5));
-  });
+
+  if (!section.details.length) {
+    sheet.addRow(['No detailed records found for this user.']);
+  }
+
   styleWorksheet(sheet);
 }
 
@@ -410,135 +351,155 @@ function createWorkbook(dataset) {
 
 async function generateExcelBuffer(dataset) {
   const workbook = createWorkbook(dataset);
-  const summary = dataset.dashboardSummary;
-  const mode = dataset.filters.exportMode;
+  const summaryEntries = [
+    ['Report Type', dataset.filters.reportType],
+    ['Record Partition', dataset.filters.recordPartition],
+    ['Export Scope', dataset.filters.exportScope],
+    ['Detail Level', dataset.filters.detailLevel],
+    ['Department', dataset.publicFilters.department || 'All'],
+    ['Program', dataset.publicFilters.program || 'All'],
+    ['Semester', dataset.publicFilters.semester || 'All'],
+    ['Status', dataset.publicFilters.status || 'All'],
+    ['User Records', dataset.userRecordCount],
+    ['Detailed Records', dataset.recordCount],
+    ['Total Approved', dataset.dashboardSummary.totalApproved],
+    ['Total Rejected', dataset.dashboardSummary.totalRejected],
+    ['Total Pending', dataset.dashboardSummary.totalPending],
+    ['Total Out', dataset.dashboardSummary.totalOut],
+    ['Total Returned', dataset.dashboardSummary.totalReturned],
+    ['Generated By', dataset.actor?.name || 'Admin'],
+    ['Generated At', formatDate(dataset.generatedAt)]
+  ];
 
-  if (mode === 'per_student' || dataset.filters.includeSeparateStudentSheets) {
-    const summaries = dataset.studentSummaries.filter((item) => item.totalGatepasses > 0 || item.user);
-    (summaries.length ? summaries : dataset.studentSummaries).forEach((item, index) => addIndividualStudentSheet(workbook, item, dataset, index));
-  } else if (mode === 'individual' && dataset.filters.studentId) {
-    const match = dataset.studentSummaries.find((item) => String(item.user?._id || '') === String(dataset.filters.studentId));
-    addIndividualStudentSheet(workbook, match || dataset.studentSummaries[0] || { name: 'Student', totalGatepasses: 0 }, dataset);
-  } else if (mode === 'individual' && dataset.filters.facultyId) {
-    const match = dataset.facultySummaries.find((item) => String(item.user?._id || '') === String(dataset.filters.facultyId));
-    addIndividualFacultySheet(workbook, match || dataset.facultySummaries[0] || { name: 'Faculty', totalGatepasses: 0 }, dataset);
-  } else {
-    addKeyValueSheet(workbook, 'Dashboard Summary', 'DwarPal Dashboard Summary', [
-      ['Total Gatepasses', summary.totalGatepasses],
-      ['Total Approved', summary.totalApproved],
-      ['Total Rejected', summary.totalRejected],
-      ['Total Pending', summary.totalPending],
-      ['Total Out', summary.totalOut],
-      ['Total Returned', summary.totalReturned],
-      ['Total Late Returns', summary.totalLateReturns],
-      ['Total Faculty Requests', summary.totalFacultyRequests],
-      ['Total Student Requests', summary.totalStudentRequests],
-      ['Total Leave Requests', summary.totalLeaveRequests],
-      ['Total Load Adjustments', summary.totalLoadAdjustments],
-      ['Date Range Used', summary.dateRangeUsed],
-      ['Generated By', summary.generatedBy],
-      ['Generated At', formatDate(summary.generatedAt)]
-    ]);
+  const studentRows = toStudentRows(dataset);
+  const facultyRows = toFacultyRows(dataset);
+  const mixedRows = toMixedRows(dataset);
+  const detailedRows = toDetailedRows(dataset);
+  const addSummarySheets = dataset.filters.detailLevel !== 'detailed_only';
+  const addDetailSheets = dataset.filters.detailLevel !== 'summary_only';
 
-    addRowsSheet(workbook, 'Student Summary', Object.keys(toStudentSummaryRows(dataset)[0] || {
-      'Sr No': '',
-      'Student Name': '',
-      'Enrollment No': '',
-      Department: '',
-      Semester: '',
-      'Division/Class': '',
-      Contact: '',
-      'Total Gatepasses': '',
-      'Approved Count': '',
-      'Rejected Count': '',
-      'Pending Count': '',
-      'Out Count': '',
-      'Returned Count': '',
-      'Late Return Count': '',
-      'Total Leave Requests': '',
-      'Total Load Adjustments': '',
-      'Last Gatepass Date': '',
-      'Most Common Reason': '',
-      'Coordinator/Class Incharge': ''
-    }), toStudentSummaryRows(dataset));
-    addRowsSheet(workbook, 'Student Gatepass Details', Object.keys(toGatepassDetailRows(dataset)[0] || {
-      'Sr No': '',
-      'Gatepass ID': '',
-      'Student Name': '',
-      'Enrollment No': '',
-      Department: '',
-      Semester: '',
-      Division: '',
-      Date: '',
-      'Out Time': '',
-      'Return Time': '',
-      'Actual Return Time': '',
-      Reason: '',
-      Destination: '',
-      'Vehicle Number': '',
-      Status: '',
-      'Approved By': '',
-      'Approval Level': '',
-      'Rejection Reason': '',
-      'Created At': '',
-      'Updated At': ''
-    }), toGatepassDetailRows(dataset));
-    addRowsSheet(workbook, 'Faculty Summary', Object.keys(toFacultySummaryRows(dataset)[0] || {
-      'Sr No': '',
-      'Faculty Name': '',
-      'Employee ID': '',
-      Department: '',
-      Role: '',
-      'Is Coordinator': '',
-      'Assigned Class/Scope': '',
-      'Total Gatepasses': '',
-      'Approved Count': '',
-      'Rejected Count': '',
-      'Pending Count': '',
-      'Leave Requests Count': '',
-      'Load Adjustment Count': '',
-      'Last Request Date': ''
-    }), toFacultySummaryRows(dataset));
-    addRowsSheet(workbook, 'Faculty Details Leave Load', Object.keys(toFacultyDetailRows(dataset)[0] || {
-      'Sr No': '',
-      'Request ID': '',
-      'Faculty Name': '',
-      'Employee ID': '',
-      Department: '',
-      'Request Type': '',
-      Date: '',
-      Time: '',
-      Reason: '',
-      'Leave Type': '',
-      'Adjustment Details': '',
-      Status: '',
-      'Approved By': '',
-      'Rejection Reason': '',
-      'Created At': ''
-    }), toFacultyDetailRows(dataset));
-    addRowsSheet(workbook, 'Department Analytics', Object.keys(toDepartmentRows(dataset)[0] || {
-      Department: '',
-      'Total Students': '',
-      'Total Faculty': '',
-      'Total Gatepasses': '',
-      'Total Approved': '',
-      'Total Rejected': '',
-      'Total Pending': '',
-      'Total Out': '',
-      'Total Returned': '',
-      'Avg Gatepasses per Student': '',
-      'Avg Gatepasses per Faculty': ''
-    }), toDepartmentRows(dataset));
-    addRowsSheet(workbook, 'Monthly Trend', Object.keys(toMonthlyRows(dataset)[0] || {
-      Month: '',
-      'Student Gatepasses': '',
-      'Faculty Gatepasses': '',
-      'Leave Requests': '',
-      'Load Adjustments': '',
-      Approved: '',
-      Rejected: '',
-      Pending: ''
-    }), toMonthlyRows(dataset));
+  if (addSummarySheets) {
+    addKeyValueSheet(workbook, 'Export Summary', 'DwarPal Export Summary', summaryEntries);
+  }
+
+  if (addSummarySheets && studentRows.length && dataset.filters.recordPartition !== 'faculty') {
+    addRowsSheet(
+      workbook,
+      'Student Overview',
+      [
+        { header: 'Sr No', key: 'srNo' },
+        { header: 'Full Name', key: 'fullName' },
+        { header: 'Enrollment Number', key: 'enrollmentNo' },
+        { header: 'Department', key: 'department' },
+        { header: 'Program', key: 'program' },
+        { header: 'Semester', key: 'semester' },
+        { header: 'Phone', key: 'phone' },
+        { header: 'Email', key: 'email' },
+        { header: 'Total Gatepasses', key: 'totalGatepasses' },
+        { header: 'Approved', key: 'approvedCount' },
+        { header: 'Rejected', key: 'rejectedCount' },
+        { header: 'Pending', key: 'pendingCount' },
+        { header: 'Out', key: 'outCount' },
+        { header: 'Returned', key: 'returnedCount' },
+        { header: 'Last Activity', key: 'lastActivityAt', type: 'date' }
+      ],
+      studentRows
+    );
+  }
+
+  if (addSummarySheets && facultyRows.length && dataset.filters.recordPartition !== 'students') {
+    addRowsSheet(
+      workbook,
+      'Faculty Overview',
+      [
+        { header: 'Sr No', key: 'srNo' },
+        { header: 'Full Name', key: 'fullName' },
+        { header: 'Employee ID', key: 'employeeId' },
+        { header: 'Department', key: 'department' },
+        { header: 'Role Type', key: 'roleType' },
+        { header: 'Coordinator', key: 'coordinator' },
+        { header: 'Phone', key: 'phone' },
+        { header: 'Email', key: 'email' },
+        { header: 'Total Requests', key: 'totalRequests' },
+        { header: 'Total Gatepasses', key: 'totalGatepasses' },
+        { header: 'Leave Requests', key: 'leaveRequestsCount' },
+        { header: 'Approved', key: 'approvedCount' },
+        { header: 'Rejected', key: 'rejectedCount' },
+        { header: 'Pending', key: 'pendingCount' },
+        { header: 'Out', key: 'outCount' },
+        { header: 'Returned', key: 'returnedCount' },
+        { header: 'Load Adjustments', key: 'loadAdjustmentCount' },
+        { header: 'Last Activity', key: 'lastActivityAt', type: 'date' }
+      ],
+      facultyRows
+    );
+  }
+
+  if (addSummarySheets && mixedRows.length && dataset.filters.recordPartition === 'mixed') {
+    addRowsSheet(
+      workbook,
+      'Mixed Overview',
+      [
+        { header: 'Sr No', key: 'srNo' },
+        { header: 'User Type', key: 'userType' },
+        { header: 'Role Type', key: 'roleType' },
+        { header: 'Full Name', key: 'fullName' },
+        { header: 'Primary ID', key: 'primaryId' },
+        { header: 'Department', key: 'department' },
+        { header: 'Program', key: 'program' },
+        { header: 'Semester', key: 'semester' },
+        { header: 'Phone', key: 'phone' },
+        { header: 'Email', key: 'email' },
+        { header: 'Total Requests', key: 'totalRequests' },
+        { header: 'Approved', key: 'approvedCount' },
+        { header: 'Rejected', key: 'rejectedCount' },
+        { header: 'Pending', key: 'pendingCount' },
+        { header: 'Out', key: 'outCount' },
+        { header: 'Returned', key: 'returnedCount' },
+        { header: 'Last Activity', key: 'lastActivityAt', type: 'date' }
+      ],
+      mixedRows
+    );
+  }
+
+  if (addDetailSheets) {
+    addRowsSheet(
+      workbook,
+      'Detailed Gatepass Records',
+      [
+        { header: 'Sr No', key: 'srNo' },
+        { header: 'Request Type', key: 'requestType' },
+        { header: 'User Type', key: 'userType' },
+        { header: 'Full Name', key: 'fullName' },
+        { header: 'Primary ID', key: 'primaryId' },
+        { header: 'Department', key: 'department' },
+        { header: 'Program', key: 'program' },
+        { header: 'Semester', key: 'semester' },
+        { header: 'Phone', key: 'phone' },
+        { header: 'Email', key: 'email' },
+        { header: 'Gatepass ID', key: 'gatepassId' },
+        { header: 'Gatepass Date', key: 'gatepassDate', type: 'date' },
+        { header: 'Out Time', key: 'outTime' },
+        { header: 'Return Time', key: 'returnTime' },
+        { header: 'Actual Return Time', key: 'actualReturnTime', type: 'date' },
+        { header: 'Reason', key: 'reason' },
+        { header: 'Destination', key: 'destination' },
+        { header: 'Vehicle Number', key: 'vehicleNumber' },
+        { header: 'Approval Status', key: 'approvalStatus', status: true },
+        { header: 'Approved / Rejected By', key: 'actionBy' },
+        { header: 'Rejection Reason', key: 'rejectionReason' },
+        { header: 'Current Workflow Stage', key: 'currentWorkflowStage' },
+        { header: 'Created At', key: 'createdAt', type: 'date' },
+        { header: 'Updated At', key: 'updatedAt', type: 'date' }
+      ],
+      detailedRows
+    );
+  }
+
+  if (dataset.filters.includeSeparateStudentSheets || dataset.filters.exportScope === 'selected') {
+    buildUserExportSections(dataset)
+      .slice(0, dataset.filters.includeSeparateStudentSheets ? 20 : 8)
+      .forEach((section, index) => addUserSectionSheet(workbook, section, index));
   }
 
   const buffer = await workbook.xlsx.writeBuffer();

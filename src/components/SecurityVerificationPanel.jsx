@@ -1,6 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Camera, LoaderCircle, QrCode, ScanLine, ShieldCheck } from 'lucide-react'
-import { ApiError, extractGatepassVerificationData, getApiErrorDetails } from '../lib/dwarpalApi'
+import { useMemo, useRef, useState } from 'react'
+import { Camera, RefreshCcw, ShieldCheck } from 'lucide-react'
+import {
+  ApiError,
+  extractGatepassVerificationData,
+  getApiErrorDetails,
+} from '../lib/dwarpalApi'
+import ManualGatepassLookup from './ManualGatepassLookup'
+import ScannerModal from './ScannerModal'
 import { useToast } from './ToastProvider'
 import { ActionButton, EmptyState, IdentityField, formatDateTime } from './ui'
 
@@ -17,9 +23,105 @@ function formatVerificationValue(value, fallback = 'Awaiting action') {
   return formatDateTime(value)
 }
 
+function humanizeLabel(value, fallback = 'Not available') {
+  const normalizedValue = String(value || '').trim()
+
+  if (!normalizedValue) {
+    return fallback
+  }
+
+  return normalizedValue
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\b\w/g, (character) => character.toUpperCase())
+}
+
 function getRoleLabel(gatepass) {
   if (gatepass?.requestKind === 'faculty_leave') return 'Faculty'
   return gatepass?.requesterType === 'faculty' ? 'Faculty' : 'Student'
+}
+
+function getWorkflowLabel(gatepass) {
+  if (!gatepass) {
+    return 'Workflow not available'
+  }
+
+  if (gatepass.requestKind === 'faculty_leave') {
+    return [gatepass.leaveType || 'Leave', gatepass.workloadStage, gatepass.shortLeaveStage]
+      .filter(Boolean)
+      .join(' | ')
+  }
+
+  return [humanizeLabel(gatepass.stage, ''), humanizeLabel(gatepass.rawApprovalLevel, '')]
+    .filter(Boolean)
+    .join(' | ') || `${getRoleLabel(gatepass)} workflow`
+}
+
+function getGatepassIdentifier(gatepass) {
+  return gatepass?.gatepassId || gatepass?.requestNumber || gatepass?.id || 'Not available'
+}
+
+function getNextSecurityAction(gatepass) {
+  if (!gatepass) {
+    return null
+  }
+
+  if (gatepass.security?.checkedInAt || gatepass.status === 'Returned') {
+    return null
+  }
+
+  if (gatepass.security?.checkedOutAt || gatepass.status === 'Out') {
+    return 'markIn'
+  }
+
+  if (gatepass.status === 'Approved') {
+    return 'markOut'
+  }
+
+  return null
+}
+
+function buildOptimisticGatepassAfterAction(gatepass, action) {
+  const now = new Date().toISOString()
+  const nextSecurity = {
+    ...(gatepass?.security || {}),
+  }
+
+  if (action === 'markOut') {
+    nextSecurity.checkedOutAt = nextSecurity.checkedOutAt || now
+  } else if (action === 'markIn') {
+    nextSecurity.checkedInAt = nextSecurity.checkedInAt || now
+  }
+
+  return {
+    ...gatepass,
+    status: action === 'markOut' ? 'Out' : 'Returned',
+    updatedAt: now,
+    security: nextSecurity,
+  }
+}
+
+function getVerificationStateMeta(result) {
+  const gatepass = result?.gatepass
+
+  if (gatepass?.status === 'Returned') {
+    return {
+      tone: 'completed',
+      label: 'Completed',
+    }
+  }
+
+  if (result?.valid) {
+    return {
+      tone: 'valid',
+      label: 'Ready',
+    }
+  }
+
+  return {
+    tone: 'invalid',
+    label: 'Blocked',
+  }
 }
 
 export default function SecurityVerificationPanel({
@@ -29,6 +131,7 @@ export default function SecurityVerificationPanel({
   onOpenQrPreview,
 }) {
   const toast = useToast()
+  const manualInputRef = useRef(null)
   const [gatepassId, setGatepassId] = useState('')
   const [error, setError] = useState('')
   const [statusMessage, setStatusMessage] = useState('')
@@ -36,17 +139,7 @@ export default function SecurityVerificationPanel({
   const [isManualVerifying, setIsManualVerifying] = useState(false)
   const [isScanVerifying, setIsScanVerifying] = useState(false)
   const [isActionLoading, setIsActionLoading] = useState(false)
-  const [isPreparingScanner, setIsPreparingScanner] = useState(false)
-  const [isScannerActive, setIsScannerActive] = useState(false)
-  const [scannerError, setScannerError] = useState('')
-  const [cameraPermission, setCameraPermission] = useState('idle')
-  const videoRef = useRef(null)
-  const streamRef = useRef(null)
-  const animationFrameRef = useRef(0)
-  const detectorRef = useRef(null)
-  const scanBusyRef = useRef(false)
-  const lastScanAtRef = useRef(0)
-  const scannerWatchdogRef = useRef(0)
+  const [scannerOpen, setScannerOpen] = useState(false)
 
   const actionButton = useMemo(() => {
     if (!verificationResult?.valid || !verificationResult?.nextAction) {
@@ -61,133 +154,59 @@ export default function SecurityVerificationPanel({
     }
 
     return {
-      label: isActionLoading ? 'Marking Returned...' : 'Mark Returned',
+      label: isActionLoading ? 'Marking Return...' : 'Mark Return',
       tone: 'secondary',
     }
   }, [isActionLoading, verificationResult])
 
-  useEffect(() => {
-    return () => {
-      stopScanner()
-    }
-  }, [])
+  const resultFields = useMemo(() => {
+    const gatepass = verificationResult?.gatepass
 
-  function resetFeedback() {
+    if (!gatepass) {
+      return []
+    }
+
+    return [
+      { label: 'Gatepass ID', value: getGatepassIdentifier(gatepass) },
+      { label: 'Name', value: gatepass.name || 'Not provided' },
+      { label: 'Role', value: getRoleLabel(gatepass) },
+      { label: 'Department', value: gatepass.department || 'Not provided' },
+      {
+        label: gatepass.requestKind === 'faculty_leave' ? 'Program / Designation' : 'Program',
+        value: gatepass.program || gatepass.designation || 'Not provided',
+      },
+      { label: 'Reason', value: gatepass.reason || 'No reason provided' },
+      { label: 'Created', value: formatVerificationValue(gatepass.submittedAt, 'Not created yet') },
+      { label: 'Updated', value: formatVerificationValue(gatepass.updatedAt, 'Not updated yet') },
+      { label: 'Out Time', value: formatVerificationValue(gatepass.outTime, 'Not scheduled') },
+      {
+        label: 'Return Time',
+        value: gatepass.expectedReturnTime ? formatVerificationValue(gatepass.expectedReturnTime) : 'One way',
+      },
+      { label: 'Workflow Stage', value: getWorkflowLabel(gatepass) },
+      { label: 'Approval Status', value: gatepass.status || 'Pending' },
+      { label: 'Handled By', value: gatepass.approvedBy || 'Awaiting approval' },
+      { label: 'Vehicle Number', value: gatepass.vehicleNumber || 'Not provided' },
+      { label: 'Destination', value: gatepass.destination || gatepass.instituteName || 'Not provided' },
+      { label: 'Marked OUT', value: formatVerificationValue(gatepass.security?.checkedOutAt, 'Pending') },
+      { label: 'Marked Returned', value: formatVerificationValue(gatepass.security?.checkedInAt, 'Pending') },
+      { label: 'Rejection Reason', value: gatepass.rejectionReason || 'Not applicable' },
+    ]
+  }, [verificationResult])
+
+  function resetFeedback({ preserveResult = false } = {}) {
     setError('')
     setStatusMessage('')
-  }
 
-  function stopScanner() {
-    if (animationFrameRef.current) {
-      window.cancelAnimationFrame(animationFrameRef.current)
-      animationFrameRef.current = 0
-    }
-
-    if (scannerWatchdogRef.current) {
-      window.clearTimeout(scannerWatchdogRef.current)
-      scannerWatchdogRef.current = 0
-    }
-
-    streamRef.current?.getTracks?.().forEach((track) => track.stop())
-    streamRef.current = null
-    if (videoRef.current) {
-      videoRef.current.srcObject = null
-    }
-    scanBusyRef.current = false
-    setIsScannerActive(false)
-  }
-
-  async function hasVideoInputDevice() {
-    if (!window?.navigator?.mediaDevices?.enumerateDevices) {
-      return true
-    }
-
-    try {
-      const devices = await window.navigator.mediaDevices.enumerateDevices()
-      return devices.some((device) => device.kind === 'videoinput')
-    } catch {
-      return true
+    if (!preserveResult) {
+      setVerificationResult(null)
     }
   }
 
-  async function requestCameraStream() {
-    const constraintCandidates = [
-      {
-        video: {
-          facingMode: { ideal: 'environment' },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
-      },
-      {
-        video: {
-          facingMode: { ideal: 'environment' },
-        },
-        audio: false,
-      },
-      {
-        video: true,
-        audio: false,
-      },
-    ]
-
-    let lastError = null
-
-    for (const constraints of constraintCandidates) {
-      try {
-        return await window.navigator.mediaDevices.getUserMedia(constraints)
-      } catch (error) {
-        lastError = error
-      }
-    }
-
-    throw lastError || new Error('Unable to initialize camera stream.')
-  }
-
-  function waitForVideoReady(videoElement, timeoutMs = 5000) {
-    return new Promise((resolve, reject) => {
-      if (!videoElement) {
-        reject(new Error('Video preview is not available.'))
-        return
-      }
-
-      if (videoElement.readyState >= 2 && videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
-        resolve()
-        return
-      }
-
-      let timeoutId = 0
-
-      function cleanup() {
-        videoElement.removeEventListener('loadedmetadata', handleLoadedMetadata)
-        videoElement.removeEventListener('error', handleVideoError)
-
-        if (timeoutId) {
-          window.clearTimeout(timeoutId)
-        }
-      }
-
-      function handleLoadedMetadata() {
-        if (videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
-          cleanup()
-          resolve()
-        }
-      }
-
-      function handleVideoError() {
-        cleanup()
-        reject(new Error('Camera preview failed to initialize.'))
-      }
-
-      timeoutId = window.setTimeout(() => {
-        cleanup()
-        reject(new Error('Camera opened but no video feed was received.'))
-      }, timeoutMs)
-
-      videoElement.addEventListener('loadedmetadata', handleLoadedMetadata)
-      videoElement.addEventListener('error', handleVideoError)
-    })
+  function handleLookupValueChange(nextValue) {
+    setGatepassId(nextValue)
+    setError('')
+    setStatusMessage('')
   }
 
   async function applyVerificationResult(result, successFallback) {
@@ -221,7 +240,6 @@ export default function SecurityVerificationPanel({
       return
     }
 
-    stopScanner()
     setIsManualVerifying(true)
     resetFeedback()
 
@@ -254,8 +272,6 @@ export default function SecurityVerificationPanel({
     const verificationData = extractGatepassVerificationData(normalizedValue)
 
     if (verificationData.verificationToken) {
-      stopScanner()
-      setGatepassId(normalizedValue)
       await handleVerifyScannedQr(normalizedValue)
       return
     }
@@ -283,135 +299,19 @@ export default function SecurityVerificationPanel({
     }
   }
 
-  async function scanFrame() {
-    if (!videoRef.current || !detectorRef.current || scanBusyRef.current) {
-      animationFrameRef.current = window.requestAnimationFrame(scanFrame)
-      return
-    }
-
-    if (performance.now() - lastScanAtRef.current < 180) {
-      animationFrameRef.current = window.requestAnimationFrame(scanFrame)
-      return
-    }
-
-    lastScanAtRef.current = performance.now()
-    scanBusyRef.current = true
-
-    try {
-      const detections = await detectorRef.current.detect(videoRef.current)
-      const qrResult = detections.find((item) => String(item?.rawValue || '').trim())
-
-      if (qrResult?.rawValue) {
-        stopScanner()
-        await handleVerifyScannedQr(qrResult.rawValue)
-        return
-      }
-    } catch (scanError) {
-      const scanErrorMessage = readVerificationError(scanError, 'Unable to read the QR yet. Keep the code inside the frame and try again.')
-      setScannerError(scanErrorMessage)
-    } finally {
-      scanBusyRef.current = false
-    }
-
-    animationFrameRef.current = window.requestAnimationFrame(scanFrame)
+  async function handleScannerDetected(rawValue) {
+    const verificationData = extractGatepassVerificationData(rawValue)
+    setGatepassId(verificationData.gatepassId || rawValue)
+    setScannerOpen(false)
+    await handleVerifyScannedQr(rawValue)
   }
 
-  async function startScanner() {
-    resetFeedback()
-    setScannerError('')
-    setVerificationResult(null)
+  function handleUseManualFallback() {
+    setScannerOpen(false)
 
-    if (!window?.navigator?.mediaDevices?.getUserMedia) {
-      setCameraPermission('unsupported')
-      setScannerError('Camera scanning is not supported in this browser. Use the manual Gatepass ID check instead.')
-      toast.warning({
-        title: 'Camera unavailable',
-        message: 'Camera scanning is not supported in this browser. Use manual Gatepass ID verification instead.',
-      })
-      return
-    }
-
-    if (!window.BarcodeDetector) {
-      setCameraPermission('unsupported')
-      setScannerError('This browser does not support QR scanning yet. Use the manual Gatepass ID check instead.')
-      toast.warning({
-        title: 'QR scanning unavailable',
-        message: 'This browser does not support QR scanning yet. Use manual Gatepass ID verification instead.',
-      })
-      return
-    }
-
-    setIsPreparingScanner(true)
-
-    try {
-      const hasCamera = await hasVideoInputDevice()
-
-      if (!hasCamera) {
-        setCameraPermission('missing')
-        setScannerError('No camera was found on this device. Use manual Gatepass ID verification instead.')
-        toast.warning({
-          title: 'No camera found',
-          message: 'No camera was found on this device. Use manual Gatepass ID verification instead.',
-        })
-        return
-      }
-
-      detectorRef.current = detectorRef.current || new window.BarcodeDetector({ formats: ['qr_code'] })
-      const stream = await requestCameraStream()
-
-      streamRef.current = stream
-      setCameraPermission('granted')
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        videoRef.current.setAttribute('playsinline', 'true')
-        await videoRef.current.play()
-        await waitForVideoReady(videoRef.current)
-      }
-
-      setIsScannerActive(true)
-      animationFrameRef.current = window.requestAnimationFrame(scanFrame)
-
-      scannerWatchdogRef.current = window.setTimeout(() => {
-        if (!videoRef.current || videoRef.current.videoWidth > 0) {
-          return
-        }
-
-        stopScanner()
-        setScannerError('Camera opened but the preview stayed black. Please close other camera apps and try again.')
-        toast.warning({
-          title: 'Camera preview issue',
-          message: 'Camera opened but the preview stayed black. Please close other camera apps and try again.',
-        })
-      }, 4500)
-    } catch (cameraError) {
-      stopScanner()
-      const denied = ['NotAllowedError', 'SecurityError'].includes(cameraError?.name)
-      const noCamera = ['NotFoundError', 'OverconstrainedError'].includes(cameraError?.name)
-      const cameraBusy = ['NotReadableError', 'TrackStartError'].includes(cameraError?.name)
-      setCameraPermission(denied ? 'denied' : noCamera ? 'missing' : 'error')
-      const errorMessage = denied
-        ? 'Camera access was denied. Allow camera permission and try again.'
-        : noCamera
-          ? 'No usable camera was found. Use manual Gatepass ID verification instead.'
-          : cameraBusy
-            ? 'Camera is busy in another app. Close that app and try again.'
-            : cameraError?.message || 'Scanner initialization failed. Please try again.'
-
-      setScannerError(errorMessage)
-      toast[denied || noCamera ? 'warning' : 'error']({
-        title: denied
-          ? 'Camera permission denied'
-          : noCamera
-            ? 'No camera available'
-            : cameraBusy
-              ? 'Camera busy'
-              : 'Scanner initialization failed',
-        message: errorMessage,
-      })
-    } finally {
-      setIsPreparingScanner(false)
-    }
+    window.setTimeout(() => {
+      manualInputRef.current?.focus?.()
+    }, 50)
   }
 
   async function handleSecurityAction() {
@@ -420,7 +320,8 @@ export default function SecurityVerificationPanel({
     }
 
     setIsActionLoading(true)
-    resetFeedback()
+    setError('')
+    setStatusMessage('')
 
     const requestBody =
       verificationResult.nextAction === 'markOut' && verificationResult.gatepass.qr?.verificationToken
@@ -439,113 +340,86 @@ export default function SecurityVerificationPanel({
         return
       }
 
-      setVerificationResult(null)
-      setGatepassId('')
-      setStatusMessage(
+      const updatedGatepass =
+        actionResult.request || buildOptimisticGatepassAfterAction(verificationResult.gatepass, verificationResult.nextAction)
+      const nextAction = getNextSecurityAction(updatedGatepass)
+      const actionMessage =
         verificationResult.nextAction === 'markOut'
           ? 'Gatepass marked OUT successfully.'
-          : 'Gatepass marked as returned successfully.',
-      )
+          : 'Gatepass marked as returned successfully.'
+
+      setVerificationResult({
+        valid: Boolean(nextAction),
+        message: actionMessage,
+        gatepass: updatedGatepass,
+        nextAction,
+      })
+      setStatusMessage(actionMessage)
+      setError('')
     } finally {
       setIsActionLoading(false)
     }
   }
 
   const gatepass = verificationResult?.gatepass
+  const verificationStateMeta = getVerificationStateMeta(verificationResult)
 
   return (
     <section className="workspace-card security-verify-card">
       <div className="section-heading">
         <div>
-          <h3>Scan Gatepass</h3>
-          <p>Scan only DwarPal-generated QR codes. Every scan is verified securely against backend records.</p>
+          <h3>Security scanner</h3>
+          <p>Open the camera for fast QR verification or fall back to manual Gatepass lookup without leaving the queue.</p>
         </div>
       </div>
 
       <div className="security-verify-grid">
         <div className="security-scan-panel">
-          <div className="security-scan-card">
+          <div className="security-scan-card security-scan-launcher">
             <div className="security-scan-card-header">
               <div>
                 <span className="eyebrow">Camera Scanner</span>
-                <h4>Scan Gatepass</h4>
-                <p>
-                  Works on supported laptop and mobile browsers after camera permission is granted.
-                </p>
+                <h4>Open Scanner</h4>
+                <p>Uses the device camera, duplicate-scan protection, and immediate verification after a successful read.</p>
               </div>
               <ActionButton
                 type="button"
                 icon={Camera}
-                onClick={isScannerActive ? stopScanner : startScanner}
-                disabled={isPreparingScanner || isScanVerifying}
+                onClick={() => setScannerOpen(true)}
+                disabled={isScanVerifying}
               >
-                {isPreparingScanner ? 'Opening scanner...' : isScannerActive ? 'Stop Scanner' : 'Scan Gatepass'}
+                {isScanVerifying ? 'Verifying scan...' : 'Open Scanner'}
               </ActionButton>
             </div>
 
-            <div className={`scanner-preview ${isScannerActive ? 'active' : ''}`}>
-              {isScannerActive ? (
-                <video ref={videoRef} autoPlay muted playsInline />
-              ) : (
-                <div className="scanner-placeholder">
-                  <ScanLine size={20} />
-                  <p>Tap Scan Gatepass to open the camera and verify a QR code.</p>
-                </div>
-              )}
+            <div className="scanner-launch-surface" aria-hidden="true">
+              <div className="scanner-launch-frame">
+                <span className="scanner-frame-corner top-left" />
+                <span className="scanner-frame-corner top-right" />
+                <span className="scanner-frame-corner bottom-left" />
+                <span className="scanner-frame-corner bottom-right" />
+              </div>
+              <div className="scanner-launch-copy">
+                <strong>Align QR inside the frame</strong>
+                <p>The scanner opens in a focused modal and fetches gatepass details as soon as the QR is detected.</p>
+              </div>
             </div>
 
-            {isScanVerifying ? (
-              <div className="scanner-status-card">
-                <LoaderCircle size={16} className="spin" />
-                <span>QR detected. Verifying the gatepass...</span>
-              </div>
-            ) : null}
-
-            {scannerError ? <p className="form-error">{scannerError}</p> : null}
-            {!scannerError && cameraPermission === 'denied' ? (
-              <p className="field-help">Camera access is required for QR scanning. Use manual Gatepass ID verification if needed.</p>
-            ) : null}
-            {!scannerError && cameraPermission === 'missing' ? (
-              <p className="field-help">No camera detected. Continue with manual Gatepass ID verification.</p>
-            ) : null}
+            <div className="scanner-launch-points">
+              <span>Fast QR detection</span>
+              <span>Permission + camera error handling</span>
+              <span>Manual fallback always available</span>
+            </div>
           </div>
         </div>
 
-        <div className="security-verify-controls security-verify-manual">
-          <div className="security-manual-copy">
-            <span className="eyebrow">Manual Fallback</span>
-            <h4>Verify by Gatepass ID</h4>
-            <p>Use this when the camera is unavailable or paste a QR link/token if needed.</p>
-          </div>
-          <label className="security-verify-input">
-            <span className="field-label">
-              <span className="field-label-text">Gatepass ID or QR value</span>
-            </span>
-            <input
-              value={gatepassId}
-              onChange={(event) => setGatepassId(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  handleManualVerify()
-                }
-              }}
-              placeholder="DP-STU-2026040001 or QR link"
-              autoComplete="off"
-              spellCheck="false"
-            />
-          </label>
-          <div className="security-verify-actions">
-            <ActionButton
-              type="button"
-              icon={QrCode}
-              onClick={() => handleManualVerify()}
-              disabled={isManualVerifying || isScanVerifying}
-            >
-              {isManualVerifying || isScanVerifying ? 'Verifying...' : 'Verify Gatepass'}
-            </ActionButton>
-          </div>
-        </div>
+        <ManualGatepassLookup
+          value={gatepassId}
+          onChange={handleLookupValueChange}
+          onSubmit={() => handleManualVerify()}
+          loading={isManualVerifying || isScanVerifying}
+          inputRef={manualInputRef}
+        />
       </div>
 
       {error ? <p className="form-error">{error}</p> : null}
@@ -556,33 +430,25 @@ export default function SecurityVerificationPanel({
           <div className="security-verify-result-header">
             <div>
               <span className="eyebrow">Verification Result</span>
-              <h4>{gatepass.gatepassId || gatepass.requestNumber || gatepass.id}</h4>
+              <h4>{getGatepassIdentifier(gatepass)}</h4>
               <p>{verificationResult?.message}</p>
             </div>
-            <div className={`security-verification-status ${verificationResult?.valid ? 'valid' : 'invalid'}`}>
+            <div className={`security-verification-status ${verificationStateMeta.tone}`}>
               <ShieldCheck size={16} />
-              <span>{verificationResult?.valid ? 'Valid' : 'Blocked'}</span>
+              <span>{verificationStateMeta.label}</span>
             </div>
           </div>
 
           <div className="security-result-grid">
-            <IdentityField label="Gatepass ID" value={gatepass.gatepassId || gatepass.requestNumber || gatepass.id} />
-            <IdentityField label="Name" value={gatepass.name} />
-            <IdentityField label="Role" value={getRoleLabel(gatepass)} />
-            <IdentityField label="Program" value={gatepass.program || 'Not assigned'} />
-            <IdentityField label="Department" value={gatepass.department} />
-            <IdentityField label="Reason" value={gatepass.reason} />
-            <IdentityField label="Out Time" value={formatVerificationValue(gatepass.outTime)} />
-            <IdentityField
-              label="Return Time"
-              value={gatepass.expectedReturnTime ? formatVerificationValue(gatepass.expectedReturnTime) : 'One way'}
-            />
-            <IdentityField label="Status" value={gatepass.status} />
-            <IdentityField label="Approved By" value={gatepass.approvedBy || 'Awaiting approval'} />
-            <IdentityField label="Date" value={formatVerificationValue(gatepass.approvedAt || gatepass.submittedAt || gatepass.outTime)} />
+            {resultFields.map((field) => (
+              <IdentityField key={`${field.label}-${field.value}`} label={field.label} value={field.value} />
+            ))}
           </div>
 
           <div className="security-result-actions">
+            <ActionButton type="button" tone="secondary" icon={RefreshCcw} onClick={() => setScannerOpen(true)}>
+              Scan Another
+            </ActionButton>
             {gatepass.qr?.available ? (
               <ActionButton
                 type="button"
@@ -607,9 +473,17 @@ export default function SecurityVerificationPanel({
       ) : (
         <EmptyState
           title="No scanned gatepass yet"
-          description="Start the scanner or verify a Gatepass ID to view its details here."
+          description="Open the scanner or verify a Gatepass ID to load the movement details here."
         />
       )}
+
+      <ScannerModal
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onDetected={handleScannerDetected}
+        onUseManualFallback={handleUseManualFallback}
+        busy={isScanVerifying}
+      />
     </section>
   )
 }

@@ -201,8 +201,10 @@ export function Topbar({
   navOpen,
   actions = null,
 }) {
+  const showDashboardCopy = Boolean(title || subtitle)
+
   return (
-    <header className="topbar">
+    <header className={`topbar ${showDashboardCopy ? '' : 'compact'}`}>
       <div className="topbar-copy">
         <div className="topbar-leading">
           <button
@@ -213,11 +215,17 @@ export function Topbar({
           >
             <Menu size={20} />
           </button>
-          <DashboardHeaderBranding
-            roleName={ROLE_META[currentUser.role].title}
-            dashboardTitle={title}
-            subtitle={subtitle}
-          />
+          {showDashboardCopy ? (
+            <DashboardHeaderBranding
+              roleName={ROLE_META[currentUser.role].title}
+              dashboardTitle={title}
+              subtitle={subtitle}
+            />
+          ) : (
+            <div className="topbar-brand-wrap">
+              <AppBrand size="md" align="start" />
+            </div>
+          )}
         </div>
       </div>
       {actions ? <div className="topbar-actions">{actions}</div> : null}
@@ -225,15 +233,15 @@ export function Topbar({
   )
 }
 
-export function IdentityField({ label, value, className = '' }) {
+export function IdentityField({ label, value, className = '', valueOnly = false }) {
   const resolvedValue =
     typeof value === 'string' ? (value.trim() ? value.trim() : 'Not provided') : value ?? 'Not provided'
 
   return (
-    <div className={['identity-field', className].filter(Boolean).join(' ')}>
-      <span className="identity-label">{label}</span>
-      <span className="identity-separator">:</span>
-      <strong className="identity-value">{resolvedValue}</strong>
+    <div className={['identity-field', valueOnly ? 'value-only' : '', className].filter(Boolean).join(' ')}>
+      {valueOnly ? null : <span className="identity-label">{label}</span>}
+      {valueOnly ? null : <span className="identity-separator">:</span>}
+      <strong className={`identity-value ${valueOnly ? 'standalone' : ''}`.trim()}>{resolvedValue}</strong>
     </div>
   )
 }
@@ -246,14 +254,15 @@ export function ProfileCard({ currentUser, onLogout, children = null }) {
         <div className="profile-avatar">
           <UserCircle2 size={48} />
         </div>
-        <div>
+        <div className="profile-banner-copy">
           <h2>{currentUser.name}</h2>
-          <span>{ROLE_META[currentUser.role].title}</span>
+          <div className="profile-meta-pills">
+            <span className="profile-meta-pill">{ROLE_META[currentUser.role].title}</span>
+            {primaryId ? <span className="profile-meta-pill accent">{primaryId}</span> : null}
+          </div>
         </div>
       </div>
       <div className="profile-grid">
-        <ProfileField label="Name" value={currentUser.name} />
-        <ProfileField label={ROLE_META[currentUser.role].idLabel} value={primaryId} />
         <ProfileField label="Department" value={currentUser.department} />
         {currentUser.program ? <ProfileField label="Program" value={currentUser.program} /> : null}
         <ProfileField label="Mobile" value={currentUser.phone} />
@@ -261,7 +270,7 @@ export function ProfileCard({ currentUser, onLogout, children = null }) {
         {currentUser.role === 'student' ? (
           <ProfileField label="Semester" value={formatSemesterLabel(currentUser.semester) || 'Semester not assigned'} />
         ) : null}
-        <ProfileField label="Access" value={ROLE_META[currentUser.role].title} />
+        {primaryId ? <IdentityField className="profile-field profile-field-id" value={primaryId} valueOnly /> : null}
       </div>
       {children}
       <ActionButton tone="danger" icon={LogOut} onClick={onLogout}>

@@ -5,9 +5,7 @@ import {
   Bell,
   CheckCircle2,
   Clock3,
-  FingerprintPattern,
   QrCode,
-  ScanFace,
   ScanLine,
   Send,
   ShieldCheck,
@@ -24,6 +22,7 @@ import ForgotPasswordModal from './components/ForgotPasswordModal'
 import GatepassQrModal from './components/GatepassQrModal'
 import NotificationCenterPanel from './components/NotificationCenterPanel'
 import { NotificationProvider, useNotifications } from './components/NotificationProvider'
+import ExpandableGatepassCard from './components/ExpandableGatepassCard'
 import NotificationPermissionPrompt, {
   NotificationPermissionCard,
 } from './components/NotificationPermissionPrompt'
@@ -48,7 +47,6 @@ import {
   ActionButton,
   EmptyState,
   FilterTabs,
-  GatepassCard,
   IdentityField,
   ModalForm,
   ProfileCard,
@@ -1365,7 +1363,11 @@ function App() {
               vehicleNumber: normalizeVehicleNumber(form.vehicleNumber),
             }
 
-      await submitRequest(requestPayload)
+      const createdRequest = await submitRequest(requestPayload)
+      setGatepasses((previousGatepasses) => [
+        createdRequest,
+        ...previousGatepasses.filter((item) => item.recordId !== createdRequest.recordId),
+      ])
       await refreshAppData(undefined, { force: true })
       toast.success({
         title: currentUser.role === 'faculty' ? 'Leave request created' : 'Gatepass created',
@@ -1374,7 +1376,7 @@ function App() {
             ? 'Your leave request was submitted successfully.'
             : 'Your gatepass request was submitted successfully.',
       })
-      return { ok: true }
+      return { ok: true, request: createdRequest }
     } catch (error) {
       const { message, fieldErrors } = resolveApiError(error, {
         fallbackMessage: 'Unable to submit the request right now.',
@@ -1394,14 +1396,14 @@ function App() {
 
   async function updateGatepass(request, action, requestBody = null) {
     try {
-      await updateRequestStatus(request, action, requestBody)
+      const updatedRequest = await updateRequestStatus(request, action, requestBody)
       await refreshAppData(undefined, { force: true })
       const toastMeta = getActionToastMeta(request, action)
       toast[toastMeta.tone]?.({
         title: toastMeta.title,
         message: toastMeta.message,
       })
-      return { ok: true }
+      return { ok: true, request: updatedRequest }
     } catch (error) {
       const { message, fieldErrors } = resolveApiError(error, {
         fallbackMessage: 'Unable to update this request right now.',
@@ -1637,39 +1639,8 @@ function AuthBootstrapScreen() {
   )
 }
 
-const BIOMETRIC_MODE_META = {
-  fingerprint: {
-    icon: FingerprintPattern,
-    label: 'Fingerprint login',
-  },
-  face: {
-    icon: ScanFace,
-    label: 'Face recognition login',
-  },
-}
-
-function BiometricSymbolButton({ mode, active, loading, onClick }) {
-  const { icon: Icon, label } = BIOMETRIC_MODE_META[mode]
-
-  return (
-    <button
-      type="button"
-      className={`biometric-symbol-button${loading ? ' loading' : ''}`}
-      onClick={onClick}
-      disabled={!active || loading}
-      aria-label={label}
-      title={label}
-      aria-busy={loading}
-    >
-      <Icon size={24} strokeWidth={1.85} />
-      <span className="sr-only">{label}</span>
-    </button>
-  )
-}
-
 function LoginScreen({
   onLogin,
-  onBiometricLogin,
   onForgotPasswordResolveAccount,
   onForgotPasswordStart,
   onForgotPasswordVerifyOtp,
@@ -1684,34 +1655,6 @@ function LoginScreen({
   const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const submitLockRef = useRef(false)
-  const [biometricSupport, setBiometricSupport] = useState({
-    supported: false,
-    message: '',
-    platformAuthenticatorAvailable: false,
-    modes: {
-      fingerprint: { supported: false },
-      face: { supported: false },
-    },
-  })
-  const [biometricLoadingMode, setBiometricLoadingMode] = useState('')
-
-  useEffect(() => {
-    let ignore = false
-
-    async function loadBiometricSupport() {
-      const supportState = await detectBiometricSupport()
-
-      if (!ignore) {
-        setBiometricSupport(supportState)
-      }
-    }
-
-    loadBiometricSupport()
-
-    return () => {
-      ignore = true
-    }
-  }, [])
 
   useEffect(() => {
     const authNotice = location.state?.authNotice
@@ -1846,62 +1789,6 @@ function LoginScreen({
     }
   }
 
-  async function handleBiometricLogin(mode) {
-    if (isSubmitting) {
-      return
-    }
-
-    if (!biometricSupport.modes?.[mode]?.supported) {
-      setError(
-        mode === 'face' ? 'Face recognition is not available on this device.' : 'Fingerprint login is not available on this device.',
-      )
-      return
-    }
-
-    if (!form.identifier.trim()) {
-      setFieldErrors((prev) => ({
-        ...prev,
-        identifier: 'Enter your enrollment number or employee ID before using biometric login.',
-      }))
-      setError('')
-      return
-    }
-
-    if (isEmailStyleIdentifier(form.identifier.trim())) {
-      setFieldErrors((prev) => ({
-        ...prev,
-        identifier: 'Use your enrollment number or employee ID for biometric login.',
-      }))
-      setError('Email login is not allowed. Use your enrollment number or employee ID.')
-      return
-    }
-
-    setBiometricLoadingMode(mode)
-    setSuccess('')
-
-    try {
-      const result = await onBiometricLogin(form.identifier.trim(), mode)
-
-      if (!result?.ok) {
-        setError(result?.error || 'Biometric verification failed. Please try again or use manual login.')
-        return
-      }
-
-      const dashboardPath = result.dashboardPath || getLandingPathForUser(result.user)
-      setSuccess('Login successful. Redirecting to your dashboard...')
-      navigate(dashboardPath, { replace: true })
-    } catch (error) {
-      setError(getApiErrorMessage(error, 'Biometric verification failed. Please try again or use manual login.'))
-    } finally {
-      setBiometricLoadingMode('')
-    }
-  }
-
-  const biometricUnsupportedMessage =
-    biometricSupport.message || 'Biometric login is not available on this device.'
-  const fingerprintSupported = Boolean(biometricSupport.modes?.fingerprint?.supported)
-  const faceSupported = Boolean(biometricSupport.modes?.face?.supported)
-
   return (
     <AuthShell title="Login">
       <form className="auth-form" onSubmit={handleLogin} noValidate>
@@ -1952,26 +1839,6 @@ function LoginScreen({
           {isSubmitting ? 'Signing in...' : 'Sign In'}
         </ActionButton>
       </form>
-      <div className="auth-divider" aria-hidden="true">
-        <span>OR</span>
-      </div>
-      <section className="auth-biometric-panel" aria-label="Biometric login">
-        <div className="auth-biometric-actions">
-          <BiometricSymbolButton
-            mode="fingerprint"
-            active={fingerprintSupported && !biometricLoadingMode && !isSubmitting}
-            loading={biometricLoadingMode === 'fingerprint'}
-            onClick={() => handleBiometricLogin('fingerprint')}
-          />
-          <BiometricSymbolButton
-            mode="face"
-            active={faceSupported && !biometricLoadingMode && !isSubmitting}
-            loading={biometricLoadingMode === 'face'}
-            onClick={() => handleBiometricLogin('face')}
-          />
-        </div>
-        {!fingerprintSupported || !faceSupported ? <p className="field-hint auth-biometric-status">{biometricUnsupportedMessage}</p> : null}
-      </section>
       <p className="auth-nav">
         Don&apos;t have an account?{' '}
         <Link to="/register" replace className="auth-link">
@@ -3504,6 +3371,7 @@ function DashboardPage({
 }) {
   const isRequester = currentUser.role === 'student' || currentUser.role === 'faculty'
   const summaryCards = getSummaryCards(currentUser.role, stats)
+  const [expandedGatepassId, setExpandedGatepassId] = useState('')
   const gatepassCards = useMemo(
     () =>
       gatepasses.map((gatepass) => ({
@@ -3538,21 +3406,44 @@ function DashboardPage({
     }
   }, [focusReference, gatepassCards.length])
 
+  useEffect(() => {
+    if (!gatepassCards.length) {
+      setExpandedGatepassId('')
+      return
+    }
+
+    const focusedGatepass = focusReference
+      ? gatepassCards.find(({ gatepass }) => matchesGatepassReference(gatepass, focusReference))
+      : null
+
+    if (focusedGatepass) {
+      setExpandedGatepassId(focusedGatepass.gatepass.id)
+      return
+    }
+
+    if (expandedGatepassId && !gatepassCards.some(({ gatepass }) => gatepass.id === expandedGatepassId)) {
+      setExpandedGatepassId('')
+    }
+  }, [expandedGatepassId, focusReference, gatepassCards])
+
   return (
     <div className="page-stack">
-      <section className="hero-strip">
-        <div>
-          <h2>
-            {currentUser.name}{' '}
-            <span>{`${ROLE_META[currentUser.role].idLabel}: ${currentUser.enrollment || currentUser.employeeId}`}</span>
-          </h2>
-        </div>
-        {isRequester ? (
+      {isRequester ? (
+        <section className="dashboard-toolbar">
+          <div className="dashboard-toolbar-copy">
+            <strong>{currentUser.name}</strong>
+            <div className="dashboard-toolbar-meta">
+              {currentUser.enrollment || currentUser.employeeId ? (
+                <span className="dashboard-toolbar-pill">{currentUser.enrollment || currentUser.employeeId}</span>
+              ) : null}
+              <span className="dashboard-toolbar-pill muted">{ROLE_META[currentUser.role].title}</span>
+            </div>
+          </div>
           <ActionButton icon={Send} onClick={onOpenModal}>
             + New Gatepass
           </ActionButton>
-        ) : null}
-      </section>
+        </section>
+      ) : null}
 
       <section className="summary-grid">
         {summaryCards.map((card) => (
@@ -3597,13 +3488,15 @@ function DashboardPage({
         {gatepassCards.length ? (
           <div className="gatepass-grid">
             {gatepassCards.map(({ gatepass, actions, highlighted }) => (
-              <GatepassCard
+              <ExpandableGatepassCard
                 key={gatepass.id}
                 gatepass={gatepass}
                 currentUserRole={currentUser.role}
                 actions={actions}
+                expanded={expandedGatepassId === gatepass.id}
                 highlighted={highlighted}
                 onOpenQrPreview={isRequester ? onOpenQrPreview : undefined}
+                onToggle={() => setExpandedGatepassId((previousId) => (previousId === gatepass.id ? '' : gatepass.id))}
               />
             ))}
           </div>
@@ -3726,10 +3619,7 @@ function CreateGatepassModal({ open, currentUser, onClose, onSubmit }) {
       <form className="modal-form" onSubmit={handleSubmit} noValidate>
         <div className="read-only-grid">
           <ReadOnlyField label="Name" value={currentUser.name} />
-          <ReadOnlyField
-            label={currentUser.enrollment ? 'Enrollment Number' : 'Employee ID'}
-            value={currentUser.enrollment || currentUser.employeeId}
-          />
+          <ReadOnlyField value={currentUser.enrollment || currentUser.employeeId} valueOnly />
           {currentUser.program ? <ReadOnlyField label="Program" value={currentUser.program} /> : null}
           <ReadOnlyField label="Department" value={currentUser.department} />
         </div>
@@ -3919,8 +3809,8 @@ function RejectRequestModal({ open, request, onClose, onSubmit }) {
   )
 }
 
-function ReadOnlyField({ label, value }) {
-  return <IdentityField className="read-only-field" label={label} value={value} />
+function ReadOnlyField({ label = '', value, valueOnly = false }) {
+  return <IdentityField className="read-only-field" label={label} value={value} valueOnly={valueOnly} />
 }
 
 function getRoleScopedGatepasses(currentUser, gatepasses) {
@@ -4072,11 +3962,11 @@ function getAvailableActions(role, gatepass, onGatepassAction) {
   if (gatepass.requestKind === 'faculty_leave') {
     if (role === 'security') {
       if (gatepass.status === 'Approved') {
-        return [{ label: 'Mark OUT', tone: 'security-out', onClick: handleAction('markOut') }]
+        return [{ label: 'Mark Out', tone: 'security-out', onClick: handleAction('markOut') }]
       }
 
       if (gatepass.status === 'Out') {
-        return [{ label: 'Mark Returned', tone: 'secondary', onClick: handleAction('markIn') }]
+        return [{ label: 'Mark Return', tone: 'secondary', onClick: handleAction('markIn') }]
       }
     }
 
@@ -4136,10 +4026,10 @@ function getAvailableActions(role, gatepass, onGatepassAction) {
 
   if (role === 'security') {
     if (gatepass.status === 'Approved') {
-      return [{ label: 'Mark OUT', tone: 'security-out', onClick: handleAction('markOut') }]
+      return [{ label: 'Mark Out', tone: 'security-out', onClick: handleAction('markOut') }]
     }
     if (gatepass.status === 'Out') {
-      return [{ label: 'Mark IN', tone: 'secondary', onClick: handleAction('markIn') }]
+      return [{ label: 'Mark Return', tone: 'secondary', onClick: handleAction('markIn') }]
     }
   }
 
@@ -4149,7 +4039,7 @@ function getAvailableActions(role, gatepass, onGatepassAction) {
 function getPageTitle(user, page) {
   if (page === 'profile') return 'Profile'
   if (page === 'notifications') return 'Notifications'
-  return ROLE_META[user.role].panelTitle
+  return ''
 }
 
 function matchesGatepassReference(gatepass, focusReference) {
@@ -4168,9 +4058,7 @@ function matchesGatepassReference(gatepass, focusReference) {
 function getPageSubtitle(user, page) {
   if (page === 'profile') return ''
   if (page === 'notifications') return 'Latest workflow updates from your dashboard queue.'
-  if (user.role === 'student') return 'Track your gatepasses.'
-  if (user.role === 'faculty') return 'Track your leave applications.'
-  return 'Review assigned requests.'
+  return ''
 }
 
 function getListTitle(user) {
