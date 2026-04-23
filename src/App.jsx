@@ -886,18 +886,10 @@ function App() {
 
   async function login(identifier, password) {
     const normalizedIdentifier = String(identifier || '').trim()
-    console.info('[dwarpal-auth-ui] login request starting', {
-      identifier: maskAuthIdentifier(normalizedIdentifier),
-    })
 
     try {
       const user = await loginUser(normalizedIdentifier, password)
       const verificationRequired = user?.emailVerified === false
-      console.info('[dwarpal-auth-ui] login response received', {
-        identifier: maskAuthIdentifier(normalizedIdentifier),
-        role: user?.role || '',
-        userId: user?.id || '',
-      })
       setCurrentUser(user)
       toast[verificationRequired ? 'warning' : 'success']?.({
         title: verificationRequired ? 'Email verification required' : 'Login successful',
@@ -907,10 +899,6 @@ function App() {
       })
       return { ok: true, user, dashboardPath: getLandingPathForUser(user) }
     } catch (error) {
-      console.error('[dwarpal-auth-ui] login request failed', {
-        error,
-        identifier: maskAuthIdentifier(normalizedIdentifier),
-      })
       const errorDetails = resolveApiError(error, {
         fallbackMessage: 'Unable to complete DwarPal sign-in. Please try again.',
         authMode: 'login',
@@ -1016,12 +1004,6 @@ function App() {
       }
     }
 
-    console.info('[dwarpal-auth-ui] register request starting', {
-      email: normalizedEmail,
-      identifier: maskAuthIdentifier(normalizedEnrollment),
-      role: normalizedRole,
-    })
-
     try {
       const result = await startRegistration({
         ...payload,
@@ -1033,12 +1015,6 @@ function App() {
         phone: normalizedPhone,
       })
 
-      console.info('[dwarpal-auth-ui] register response received', {
-        email: result.email || normalizedEmail,
-        role: normalizedRole,
-        otpCooldownSeconds: result.cooldownSeconds || 0,
-      })
-
       return {
         ok: true,
         message: result.message,
@@ -1047,11 +1023,6 @@ function App() {
         expiresInSeconds: result.expiresInSeconds || 300,
       }
     } catch (error) {
-      console.error('[dwarpal-auth-ui] register request failed', {
-        email: normalizedEmail,
-        error,
-        role: normalizedRole,
-      })
       const { message, fieldErrors } = resolveApiError(error, {
         fallbackMessage: 'Unable to create your account right now.',
       })
@@ -1781,13 +1752,8 @@ function LoginScreen({
 
   async function handleLogin(event) {
     event.preventDefault()
-    console.log('Login submit triggered')
-    console.info('[dwarpal-auth-ui] login submit triggered', {
-      identifier: maskAuthIdentifier(form.identifier),
-    })
 
     if (isSubmitting || submitLockRef.current) {
-      console.warn('[dwarpal-auth-ui] login submit ignored because a request is already in progress')
       return
     }
 
@@ -1797,7 +1763,6 @@ function LoginScreen({
     })
 
     if (Object.keys(nextFieldErrors).length) {
-      console.warn('[dwarpal-auth-ui] login submit blocked by client validation', nextFieldErrors)
       setFieldErrors(nextFieldErrors)
       setError('Please enter both your enrollment number or employee ID and password.')
       return
@@ -1819,24 +1784,11 @@ function LoginScreen({
 
     try {
       const normalizedIdentifier = String(form.identifier || '').trim()
-      const formData = {
-        identifier: normalizedIdentifier,
-        password: form.password ? '[redacted]' : '',
-      }
-      console.log('Sending login request', formData)
-      console.info('[dwarpal-auth-ui] login submit calling API', {
-        identifier: maskAuthIdentifier(normalizedIdentifier),
-      })
       const result = await onLogin(normalizedIdentifier, form.password)
       if (!result?.ok) {
-        console.warn('[dwarpal-auth-ui] login submit received failure response', result)
         setError(result?.error || 'Unable to sign in. Please try again.')
         return
       }
-
-      console.info('[dwarpal-auth-ui] login submit completed successfully', {
-        identifier: maskAuthIdentifier(form.identifier),
-      })
 
       if (typeof window !== 'undefined') {
         if (rememberMe) {
@@ -1851,7 +1803,6 @@ function LoginScreen({
       // Use replace so the previous login entry is not left as a reachable back-navigation target.
       navigate(dashboardPath, { replace: true })
     } catch (error) {
-      console.error('[dwarpal-auth-ui] login submit crashed unexpectedly', error)
       setError(getApiErrorMessage(error, 'Unable to sign in right now. Please try again.'))
     } finally {
       submitLockRef.current = false
@@ -2038,20 +1989,14 @@ function RegisterScreen({ onRegister, onVerifyOtp, onResendOtp }) {
 
   async function handleCreateAccount(event) {
     event.preventDefault()
-    console.info('[dwarpal-auth-ui] register submit triggered', {
-      email: String(form.email || '').trim().toLowerCase(),
-      role: normalizeRole(form.role),
-    })
 
     if (isRegistering) {
-      console.warn('[dwarpal-auth-ui] register submit ignored because a request is already in progress')
       return
     }
 
     const preparedSubmission = buildSubmissionPayload()
 
     if (!preparedSubmission.ok) {
-      console.warn('[dwarpal-auth-ui] register submit blocked by client validation', preparedSubmission.fieldErrors)
       setFieldErrors(preparedSubmission.fieldErrors)
       setError('')
       return
@@ -2063,14 +2008,9 @@ function RegisterScreen({ onRegister, onVerifyOtp, onResendOtp }) {
     setError('')
 
     try {
-      console.info('[dwarpal-auth-ui] register submit calling API', {
-        email: submissionPayload.email,
-        role: submissionPayload.role,
-      })
       const result = await onRegister(submissionPayload)
 
       if (!result?.ok) {
-        console.warn('[dwarpal-auth-ui] register submit received failure response', result)
         if (result?.fieldErrors) {
           setFieldErrors((prev) => ({
             ...prev,
@@ -2081,16 +2021,10 @@ function RegisterScreen({ onRegister, onVerifyOtp, onResendOtp }) {
         setError(result?.error || 'Unable to create your account right now.')
         return
       }
-
-      console.info('[dwarpal-auth-ui] register submit completed successfully', {
-        email: result.email || submissionPayload.email,
-        role: submissionPayload.role,
-      })
       setPendingVerificationEmail(result.email || submissionPayload.email)
       setOtpCooldownSeconds(result.cooldownSeconds || 45)
       setOtpModalOpen(true)
     } catch (error) {
-      console.error('[dwarpal-auth-ui] register submit crashed unexpectedly', error)
       const errorDetails = getApiErrorDetails(error, 'Unable to create your account right now.')
 
       if (errorDetails.fieldErrors) {

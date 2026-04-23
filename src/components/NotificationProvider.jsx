@@ -570,11 +570,14 @@ export function NotificationProvider({ children, currentUser, notificationPermis
     let unsubscribe = () => {}
 
     async function setupPushNotifications() {
-      if (
-        !currentUser?.id ||
-        notificationPermissionState !== 'granted' ||
-        !isFirebaseMessagingConfigured()
-      ) {
+      if (!currentUser?.id || notificationPermissionState !== 'granted') {
+        setPushReady(false)
+        return
+      }
+
+      const firebaseMessagingConfigured = await isFirebaseMessagingConfigured()
+
+      if (!firebaseMessagingConfigured) {
         setPushReady(false)
         return
       }

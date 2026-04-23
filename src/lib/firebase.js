@@ -2,40 +2,88 @@ import { getApp, getApps, initializeApp } from 'firebase/app'
 import { getMessaging, getToken, isSupported, onMessage } from 'firebase/messaging'
 import { isSecureBrowserContext } from './preferences'
 
-const firebaseConfig = {
-  apiKey: String(import.meta.env.VITE_FIREBASE_API_KEY || '').trim(),
-  authDomain: String(import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '').trim(),
-  projectId: String(import.meta.env.VITE_FIREBASE_PROJECT_ID || '').trim(),
-  storageBucket: String(import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '').trim(),
-  messagingSenderId: String(import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '').trim(),
-  appId: String(import.meta.env.VITE_FIREBASE_APP_ID || '').trim(),
+function normalizeApiBaseUrl(value) {
+  return String(value || '').trim().replace(/\/+$/, '')
 }
-const vapidKey = String(import.meta.env.VITE_FIREBASE_VAPID_KEY || '').trim()
+
+const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL) || '/api'
+const PUBLIC_FRONTEND_CONFIG_PATH = '/public/frontend-config'
 let messagingSupportPromise = null
+let publicFirebaseConfigPromise = null
 
-export function isFirebaseMessagingConfigured() {
-  return Boolean(
-    firebaseConfig.apiKey &&
-      firebaseConfig.projectId &&
-      firebaseConfig.messagingSenderId &&
-      firebaseConfig.appId &&
-      vapidKey,
-  )
+function buildPublicFrontendConfigUrl() {
+  return `${API_BASE_URL}${PUBLIC_FRONTEND_CONFIG_PATH}`
 }
 
-function buildMessagingServiceWorkerUrl() {
-  const searchParams = new URLSearchParams()
+function normalizePublicFirebaseConfig(payload = null) {
+  const data = payload?.data
+  const firebase = data?.firebase
 
-  Object.entries(firebaseConfig).forEach(([key, value]) => {
-    if (value) {
-      searchParams.set(key, value)
-    }
+  if (!firebase || typeof firebase !== 'object') {
+    return null
+  }
+
+  const normalizedFirebaseConfig = {
+    apiKey: String(firebase.apiKey || '').trim(),
+    authDomain: String(firebase.authDomain || '').trim(),
+    projectId: String(firebase.projectId || '').trim(),
+    storageBucket: String(firebase.storageBucket || '').trim(),
+    messagingSenderId: String(firebase.messagingSenderId || '').trim(),
+    appId: String(firebase.appId || '').trim(),
+  }
+  const vapidKey = String(firebase.vapidKey || '').trim()
+
+  if (
+    !normalizedFirebaseConfig.apiKey ||
+    !normalizedFirebaseConfig.authDomain ||
+    !normalizedFirebaseConfig.projectId ||
+    !normalizedFirebaseConfig.storageBucket ||
+    !normalizedFirebaseConfig.messagingSenderId ||
+    !normalizedFirebaseConfig.appId ||
+    !vapidKey
+  ) {
+    return null
+  }
+
+  return {
+    firebaseConfig: normalizedFirebaseConfig,
+    vapidKey,
+  }
+}
+
+async function fetchPublicFirebaseConfig() {
+  const response = await fetch(buildPublicFrontendConfigUrl(), {
+    method: 'GET',
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+    },
   })
 
-  return `/firebase-messaging-sw.js?${searchParams.toString()}`
+  if (!response.ok) {
+    return null
+  }
+
+  let payload = null
+
+  try {
+    payload = await response.json()
+  } catch {
+    return null
+  }
+
+  return normalizePublicFirebaseConfig(payload)
 }
 
-function getFirebaseApp() {
+async function getPublicFirebaseConfig() {
+  if (!publicFirebaseConfigPromise) {
+    publicFirebaseConfigPromise = fetchPublicFirebaseConfig().catch(() => null)
+  }
+
+  return publicFirebaseConfigPromise
+}
+
+function getFirebaseApp(firebaseConfig) {
   if (getApps().length) {
     return getApp()
   }
@@ -51,14 +99,23 @@ async function isMessagingSupportedInBrowser() {
   return messagingSupportPromise
 }
 
+export async function isFirebaseMessagingConfigured() {
+  return Boolean(await getPublicFirebaseConfig())
+}
+
 export async function getFirebaseMessagingContext() {
   if (
     typeof window === 'undefined' ||
     typeof navigator === 'undefined' ||
     !isSecureBrowserContext() ||
-    !isFirebaseMessagingConfigured() ||
     !('serviceWorker' in navigator)
   ) {
+    return null
+  }
+
+  const publicConfig = await getPublicFirebaseConfig()
+
+  if (!publicConfig) {
     return null
   }
 
@@ -68,11 +125,12 @@ export async function getFirebaseMessagingContext() {
     return null
   }
 
-  const app = getFirebaseApp()
+  const app = getFirebaseApp(publicConfig.firebaseConfig)
 
   return {
     app,
     messaging: getMessaging(app),
+    vapidKey: publicConfig.vapidKey,
   }
 }
 
@@ -81,7 +139,7 @@ export async function registerFirebaseMessagingServiceWorker() {
     return null
   }
 
-  return navigator.serviceWorker.register(buildMessagingServiceWorkerUrl(), {
+  return navigator.serviceWorker.register('/firebase-messaging-sw.js', {
     scope: '/',
   })
 }
@@ -100,7 +158,7 @@ export async function getFirebaseMessagingToken() {
   }
 
   return getToken(context.messaging, {
-    vapidKey,
+    vapidKey: context.vapidKey,
     serviceWorkerRegistration,
   })
 }

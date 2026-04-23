@@ -217,6 +217,31 @@ const env = {
   firebaseStorageBucket: normalizeEnvString(process.env.FIREBASE_STORAGE_BUCKET),
   firebaseServiceAccountJson: normalizeEnvString(process.env.FIREBASE_SERVICE_ACCOUNT_JSON),
   firebaseServiceAccountBase64: normalizeEnvString(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64),
+  firebaseWebApiKey:
+    normalizeEnvString(process.env.FIREBASE_WEB_API_KEY) ||
+    normalizeEnvString(process.env.VITE_FIREBASE_API_KEY),
+  firebaseWebAuthDomain:
+    normalizeEnvString(process.env.FIREBASE_WEB_AUTH_DOMAIN) ||
+    normalizeEnvString(process.env.VITE_FIREBASE_AUTH_DOMAIN),
+  firebaseWebProjectId:
+    normalizeEnvString(process.env.FIREBASE_WEB_PROJECT_ID) ||
+    normalizeEnvString(process.env.VITE_FIREBASE_PROJECT_ID),
+  firebaseWebStorageBucket:
+    normalizeEnvString(process.env.FIREBASE_WEB_STORAGE_BUCKET) ||
+    normalizeEnvString(process.env.VITE_FIREBASE_STORAGE_BUCKET),
+  firebaseWebMessagingSenderId:
+    normalizeEnvString(process.env.FIREBASE_WEB_MESSAGING_SENDER_ID) ||
+    normalizeEnvString(process.env.VITE_FIREBASE_MESSAGING_SENDER_ID),
+  firebaseWebAppId:
+    normalizeEnvString(process.env.FIREBASE_WEB_APP_ID) ||
+    normalizeEnvString(process.env.VITE_FIREBASE_APP_ID),
+  firebaseWebMeasurementId:
+    normalizeEnvString(process.env.FIREBASE_WEB_MEASUREMENT_ID) ||
+    normalizeEnvString(process.env.VITE_FIREBASE_MEASUREMENT_ID),
+  firebaseWebVapidKey:
+    normalizeEnvString(process.env.FIREBASE_WEB_VAPID_KEY) ||
+    normalizeEnvString(process.env.VITE_FIREBASE_VAPID_KEY),
+  enableWebPush: parseBooleanEnv(process.env.ENABLE_WEB_PUSH, false),
   qrSignSecret:
     normalizeEnvString(process.env.QR_SIGN_SECRET) ||
     normalizeEnvString(process.env.JWT_SECRET) ||
@@ -230,6 +255,54 @@ const env = {
   gatepassEscalationTimeoutMinutes: parsePositiveIntegerEnv(process.env.GATEPASS_ESCALATION_TIMEOUT_MINUTES, 5),
   gatepassEscalationSweepIntervalMs: parsePositiveIntegerEnv(process.env.GATEPASS_ESCALATION_SWEEP_INTERVAL_MS, 60000)
 };
+
+function getWebPushConfig() {
+  const firebase = {
+    apiKey: env.firebaseWebApiKey,
+    authDomain: env.firebaseWebAuthDomain,
+    projectId: env.firebaseWebProjectId,
+    storageBucket: env.firebaseWebStorageBucket,
+    messagingSenderId: env.firebaseWebMessagingSenderId,
+    appId: env.firebaseWebAppId,
+    measurementId: env.firebaseWebMeasurementId,
+    vapidKey: env.firebaseWebVapidKey
+  };
+
+  const requiredFields = [
+    firebase.apiKey,
+    firebase.authDomain,
+    firebase.projectId,
+    firebase.storageBucket,
+    firebase.messagingSenderId,
+    firebase.appId,
+    firebase.vapidKey
+  ];
+  const hasAnyRequiredField = requiredFields.some(Boolean);
+  const hasAllRequiredFields = requiredFields.every(Boolean);
+
+  return {
+    enabled: env.enableWebPush,
+    hasAnyRequiredField,
+    isComplete: hasAllRequiredFields,
+    firebase: hasAllRequiredFields ? firebase : null
+  };
+}
+
+function validateOptionalWebPushConfig() {
+  const webPush = getWebPushConfig();
+
+  if (!webPush.enabled) {
+    return [];
+  }
+
+  if (webPush.isComplete) {
+    return [];
+  }
+
+  return [
+    'ENABLE_WEB_PUSH is true but Firebase web push config is incomplete. Set FIREBASE_WEB_API_KEY, FIREBASE_WEB_AUTH_DOMAIN, FIREBASE_WEB_PROJECT_ID, FIREBASE_WEB_STORAGE_BUCKET, FIREBASE_WEB_MESSAGING_SENDER_ID, FIREBASE_WEB_APP_ID, and FIREBASE_WEB_VAPID_KEY.'
+  ];
+}
 
 function validateStartupEnv() {
   const errors = [];
@@ -250,9 +323,13 @@ function validateStartupEnv() {
     errors.push('ENABLE_IN_MEMORY_DB must be false in production.');
   }
 
+  errors.push(...validateOptionalWebPushConfig());
+
   return errors;
 }
 
 env.validateStartupEnv = validateStartupEnv;
+env.getWebPushConfig = getWebPushConfig;
+env.validateOptionalWebPushConfig = validateOptionalWebPushConfig;
 
 module.exports = env;

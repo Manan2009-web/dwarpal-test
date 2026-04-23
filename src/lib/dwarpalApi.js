@@ -89,7 +89,14 @@ function sanitizeAuthDebugBody(body) {
 }
 
 function logAuthDebug(message, details) {
-  console.info(`[dwarpal-auth-api] ${message}`, details)
+  if (!import.meta.env.DEV) {
+    return
+  }
+
+  // Keep auth debugging intentionally minimal to avoid leaking sensitive request/response details.
+  console.info(`[dwarpal-auth-api] ${message}`, {
+    hasDetails: Boolean(details),
+  })
 }
 
 function createRequestSignal(signal, timeoutMs) {
@@ -582,15 +589,6 @@ export async function apiRequest(path, { method = 'GET', body, headers, signal, 
     responsePreview = parsedResponse.rawText.slice(0, 240)
     contentType = parsedResponse.contentType
   } catch (error) {
-    if (isAuthRequest) {
-      console.error('[dwarpal-auth-api] request error', {
-        error,
-        method,
-        path,
-        requestUrl,
-      })
-    }
-
     if (requestController.didTimeout()) {
       const seconds = Math.ceil(resolvedTimeoutMs / 1000)
       throw new ApiError(
@@ -605,10 +603,6 @@ export async function apiRequest(path, { method = 'GET', body, headers, signal, 
     }
 
     if (!response) {
-      if (import.meta.env.DEV) {
-        console.error('DwarPal API network error', { requestUrl, method, error })
-      }
-
       throw new ApiError(
         `Unable to reach the DwarPal backend at ${API_BASE_URL}. Please start the backend server and try again.`,
         0,
@@ -627,26 +621,6 @@ export async function apiRequest(path, { method = 'GET', body, headers, signal, 
   }
 
   if (!response.ok || payload?.success === false) {
-    if (isAuthRequest) {
-      console.error('[dwarpal-auth-api] response error', {
-        message: payload?.message || getDefaultErrorMessage(response.status, path),
-        method,
-        path,
-        payload,
-        requestUrl,
-        status: response.status,
-      })
-    }
-
-    if (import.meta.env.DEV) {
-      console.error('DwarPal API request failed', {
-        requestUrl,
-        method,
-        status: response.status,
-        payload,
-      })
-    }
-
     throw new ApiError(
       payload?.message || getDefaultErrorMessage(response.status, path),
       response.status,
@@ -1433,8 +1407,6 @@ export async function loginUser(identifier, password) {
       password,
     },
   })
-
-  console.log('Login response', payload?.data || null)
 
   if (payload?.data?.token) {
     storeAuthToken(payload.data.token)

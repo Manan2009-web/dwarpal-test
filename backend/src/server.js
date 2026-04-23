@@ -283,6 +283,14 @@ async function startServer() {
     `HTTP timeouts configured (request=${env.httpRequestTimeoutMs}ms, headers=${env.httpHeadersTimeoutMs}ms, keepAlive=${env.httpKeepAliveTimeoutMs}ms)`
   );
 
+  const webPushConfig = typeof env.getWebPushConfig === 'function' ? env.getWebPushConfig() : null;
+
+  if (webPushConfig?.enabled && webPushConfig?.isComplete) {
+    console.log('[startup] Web push notifications enabled.');
+  } else {
+    console.log('[startup] Web push notifications disabled or not configured.');
+  }
+
   kickOffOptionalStartupTasks();
   startOptionalRuntimeServices(server);
 

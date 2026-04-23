@@ -32,7 +32,7 @@ function errorHandler(err, req, res, next) {
     } else if (error.message === 'Only image files are allowed') {
       error = new AppError(error.message, 400);
     } else {
-      error = new AppError(error.message || 'Internal server error', error.statusCode || 500);
+      error = new AppError('Internal server error', error.statusCode || 500);
     }
   }
 
@@ -60,9 +60,12 @@ function errorHandler(err, req, res, next) {
     response.rateLimit = error.rateLimit;
   }
 
-  if (process.env.NODE_ENV !== 'production' && err && err.stack) {
-    response.stack = err.stack;
-    console.error(`[${req.method}] ${req.originalUrl}`, err);
+  if (err && err.stack) {
+    console.error(`[${req.method}] ${req.originalUrl} ${error.message || 'Internal server error'}`);
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.error(err.stack);
+    }
   }
 
   res.status(error.statusCode || 500).json(response);
