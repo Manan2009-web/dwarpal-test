@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { KeyRound } from 'lucide-react'
 import { ActionButton, ModalForm } from './ui'
 import OtpCodeInput from './OtpCodeInput'
+import PasswordInput from './PasswordInput'
 import { getApiErrorMessage } from '../lib/dwarpalApi'
 
 const PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/
@@ -372,13 +373,12 @@ export default function ForgotPasswordModal({
           <form onSubmit={handleResetPassword} className="auth-otp-step-form">
             <label>
               <span className="field-label-text">New Password</span>
-              <input
-                type="password"
+              <PasswordInput
                 value={newPassword}
-                onChange={(event) => updatePasswordField('newPassword', event.target.value)}
+                onChange={(value) => updatePasswordField('newPassword', value)}
                 autoComplete="new-password"
                 className={fieldErrors.newPassword ? 'field-invalid' : ''}
-                aria-invalid={Boolean(fieldErrors.newPassword)}
+                ariaInvalid={Boolean(fieldErrors.newPassword)}
                 disabled={isResetting}
                 required
               />
@@ -386,13 +386,12 @@ export default function ForgotPasswordModal({
             </label>
             <label>
               <span className="field-label-text">Confirm Password</span>
-              <input
-                type="password"
+              <PasswordInput
                 value={confirmPassword}
-                onChange={(event) => updatePasswordField('confirmPassword', event.target.value)}
+                onChange={(value) => updatePasswordField('confirmPassword', value)}
                 autoComplete="new-password"
                 className={fieldErrors.confirmPassword ? 'field-invalid' : ''}
-                aria-invalid={Boolean(fieldErrors.confirmPassword)}
+                ariaInvalid={Boolean(fieldErrors.confirmPassword)}
                 disabled={isResetting}
                 required
               />

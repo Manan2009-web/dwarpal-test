@@ -33,6 +33,7 @@ import NotificationPermissionPrompt, {
 } from './components/NotificationPermissionPrompt'
 import PreferencesPanel from './components/PreferencesPanel'
 import PrivacyPreferencesBanner from './components/PrivacyPreferencesBanner'
+import PasswordInput from './components/PasswordInput'
 import RegisterOtpModal from './components/RegisterOtpModal'
 import SecurityVerificationPanel from './components/SecurityVerificationPanel'
 import { useToast } from './components/ToastProvider'
@@ -2200,14 +2201,13 @@ function RegisterScreen({ onRegister, onVerifyOtp, onResendOtp }) {
         ) : null}
         <label className="full-span">
           <FieldLabel required>Password</FieldLabel>
-          <input
-            type="password"
+          <PasswordInput
             value={form.password}
-            onChange={(event) => updateFormField('password', event.target.value)}
+            onChange={(value) => updateFormField('password', value)}
             placeholder="Enter your password"
             autoComplete="new-password"
             className={fieldErrors.password ? 'field-invalid' : ''}
-            aria-invalid={Boolean(fieldErrors.password)}
+            ariaInvalid={Boolean(fieldErrors.password)}
             disabled={isRegistering}
             required
           />

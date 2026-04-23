@@ -2,6 +2,7 @@ import { Check, ShieldCheck } from 'lucide-react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import logo from '../../assets/dwarpal_logo.png'
+import PasswordInput from '../PasswordInput'
 
 const formVariants = {
   hidden: { opacity: 0 },
@@ -37,6 +38,8 @@ function FormField({
   error,
   disabled,
 }) {
+  const isPasswordField = type === 'password'
+
   return (
     <motion.div variants={itemVariants} className="tw:space-y-2">
       <label htmlFor={id} className="tw:block tw:text-[0.84rem] tw:font-semibold tw:text-[#425f78]">
@@ -44,20 +47,38 @@ function FormField({
       </label>
       <div className="tw:group tw:relative">
         <div className="tw:absolute tw:inset-0 tw:rounded-[20px] tw:bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(227,239,251,0.72))]" />
-        <input
-          id={id}
-          type={type}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder={placeholder}
-          autoComplete={autoComplete}
-          disabled={disabled}
-          aria-invalid={Boolean(error)}
-          className={[
-            'tw:relative tw:w-full tw:rounded-[20px] tw:border tw:bg-transparent tw:px-4 tw:py-4 tw:text-[0.98rem] tw:text-dwarpal-ink tw:shadow-[0_12px_30px_rgba(34,87,128,0.08)] tw:outline-none tw:transition tw:duration-200 tw:placeholder:text-[#7b90a3] tw:focus:border-[#2f6db5] tw:focus:shadow-[0_0_0_4px_rgba(47,109,181,0.14),0_18px_32px_rgba(34,87,128,0.12)] tw:disabled:cursor-not-allowed tw:disabled:opacity-65',
-            error ? 'tw:border-[#d65763]' : 'tw:border-[rgba(105,143,176,0.22)]',
-          ].join(' ')}
-        />
+        {isPasswordField ? (
+          <PasswordInput
+            id={id}
+            value={value}
+            onChange={onChange}
+            placeholder={placeholder}
+            autoComplete={autoComplete}
+            disabled={disabled}
+            ariaInvalid={Boolean(error)}
+            wrapperClassName="tw:relative tw:z-[1]"
+            className={[
+              'tw:relative tw:w-full tw:rounded-[20px] tw:border tw:bg-transparent tw:px-4 tw:py-4 tw:pr-12 tw:text-[0.98rem] tw:text-dwarpal-ink tw:shadow-[0_12px_30px_rgba(34,87,128,0.08)] tw:outline-none tw:transition tw:duration-200 tw:placeholder:text-[#7b90a3] tw:focus:border-[#2f6db5] tw:focus:shadow-[0_0_0_4px_rgba(47,109,181,0.14),0_18px_32px_rgba(34,87,128,0.12)] tw:disabled:cursor-not-allowed tw:disabled:opacity-65',
+              error ? 'tw:border-[#d65763]' : 'tw:border-[rgba(105,143,176,0.22)]',
+            ].join(' ')}
+            toggleClassName="tw:absolute tw:right-3 tw:top-0 tw:bottom-0 tw:my-auto tw:grid tw:h-9 tw:w-9 tw:place-items-center tw:rounded-full tw:border tw:border-[rgba(105,143,176,0.28)] tw:bg-[rgba(255,255,255,0.74)] tw:text-[#48637c] tw:transition tw:duration-200 hover:tw:bg-white hover:tw:text-[#2f6db5] focus-visible:tw:outline-none focus-visible:tw:ring-2 focus-visible:tw:ring-[#2f6db5]/35 disabled:tw:cursor-not-allowed disabled:tw:opacity-60"
+          />
+        ) : (
+          <input
+            id={id}
+            type={type}
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder={placeholder}
+            autoComplete={autoComplete}
+            disabled={disabled}
+            aria-invalid={Boolean(error)}
+            className={[
+              'tw:relative tw:w-full tw:rounded-[20px] tw:border tw:bg-transparent tw:px-4 tw:py-4 tw:text-[0.98rem] tw:text-dwarpal-ink tw:shadow-[0_12px_30px_rgba(34,87,128,0.08)] tw:outline-none tw:transition tw:duration-200 tw:placeholder:text-[#7b90a3] tw:focus:border-[#2f6db5] tw:focus:shadow-[0_0_0_4px_rgba(47,109,181,0.14),0_18px_32px_rgba(34,87,128,0.12)] tw:disabled:cursor-not-allowed tw:disabled:opacity-65',
+              error ? 'tw:border-[#d65763]' : 'tw:border-[rgba(105,143,176,0.22)]',
+            ].join(' ')}
+          />
+        )}
       </div>
       {error ? <p className="tw:text-[0.82rem] tw:font-medium tw:text-[#d65763]">{error}</p> : null}
     </motion.div>

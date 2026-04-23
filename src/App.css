@@ -1704,6 +1704,49 @@ button {
   caret-color: var(--text);
 }
 
+.password-input-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.password-input-field {
+  padding-right: 3rem;
+}
+
+.password-visibility-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.7rem;
+  transform: translateY(-50%);
+  width: 2.05rem;
+  height: 2.05rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(21, 50, 71, 0.16);
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--text-soft);
+  cursor: pointer;
+  transition: color 180ms ease, background 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.password-visibility-toggle:hover:not(:disabled) {
+  color: var(--app-accent-strong);
+  border-color: rgba(40, 114, 161, 0.32);
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.password-visibility-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(40, 114, 161, 0.22);
+}
+
+.password-visibility-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .select-field {
   position: relative;
   width: 100%;
