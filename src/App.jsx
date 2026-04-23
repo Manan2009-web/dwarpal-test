@@ -17,6 +17,9 @@ import {
 import './App.css'
 import AppBrand from './components/AppBrand'
 import AdminPortal from './components/AdminPortal'
+import AuthPage from './components/auth/AuthPage'
+import LoginForm from './components/auth/LoginForm'
+import MascotPanel from './components/auth/MascotPanel'
 import FacultyLeaveWizard from './components/FacultyLeaveWizard'
 import FeatureBoundary from './components/FeatureBoundary'
 import ForceEmailVerificationModal from './components/ForceEmailVerificationModal'
@@ -119,6 +122,7 @@ import {
 const DASHBOARD_REFRESH_MS = 10000
 const REFRESH_ERROR_TOAST_COOLDOWN_MS = 30000
 const AUTH_BOOTSTRAP_TIMEOUT_MS = 5000
+const REMEMBERED_LOGIN_IDENTIFIER_STORAGE_KEY = 'dwarpal.remembered-login-identifier'
 const VEHICLE_NUMBER_PATTERN = /^[A-Za-z0-9 -]+$/
 const REQUIRED_FIELD_MESSAGE = 'Please fill this field'
 const REASON_MIN_LENGTH = 5
@@ -1683,12 +1687,31 @@ function LoginScreen({
   const navigate = useNavigate()
   const location = useLocation()
   const [form, setForm] = useState({ identifier: '', password: '' })
+  const [rememberMe, setRememberMe] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
   const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const submitLockRef = useRef(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const rememberedIdentifier = window.localStorage.getItem(REMEMBERED_LOGIN_IDENTIFIER_STORAGE_KEY)
+
+    if (!rememberedIdentifier) {
+      return
+    }
+
+    setForm((previousForm) => ({
+      ...previousForm,
+      identifier: previousForm.identifier || rememberedIdentifier,
+    }))
+    setRememberMe(true)
+  }, [])
 
   useEffect(() => {
     const authNotice = location.state?.authNotice
@@ -1709,8 +1732,12 @@ function LoginScreen({
     setSuccess('')
   }
 
-  function handleSignInButtonClick() {
-    console.log('Sign in button clicked')
+  function handleRememberMeChange(nextValue) {
+    setRememberMe(nextValue)
+
+    if (!nextValue && typeof window !== 'undefined') {
+      window.localStorage.removeItem(REMEMBERED_LOGIN_IDENTIFIER_STORAGE_KEY)
+    }
   }
 
   function handleForgotPasswordClick() {
@@ -1810,6 +1837,15 @@ function LoginScreen({
       console.info('[dwarpal-auth-ui] login submit completed successfully', {
         identifier: maskAuthIdentifier(form.identifier),
       })
+
+      if (typeof window !== 'undefined') {
+        if (rememberMe) {
+          window.localStorage.setItem(REMEMBERED_LOGIN_IDENTIFIER_STORAGE_KEY, normalizedIdentifier)
+        } else {
+          window.localStorage.removeItem(REMEMBERED_LOGIN_IDENTIFIER_STORAGE_KEY)
+        }
+      }
+
       const dashboardPath = result.dashboardPath || getLandingPathForUser(result.user)
       setSuccess('Login successful. Redirecting to your dashboard...')
       // Use replace so the previous login entry is not left as a reachable back-navigation target.
@@ -1824,61 +1860,23 @@ function LoginScreen({
   }
 
   return (
-    <AuthShell title="Login">
-      <form className="auth-form" onSubmit={handleLogin} noValidate>
-        <label>
-          <FieldLabel required>Enrollment Number / Employee ID</FieldLabel>
-          <input
-            value={form.identifier}
-            onChange={(event) => updateFormField('identifier', event.target.value)}
-            placeholder="Enter your enrollment number or employee ID"
-            autoComplete="username"
-            className={fieldErrors.identifier ? 'field-invalid' : ''}
-            aria-invalid={Boolean(fieldErrors.identifier)}
-            disabled={isSubmitting}
-            required
-          />
-          {fieldErrors.identifier ? <p className="field-error">{fieldErrors.identifier}</p> : null}
-        </label>
-        <label>
-          <FieldLabel required>Password</FieldLabel>
-          <input
-            type="password"
-            value={form.password}
-            onChange={(event) => updateFormField('password', event.target.value)}
-            placeholder="Enter your password"
-            autoComplete="current-password"
-            className={fieldErrors.password ? 'field-invalid' : ''}
-            aria-invalid={Boolean(fieldErrors.password)}
-            disabled={isSubmitting}
-            required
-          />
-          {fieldErrors.password ? <p className="field-error">{fieldErrors.password}</p> : null}
-        </label>
-        <div className="auth-inline-action-row">
-          <button type="button" className="text-button auth-inline-link" onClick={handleForgotPasswordClick}>
-            Forgot Password?
-          </button>
-        </div>
-        {error ? <p className="form-error" aria-live="polite" role="alert">{error}</p> : null}
-        {success ? <p className="form-success" aria-live="polite">{success}</p> : null}
-        {isSubmitting ? <p className="field-hint" aria-live="polite">Signing in...</p> : null}
-        <ActionButton
-          icon={ShieldCheck}
-          type="submit"
-          onClick={handleSignInButtonClick}
-          disabled={isSubmitting}
-          aria-busy={isSubmitting}
-        >
-          {isSubmitting ? 'Signing in...' : 'Sign In'}
-        </ActionButton>
-      </form>
-      <p className="auth-nav">
-        Don&apos;t have an account?{' '}
-        <Link to="/register" replace className="auth-link">
-          Register
-        </Link>
-      </p>
+    <>
+      <AuthPage left={<MascotPanel />} right={
+        <LoginForm
+          identifier={form.identifier}
+          password={form.password}
+          rememberMe={rememberMe}
+          onIdentifierChange={(value) => updateFormField('identifier', value)}
+          onPasswordChange={(value) => updateFormField('password', value)}
+          onRememberMeChange={handleRememberMeChange}
+          onForgotPassword={handleForgotPasswordClick}
+          onSubmit={handleLogin}
+          error={error}
+          success={success}
+          fieldErrors={fieldErrors}
+          isSubmitting={isSubmitting}
+        />
+      } />
       <ForgotPasswordModal
         open={forgotPasswordOpen}
         identifier={String(form.identifier || '').trim()}
@@ -1889,7 +1887,7 @@ function LoginScreen({
         onResetPassword={onForgotPasswordReset}
         onComplete={handleForgotPasswordComplete}
       />
-    </AuthShell>
+    </>
   )
 }
 

@@ -1,3 +1,15 @@
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme) prefix(tw);
+@import "tailwindcss/utilities.css" layer(utilities) prefix(tw);
+
+@theme {
+  --font-sans: "Aptos", "Segoe UI Variable Text", "Segoe UI", "Trebuchet MS", sans-serif;
+  --font-display: "Aptos Display", "Aptos", "Segoe UI Variable Display", "Segoe UI", "Trebuchet MS", sans-serif;
+  --color-dwarpal-surface: #f6fbff;
+  --color-dwarpal-ink: #10263e;
+  --color-dwarpal-muted: #62788d;
+}
+
 :root {
   --font-sans: 'Segoe UI', 'Trebuchet MS', Helvetica, Arial, sans-serif;
 }

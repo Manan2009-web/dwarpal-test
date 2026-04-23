@@ -21,6 +21,7 @@
   "dependencies": {
     "@simplewebauthn/browser": "^13.3.0",
     "firebase": "^11.10.0",
+    "framer-motion": "^12.38.0",
     "lucide-react": "^1.0.0",
     "qr-scanner": "^1.4.2",
     "react": "^18.2.0",
@@ -29,13 +30,17 @@
     "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.4",
     "@types/react": "^18.2.15",
     "@types/react-dom": "^18.2.7",
     "@vitejs/plugin-react": "^4.0.3",
+    "autoprefixer": "^10.5.0",
     "eslint": "^8.45.0",
     "eslint-plugin-react": "^7.32.2",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.3",
+    "postcss": "^8.5.10",
+    "tailwindcss": "^4.2.4",
     "vite": "^4.4.5"
   }
 }
