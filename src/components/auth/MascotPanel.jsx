@@ -1,24 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Clock3, ScanLine, ShieldCheck, Sparkles } from 'lucide-react'
-import { motion, useMotionValue, useReducedMotion, useSpring, useTransform } from 'framer-motion'
-
-const STATUS_ITEMS = [
-  {
-    label: 'Approval trail',
-    value: 'Live',
-    icon: ShieldCheck,
-  },
-  {
-    label: 'Movement updates',
-    value: 'Real-time',
-    icon: ScanLine,
-  },
-  {
-    label: 'Campus uptime',
-    value: '24/7',
-    icon: Clock3,
-  },
-]
+import { useReducedMotion } from 'framer-motion'
+import logo from '../../assets/dwarpal_logo.png'
 
 function useFinePointer() {
   const [canTrack, setCanTrack] = useState(false)
@@ -49,36 +31,80 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value))
 }
 
-export default function MascotPanel() {
-  const panelRef = useRef(null)
-  const reduceMotion = useReducedMotion()
-  const canTrack = useFinePointer()
-  const [isActive, setIsActive] = useState(false)
-  const pointerX = useMotionValue(0)
-  const pointerY = useMotionValue(0)
-  const smoothX = useSpring(pointerX, { stiffness: 160, damping: 24, mass: 0.8 })
-  const smoothY = useSpring(pointerY, { stiffness: 160, damping: 24, mass: 0.8 })
-  const bodyShiftX = useTransform(smoothX, [-1, 1], [-10, 10])
-  const bodyShiftY = useTransform(smoothY, [-1, 1], [-8, 8])
-  const bodyRotate = useTransform(smoothX, [-1, 1], [-3.5, 3.5])
-  const headRotateX = useTransform(smoothY, [-1, 1], [5, -5])
-  const headRotateY = useTransform(smoothX, [-1, 1], [-8, 8])
-  const faceShiftX = useTransform(smoothX, [-1, 1], [-6, 6])
-  const faceShiftY = useTransform(smoothY, [-1, 1], [-4, 4])
-  const eyeShiftX = useTransform(smoothX, [-1, 1], [-4, 4])
-  const eyeShiftY = useTransform(smoothY, [-1, 1], [-3, 3])
-  const badgeShiftX = useTransform(smoothX, [-1, 1], [-3, 3])
-  const haloShiftX = useTransform(smoothX, [-1, 1], [-22, 22])
-  const haloShiftY = useTransform(smoothY, [-1, 1], [-18, 18])
-  const shadowScale = useTransform(smoothY, [-1, 1], [0.92, 1.08])
-
-  function resetPointer() {
-    pointerX.set(0)
-    pointerY.set(0)
+function setMotionVars(node, { trackX = 0, trackY = 0, idleY = '0px', idleRotate = '0deg' } = {}) {
+  if (!node) {
+    return
   }
 
+  node.style.setProperty('--track-x', String(trackX))
+  node.style.setProperty('--track-y', String(trackY))
+  node.style.setProperty('--idle-y', idleY)
+  node.style.setProperty('--idle-rotate', idleRotate)
+}
+
+export default function MascotPanel() {
+  const panelRef = useRef(null)
+  const targetRef = useRef({ x: 0, y: 0 })
+  const currentRef = useRef({ x: 0, y: 0 })
+  const canTrack = useFinePointer()
+  const reduceMotion = useReducedMotion()
+
+  useEffect(() => {
+    const node = panelRef.current
+
+    if (!node) {
+      return undefined
+    }
+
+    if (reduceMotion) {
+      setMotionVars(node)
+      return undefined
+    }
+
+    let frameId = 0
+
+    function animateFrame(now) {
+      const target = targetRef.current
+      const current = currentRef.current
+      const followFactor = canTrack ? 0.1 : 0.06
+
+      if (canTrack) {
+        current.x += (target.x - current.x) * followFactor
+        current.y += (target.y - current.y) * followFactor
+
+        setMotionVars(node, {
+          trackX: current.x.toFixed(4),
+          trackY: current.y.toFixed(4),
+          idleY: '0px',
+          idleRotate: '0deg',
+        })
+      } else {
+        const idleX = Math.sin(now / 1800) * 0.12
+        const idleYTrack = Math.sin(now / 1500) * 0.08
+
+        current.x += (idleX - current.x) * followFactor
+        current.y += (idleYTrack - current.y) * followFactor
+
+        setMotionVars(node, {
+          trackX: current.x.toFixed(4),
+          trackY: current.y.toFixed(4),
+          idleY: `${(Math.sin(now / 900) * -8).toFixed(2)}px`,
+          idleRotate: `${(Math.sin(now / 1700) * 1.2).toFixed(2)}deg`,
+        })
+      }
+
+      frameId = window.requestAnimationFrame(animateFrame)
+    }
+
+    frameId = window.requestAnimationFrame(animateFrame)
+
+    return () => {
+      window.cancelAnimationFrame(frameId)
+    }
+  }, [canTrack, reduceMotion])
+
   function updatePointer(clientX, clientY) {
-    if (!panelRef.current) {
+    if (!panelRef.current || !canTrack || reduceMotion) {
       return
     }
 
@@ -86,216 +112,211 @@ export default function MascotPanel() {
     const x = clamp(((clientX - bounds.left) / bounds.width) * 2 - 1, -1, 1)
     const y = clamp(((clientY - bounds.top) / bounds.height) * 2 - 1, -1, 1)
 
-    pointerX.set(x)
-    pointerY.set(y)
-  }
-
-  function handlePointerEnter() {
-    if (reduceMotion || !canTrack) {
-      return
-    }
-
-    setIsActive(true)
+    targetRef.current = { x, y }
   }
 
   function handlePointerMove(event) {
-    if (reduceMotion || !canTrack) {
-      return
-    }
-
-    setIsActive(true)
     updatePointer(event.clientX, event.clientY)
   }
 
   function handlePointerLeave() {
-    setIsActive(false)
-    resetPointer()
+    targetRef.current = { x: 0, y: 0 }
+  }
+
+  const motionRootStyle = {
+    '--track-x': 0,
+    '--track-y': 0,
+    '--idle-y': '0px',
+    '--idle-rotate': '0deg',
   }
 
   return (
     <section
       ref={panelRef}
-      className="tw:relative tw:flex tw:h-full tw:flex-col tw:overflow-hidden tw:bg-[linear-gradient(180deg,rgba(244,249,255,0.94),rgba(234,244,255,0.9))] tw:p-5 tw:sm:p-7 tw:lg:p-8"
-      onPointerEnter={handlePointerEnter}
+      className="tw:relative tw:hidden tw:h-full tw:overflow-hidden tw:bg-[linear-gradient(180deg,rgba(242,248,255,0.9),rgba(232,243,255,0.86))] tw:p-8 tw:lg:flex tw:items-center tw:justify-center tw:xl:p-10"
       onPointerMove={handlePointerMove}
       onPointerLeave={handlePointerLeave}
+      style={motionRootStyle}
     >
+      <style>{`
+        @keyframes dwarpal-wave {
+          0% { transform: rotate(12deg); }
+          18% { transform: rotate(32deg); }
+          36% { transform: rotate(6deg); }
+          54% { transform: rotate(26deg); }
+          72% { transform: rotate(10deg); }
+          100% { transform: rotate(12deg); }
+        }
+
+        @keyframes dwarpal-blink {
+          0%, 44%, 48%, 100% { transform: scaleY(0); }
+          46% { transform: scaleY(1); }
+        }
+      `}</style>
+
       <div
         aria-hidden="true"
         className="tw:absolute tw:inset-0"
         style={{
           backgroundImage: `
-            radial-gradient(circle at top left, rgba(255,255,255,0.86) 0, rgba(255,255,255,0.2) 26%, transparent 42%),
-            radial-gradient(circle at bottom right, rgba(139,194,255,0.24) 0, transparent 34%)
+            radial-gradient(circle at top left, rgba(255,255,255,0.92) 0, rgba(255,255,255,0.28) 28%, transparent 46%),
+            radial-gradient(circle at bottom right, rgba(139,194,255,0.22) 0, transparent 34%)
           `,
         }}
       />
 
-      <div className="tw:relative tw:z-10 tw:flex tw:h-full tw:flex-col tw:gap-6">
-        <div className="tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-3">
-          <div className="tw:inline-flex tw:items-center tw:gap-2 tw:rounded-full tw:border tw:border-white/70 tw:bg-white/70 tw:px-4 tw:py-2 tw:text-[0.72rem] tw:font-semibold tw:uppercase tw:tracking-[0.2em] tw:text-[#476884] tw:shadow-[0_12px_24px_rgba(69,111,148,0.08)]">
-            <Sparkles className="tw:h-3.5 tw:w-3.5 tw:text-[#2f6db5]" />
-            Smart Digital Gatepass System
-          </div>
-          <div className="tw:inline-flex tw:items-center tw:gap-2 tw:rounded-full tw:border tw:border-[rgba(82,125,165,0.18)] tw:bg-[rgba(255,255,255,0.5)] tw:px-3 tw:py-2 tw:text-[0.82rem] tw:font-medium tw:text-[#476884]">
-            <ShieldCheck className="tw:h-4 tw:w-4 tw:text-[#2f6db5]" />
-            Trusted by campus teams
-          </div>
-        </div>
+      <div className="tw:relative tw:z-10 tw:w-full tw:max-w-[31rem] tw:overflow-hidden tw:rounded-[40px] tw:border tw:border-white/70 tw:bg-[rgba(255,255,255,0.58)] tw:p-6 tw:shadow-[0_30px_80px_rgba(34,87,128,0.11)] tw:backdrop-blur-[20px] tw:xl:p-7">
+        <div
+          aria-hidden="true"
+          className="tw:absolute tw:inset-0 tw:opacity-60"
+          style={{
+            backgroundImage: `
+              linear-gradient(rgba(140,175,207,0.1) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(140,175,207,0.1) 1px, transparent 1px)
+            `,
+            backgroundSize: '58px 58px',
+            maskImage: 'linear-gradient(180deg, rgba(0,0,0,0.2), rgba(0,0,0,0.92))',
+          }}
+        />
 
-        <div className="tw:max-w-[35rem] tw:space-y-4">
-          <h1 className="tw:font-display tw:text-[clamp(2.35rem,5vw,4.4rem)] tw:font-semibold tw:leading-[0.96] tw:tracking-[-0.04em] tw:text-dwarpal-ink">
-            Fast approvals. Real-time tracking. Secure campus movement.
-          </h1>
-          <p className="tw:max-w-[31rem] tw:text-[1rem] tw:leading-7 tw:text-dwarpal-muted tw:sm:text-[1.05rem]">
-            DwarPal keeps student and faculty gatepasses in one secure flow, from request to approval to gate
-            verification, with the kind of calm clarity a modern campus expects.
-          </p>
-        </div>
-
-        <div className="tw:relative tw:flex tw:flex-1 tw:min-h-[320px] tw:items-end tw:justify-center tw:overflow-hidden tw:rounded-[32px] tw:border tw:border-white/60 tw:bg-[linear-gradient(180deg,rgba(255,255,255,0.68),rgba(236,245,255,0.86))] tw:px-4 tw:py-6 tw:shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_24px_60px_rgba(49,99,145,0.08)] tw:sm:min-h-[360px] tw:lg:min-h-[400px]">
+        <div className="tw:relative tw:flex tw:min-h-[34rem] tw:items-end tw:justify-center tw:overflow-hidden tw:rounded-[32px] tw:border tw:border-white/70 tw:bg-[linear-gradient(180deg,rgba(255,255,255,0.72),rgba(234,245,255,0.9))] tw:px-6 tw:py-8 tw:shadow-[inset_0_1px_0_rgba(255,255,255,0.84),0_22px_60px_rgba(49,99,145,0.08)]">
           <div
             aria-hidden="true"
-            className="tw:absolute tw:inset-0 tw:opacity-60"
+            className="tw:absolute tw:inset-0"
             style={{
-              backgroundImage: `
-                linear-gradient(rgba(140, 175, 207, 0.12) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(140, 175, 207, 0.12) 1px, transparent 1px)
+              background: `
+                radial-gradient(circle at center, rgba(150,213,255,0.18) 0, rgba(150,213,255,0.04) 28%, transparent 58%),
+                linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0))
               `,
-              backgroundSize: '56px 56px',
-              maskImage: 'linear-gradient(180deg, rgba(0,0,0,0.18), rgba(0,0,0,0.92))',
             }}
           />
 
-          <motion.div
+          <div
             aria-hidden="true"
-            className="tw:absolute tw:left-1/2 tw:top-10 tw:h-44 tw:w-44 tw:-translate-x-1/2 tw:rounded-full tw:bg-[rgba(129,194,255,0.24)] tw:blur-3xl"
-            style={{ x: haloShiftX, y: haloShiftY }}
-            animate={reduceMotion ? undefined : { scale: isActive ? 1.08 : 1 }}
-            transition={{ duration: 0.35, ease: 'easeOut' }}
+            className="tw:absolute tw:left-1/2 tw:top-12 tw:h-48 tw:w-48 tw:-translate-x-1/2 tw:rounded-full tw:bg-[rgba(129,194,255,0.26)] tw:blur-3xl"
+            style={{
+              transform: `translate3d(calc(-50% + (var(--track-x) * 20px)), calc(var(--track-y) * 18px), 0)`,
+            }}
           />
 
-          <motion.div
-            className="tw:absolute tw:bottom-6 tw:left-1/2 tw:h-8 tw:w-44 tw:-translate-x-1/2 tw:rounded-full tw:bg-[rgba(70,106,142,0.16)] tw:blur-xl"
-            style={{ scaleX: shadowScale }}
+          <div
+            aria-hidden="true"
+            className="tw:absolute tw:bottom-8 tw:left-1/2 tw:h-10 tw:w-48 tw:-translate-x-1/2 tw:rounded-full tw:bg-[rgba(70,106,142,0.16)] tw:blur-xl"
+            style={{
+              transform: `translateX(-50%) scaleX(calc(1 + (var(--track-y) * 0.08)))`,
+            }}
           />
 
-          <motion.div
+          <div
             className="tw:relative tw:flex tw:flex-col tw:items-center"
-            style={{ x: bodyShiftX, y: bodyShiftY, rotate: bodyRotate }}
-            animate={reduceMotion ? undefined : { y: [0, -8, 0] }}
-            transition={reduceMotion ? undefined : { duration: isActive ? 3.8 : 5.6, ease: 'easeInOut', repeat: Infinity }}
+            style={{
+              transform: `translate3d(calc(var(--track-x) * 10px), calc((var(--track-y) * 8px) + var(--idle-y)), 0) rotate(calc((var(--track-x) * 4deg) + var(--idle-rotate)))`,
+              transformStyle: 'preserve-3d',
+              willChange: 'transform',
+            }}
           >
-            <motion.div
-              className="tw:absolute tw:right-[-1rem] tw:top-[4.8rem] tw:flex tw:items-center tw:gap-2 tw:rounded-[20px] tw:border tw:border-white/70 tw:bg-[rgba(255,255,255,0.78)] tw:px-3 tw:py-2 tw:text-[0.78rem] tw:font-semibold tw:text-[#325676] tw:shadow-[0_18px_30px_rgba(47,94,136,0.16)]"
-              style={{ x: badgeShiftX }}
-              animate={reduceMotion ? undefined : { y: [0, -4, 0] }}
-              transition={reduceMotion ? undefined : { duration: 4.4, ease: 'easeInOut', repeat: Infinity }}
+            <div
+              className="tw:absolute tw:left-[-0.35rem] tw:top-[10.9rem] tw:h-[5.4rem] tw:w-6 tw:rounded-full tw:bg-[linear-gradient(180deg,rgba(196,224,255,0.95),rgba(166,200,234,0.84))] tw:shadow-[0_18px_28px_rgba(47,94,136,0.12)]"
+              style={{
+                transform: 'rotate(26deg)',
+                transformOrigin: 'top center',
+              }}
+            />
+
+            <div
+              className="tw:absolute tw:right-[-0.2rem] tw:top-[9.6rem]"
+              style={{
+                transform: `translate3d(calc(var(--track-x) * 2px), calc(var(--track-y) * 1px), 0)`,
+              }}
             >
-              <span className="tw:flex tw:h-8 tw:w-8 tw:items-center tw:justify-center tw:rounded-2xl tw:bg-[linear-gradient(180deg,#3e82c9,#285f9e)] tw:text-white">
-                <ScanLine className="tw:h-4 tw:w-4" />
-              </span>
-              Gate synced
-            </motion.div>
+              <div
+                className="tw:flex tw:flex-col tw:items-center"
+                style={{
+                  transformOrigin: 'top center',
+                  transform: 'rotate(12deg)',
+                  animation: reduceMotion ? 'none' : 'dwarpal-wave 1.6s ease-in-out 0.35s 1 both',
+                }}
+              >
+                <div className="tw:h-[4.7rem] tw:w-6 tw:rounded-full tw:bg-[linear-gradient(180deg,rgba(196,224,255,0.96),rgba(166,200,234,0.84))] tw:shadow-[0_18px_28px_rgba(47,94,136,0.12)]" />
+                <div className="tw:-mt-2 tw:flex tw:h-9 tw:w-9 tw:items-center tw:justify-center tw:rounded-[1.2rem] tw:border tw:border-white/80 tw:bg-[linear-gradient(180deg,#fbfdff,#d6ebff)] tw:shadow-[0_12px_24px_rgba(47,94,136,0.16)]">
+                  <div className="tw:h-2.5 tw:w-2.5 tw:rounded-full tw:bg-[#7cc7ff]" />
+                </div>
+              </div>
+            </div>
 
             <div className="tw:relative tw:flex tw:flex-col tw:items-center">
-              <div className="tw:absolute tw:-top-5 tw:flex tw:flex-col tw:items-center">
+              <div className="tw:absolute tw:-top-6 tw:flex tw:flex-col tw:items-center">
                 <div className="tw:h-6 tw:w-[3px] tw:rounded-full tw:bg-[linear-gradient(180deg,rgba(89,139,185,0.95),rgba(89,139,185,0.35))]" />
-                <motion.div
-                  className="tw:h-4 tw:w-4 tw:rounded-full tw:border tw:border-white/80 tw:bg-[linear-gradient(180deg,#fefefe,#bddfff)] tw:shadow-[0_8px_18px_rgba(78,124,165,0.22)]"
-                  animate={reduceMotion ? undefined : { scale: [1, 1.08, 1] }}
-                  transition={reduceMotion ? undefined : { duration: 3.2, ease: 'easeInOut', repeat: Infinity }}
-                />
+                <div className="tw:h-4 tw:w-4 tw:rounded-full tw:border tw:border-white/80 tw:bg-[linear-gradient(180deg,#fefefe,#bddfff)] tw:shadow-[0_8px_18px_rgba(78,124,165,0.22)]" />
               </div>
 
-              <motion.div
-                className="tw:relative tw:h-[11.5rem] tw:w-[9.8rem] tw:rounded-[2.6rem] tw:border tw:border-white/80 tw:bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(220,237,255,0.92))] tw:shadow-[0_28px_48px_rgba(47,94,136,0.18)]"
+              <div
+                className="tw:relative tw:h-[12rem] tw:w-[10.2rem] tw:rounded-[2.7rem] tw:border tw:border-white/80 tw:bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(220,237,255,0.92))] tw:shadow-[0_28px_48px_rgba(47,94,136,0.18)]"
                 style={{
-                  rotateX: headRotateX,
-                  rotateY: headRotateY,
-                  x: faceShiftX,
-                  y: faceShiftY,
-                  transformPerspective: 1100,
+                  transform: `perspective(1100px) rotateX(calc(var(--track-y) * -5deg)) rotateY(calc(var(--track-x) * 8deg)) translate3d(calc(var(--track-x) * 6px), calc(var(--track-y) * 4px), 0)`,
+                  transformStyle: 'preserve-3d',
+                  willChange: 'transform',
                 }}
               >
                 <div className="tw:absolute tw:inset-x-4 tw:top-3 tw:h-2 tw:rounded-full tw:bg-white/70" />
-                <div className="tw:absolute tw:inset-[0.75rem] tw:rounded-[2rem] tw:bg-[linear-gradient(180deg,#1f4367,#153453)] tw:shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]">
+                <div className="tw:absolute tw:inset-[0.78rem] tw:rounded-[2rem] tw:bg-[linear-gradient(180deg,#1f4367,#153453)] tw:shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]">
                   <div className="tw:absolute tw:inset-x-4 tw:top-4 tw:h-[1px] tw:bg-white/12" />
-                  <div className="tw:absolute tw:inset-x-0 tw:top-6 tw:flex tw:justify-center">
-                    <span className="tw:rounded-full tw:bg-[rgba(126,191,255,0.14)] tw:px-3 tw:py-1 tw:text-[0.62rem] tw:font-semibold tw:uppercase tw:tracking-[0.24em] tw:text-[#b9ddff]">
-                      Buddy online
-                    </span>
-                  </div>
-                  <div className="tw:absolute tw:left-1/2 tw:top-[4.4rem] tw:flex tw:-translate-x-1/2 tw:items-center tw:gap-3">
+
+                  <div className="tw:absolute tw:left-1/2 tw:top-[4.55rem] tw:flex tw:-translate-x-1/2 tw:items-center tw:gap-3">
                     {[0, 1].map((eye) => (
                       <div
                         key={eye}
-                        className="tw:flex tw:h-11 tw:w-11 tw:items-center tw:justify-center tw:rounded-[1.1rem] tw:bg-[rgba(164,219,255,0.16)] tw:shadow-[inset_0_1px_0_rgba(255,255,255,0.07)]"
+                        className="tw:relative tw:flex tw:h-11 tw:w-11 tw:items-center tw:justify-center tw:overflow-hidden tw:rounded-[1.1rem] tw:bg-[rgba(164,219,255,0.16)] tw:shadow-[inset_0_1px_0_rgba(255,255,255,0.07)]"
                       >
-                        <motion.div
-                          className="tw:flex tw:h-[1.35rem] tw:w-[1.35rem] tw:items-center tw:justify-center tw:rounded-full tw:bg-[linear-gradient(180deg,#93d8ff,#d9f5ff)] tw:shadow-[0_0_18px_rgba(123,210,255,0.4)]"
-                          style={{ x: eyeShiftX, y: eyeShiftY }}
-                          animate={reduceMotion ? undefined : { scaleY: [1, 1, 0.18, 1, 1] }}
-                          transition={
-                            reduceMotion
-                              ? undefined
-                              : {
-                                  duration: 6.4,
-                                  ease: 'easeInOut',
-                                  repeat: Infinity,
-                                  repeatDelay: eye === 0 ? 1.2 : 1.35,
-                                  times: [0, 0.42, 0.47, 0.54, 1],
-                                }
-                          }
+                        <div
+                          className="tw:flex tw:h-[1.38rem] tw:w-[1.38rem] tw:items-center tw:justify-center tw:rounded-full tw:bg-[linear-gradient(180deg,#93d8ff,#d9f5ff)] tw:shadow-[0_0_18px_rgba(123,210,255,0.45)]"
+                          style={{
+                            transform: `translate3d(calc(var(--track-x) * 4px), calc(var(--track-y) * 3px), 0)`,
+                            willChange: 'transform',
+                          }}
+                        >
+                          <span className="tw:h-1.5 tw:w-1.5 tw:rounded-full tw:bg-white/90" />
+                        </div>
+                        <div
+                          className="tw:absolute tw:inset-0 tw:origin-center tw:bg-[linear-gradient(180deg,#153453,#1b3f61)]"
+                          style={{
+                            transform: 'scaleY(0)',
+                            animation: reduceMotion
+                              ? 'none'
+                              : `dwarpal-blink 6.2s ease-in-out ${eye === 0 ? '1.2s' : '1.32s'} infinite`,
+                          }}
                         />
                       </div>
                     ))}
                   </div>
+
                   <div className="tw:absolute tw:bottom-6 tw:left-1/2 tw:h-3 tw:w-12 tw:-translate-x-1/2 tw:rounded-full tw:bg-[rgba(184,230,255,0.14)]" />
                 </div>
-              </motion.div>
+              </div>
 
               <div className="tw:relative tw:-mt-2 tw:flex tw:w-[11rem] tw:justify-between">
                 <div className="tw:h-16 tw:w-5 tw:rounded-full tw:bg-[linear-gradient(180deg,rgba(196,224,255,0.95),rgba(163,197,232,0.85))] tw:shadow-[0_18px_28px_rgba(47,94,136,0.12)]" />
                 <div className="tw:h-16 tw:w-5 tw:rounded-full tw:bg-[linear-gradient(180deg,rgba(196,224,255,0.95),rgba(163,197,232,0.85))] tw:shadow-[0_18px_28px_rgba(47,94,136,0.12)]" />
               </div>
 
-              <div className="tw:relative tw:-mt-7 tw:h-[8.9rem] tw:w-[11.2rem] tw:rounded-[2.8rem] tw:border tw:border-white/80 tw:bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(214,232,252,0.9))] tw:shadow-[0_28px_46px_rgba(47,94,136,0.18)]">
-                <div className="tw:absolute tw:inset-x-5 tw:top-5 tw:flex tw:items-center tw:justify-between">
-                  <span className="tw:text-[0.68rem] tw:font-semibold tw:uppercase tw:tracking-[0.22em] tw:text-[#66809a]">Campus flow</span>
-                  <span className="tw:h-2.5 tw:w-2.5 tw:rounded-full tw:bg-[#54c67d]" />
+              <div
+                className="tw:relative tw:-mt-7 tw:h-[9.2rem] tw:w-[11.6rem] tw:rounded-[2.9rem] tw:border tw:border-white/80 tw:bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(214,232,252,0.92))] tw:shadow-[0_28px_46px_rgba(47,94,136,0.18)]"
+                style={{
+                  transform: `translate3d(calc(var(--track-x) * 2px), calc(var(--track-y) * 1px), 0)`,
+                }}
+              >
+                <div className="tw:absolute tw:inset-x-6 tw:top-6 tw:h-[1px] tw:bg-[rgba(86,132,179,0.16)]" />
+                <div className="tw:absolute tw:left-1/2 tw:top-[2.55rem] tw:flex tw:h-[4.1rem] tw:w-[5.1rem] tw:-translate-x-1/2 tw:items-center tw:justify-center tw:rounded-[1.9rem] tw:bg-[linear-gradient(180deg,#2f6db5,#1f4e84)] tw:text-white tw:shadow-[0_18px_26px_rgba(31,78,132,0.34)]">
+                  <img src={logo} alt="" aria-hidden="true" className="tw:h-8 tw:w-8 tw:object-contain" />
                 </div>
-                <div className="tw:absolute tw:left-1/2 tw:top-[2.6rem] tw:flex tw:h-[3.9rem] tw:w-[4.9rem] tw:-translate-x-1/2 tw:flex-col tw:items-center tw:justify-center tw:rounded-[1.8rem] tw:bg-[linear-gradient(180deg,#2f6db5,#1f4e84)] tw:text-white tw:shadow-[0_18px_26px_rgba(31,78,132,0.34)]">
-                  <ShieldCheck className="tw:h-5 tw:w-5" />
-                  <span className="tw:mt-1 tw:text-[0.62rem] tw:font-semibold tw:uppercase tw:tracking-[0.24em]">DP</span>
-                </div>
-                <div className="tw:absolute tw:bottom-5 tw:left-1/2 tw:flex tw:w-[8rem] tw:-translate-x-1/2 tw:justify-between">
+                <div className="tw:absolute tw:bottom-6 tw:left-1/2 tw:flex tw:w-[8.4rem] tw:-translate-x-1/2 tw:justify-between">
                   <span className="tw:h-2 tw:w-8 tw:rounded-full tw:bg-[rgba(56,107,167,0.18)]" />
                   <span className="tw:h-2 tw:w-4 tw:rounded-full tw:bg-[rgba(56,107,167,0.12)]" />
                   <span className="tw:h-2 tw:w-3 tw:rounded-full tw:bg-[rgba(56,107,167,0.12)]" />
                 </div>
               </div>
             </div>
-          </motion.div>
-        </div>
-
-        <div className="tw:grid tw:gap-3 tw:sm:grid-cols-3">
-          {STATUS_ITEMS.map(({ label, value, icon: Icon }) => (
-            <div
-              key={label}
-              className="tw:rounded-[24px] tw:border tw:border-white/65 tw:bg-[rgba(255,255,255,0.7)] tw:p-4 tw:shadow-[0_18px_30px_rgba(69,111,148,0.08)]"
-            >
-              <div className="tw:flex tw:items-center tw:gap-3">
-                <div className="tw:flex tw:h-10 tw:w-10 tw:items-center tw:justify-center tw:rounded-2xl tw:bg-[rgba(47,109,181,0.1)] tw:text-[#2f6db5]">
-                  <Icon className="tw:h-4.5 tw:w-4.5" />
-                </div>
-                <div className="tw:min-w-0">
-                  <p className="tw:text-[0.76rem] tw:font-medium tw:uppercase tw:tracking-[0.18em] tw:text-[#6f859a]">{label}</p>
-                  <p className="tw:mt-1 tw:text-[1rem] tw:font-semibold tw:text-dwarpal-ink">{value}</p>
-                </div>
-              </div>
-            </div>
-          ))}
+          </div>
         </div>
       </div>
     </section>

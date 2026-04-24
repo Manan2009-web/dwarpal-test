@@ -113,10 +113,10 @@ export default function LoginForm({
   const reduceMotion = useReducedMotion()
 
   return (
-    <section className="tw:relative tw:flex tw:h-full tw:flex-col tw:bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(247,251,255,0.92))] tw:p-5 tw:sm:p-7 tw:lg:p-8">
+    <section className="tw:relative tw:flex tw:h-full tw:flex-col tw:bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,251,255,0.94))] tw:p-4 tw:sm:p-6 tw:lg:p-8">
       <div
         aria-hidden="true"
-        className="tw:absolute tw:inset-x-0 tw:top-0 tw:h-56 tw:bg-[radial-gradient(circle_at_top,rgba(202,229,255,0.56),transparent_72%)]"
+        className="tw:absolute tw:inset-x-0 tw:top-0 tw:h-44 tw:bg-[radial-gradient(circle_at_top,rgba(202,229,255,0.42),transparent_72%)]"
       />
 
       <motion.div
@@ -127,31 +127,22 @@ export default function LoginForm({
       >
         <motion.div
           variants={itemVariants}
-          className="tw:mx-auto tw:w-full tw:max-w-[30rem] tw:rounded-[30px] tw:border tw:border-white/70 tw:bg-[rgba(255,255,255,0.72)] tw:p-5 tw:shadow-[0_30px_80px_rgba(34,87,128,0.12)] tw:backdrop-blur-[20px] tw:sm:p-8"
+          className="tw:mx-auto tw:w-full tw:max-w-[29rem] tw:rounded-[32px] tw:border tw:border-white/80 tw:bg-[rgba(255,255,255,0.82)] tw:p-5 tw:shadow-[0_24px_72px_rgba(34,87,128,0.12)] tw:backdrop-blur-[22px] tw:sm:p-7"
         >
           <div className="tw:space-y-6">
-            <motion.div variants={itemVariants} className="tw:flex tw:items-center tw:gap-4">
-              <div className="tw:flex tw:h-14 tw:w-14 tw:items-center tw:justify-center tw:rounded-[20px] tw:border tw:border-white/75 tw:bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(224,239,255,0.94))] tw:shadow-[0_18px_34px_rgba(34,87,128,0.12)]">
-                <img src={logo} alt="DwarPal logo" className="tw:h-9 tw:w-9 tw:object-contain" />
+            <motion.div
+              variants={itemVariants}
+              className="tw:flex tw:flex-col tw:items-center tw:gap-4 tw:text-center tw:sm:flex-row tw:sm:items-center tw:sm:text-left"
+            >
+              <div className="tw:flex tw:h-20 tw:w-20 tw:flex-none tw:items-center tw:justify-center tw:rounded-[26px] tw:border tw:border-white/80 tw:bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(224,239,255,0.94))] tw:shadow-[0_18px_34px_rgba(34,87,128,0.12)]">
+                <img src={logo} alt="DwarPal logo" className="tw:h-14 tw:w-14 tw:object-contain" />
               </div>
-              <div className="tw:min-w-0">
-                <p className="tw:text-[0.76rem] tw:font-semibold tw:uppercase tw:tracking-[0.26em] tw:text-[#5d7b95]">
+              <div className="tw:min-w-0 tw:space-y-1">
+                <p className="tw:font-display tw:text-[2rem] tw:font-semibold tw:leading-none tw:tracking-[-0.05em] tw:text-dwarpal-ink tw:sm:text-[2.25rem]">
                   DwarPal
                 </p>
-                <h2 className="tw:font-display tw:text-[1.8rem] tw:font-semibold tw:tracking-[-0.03em] tw:text-dwarpal-ink">
-                  Welcome back
-                </h2>
+                <p className="tw:text-[0.96rem] tw:font-medium tw:text-dwarpal-muted">Sign in to continue</p>
               </div>
-            </motion.div>
-
-            <motion.div variants={itemVariants} className="tw:space-y-3">
-              <div className="tw:inline-flex tw:items-center tw:gap-2 tw:rounded-full tw:border tw:border-[rgba(90,130,165,0.18)] tw:bg-[rgba(242,248,255,0.86)] tw:px-3 tw:py-2 tw:text-[0.73rem] tw:font-semibold tw:uppercase tw:tracking-[0.22em] tw:text-[#56728b]">
-                Smart Digital Gatepass System
-              </div>
-              <p className="tw:text-[1rem] tw:leading-7 tw:text-dwarpal-muted">
-                Sign in to manage student and faculty gatepasses digitally with secure approvals, real-time updates,
-                and campus-ready accountability.
-              </p>
             </motion.div>
 
             <motion.form variants={formVariants} onSubmit={onSubmit} noValidate className="tw:space-y-5">
@@ -270,20 +261,9 @@ export default function LoginForm({
                   Sign up
                 </Link>
               </p>
-              <p className="tw:text-[0.84rem] tw:text-[#7890a5]">
-                Google sign-in is reserved for future campus SSO support.
-              </p>
             </motion.div>
           </div>
         </motion.div>
-
-        <motion.p
-          variants={itemVariants}
-          className="tw:mx-auto tw:mt-6 tw:max-w-[28rem] tw:text-center tw:text-[0.82rem] tw:leading-6 tw:text-[#6b8398]"
-        >
-          DwarPal helps colleges digitize gatepass workflows with fast approvals, verified movement logs, and cleaner
-          operational visibility.
-        </motion.p>
       </motion.div>
     </section>
   )
