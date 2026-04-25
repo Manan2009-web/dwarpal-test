@@ -4,14 +4,91 @@ function normalizeApiBaseUrl(value) {
   return String(value || '').trim().replace(/\/+$/, '')
 }
 
-const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL) || '/api'
+const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
+
+function isLocalHostname(value) {
+  return LOCAL_HOSTNAMES.has(String(value || '').trim().toLowerCase())
+}
+
+function safeParseUrl(value) {
+  try {
+    if (typeof window !== 'undefined') {
+      return new URL(value, window.location.origin)
+    }
+
+    return new URL(value)
+  } catch {
+    return null
+  }
+}
+
+function shouldRewriteEnvApiBaseUrlForLan(url) {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  const currentHostname = window.location.hostname
+
+  if (!currentHostname || isLocalHostname(currentHostname)) {
+    return false
+  }
+
+  const parsedUrl = safeParseUrl(url)
+  return Boolean(parsedUrl && isLocalHostname(parsedUrl.hostname))
+}
+
+export function getApiBaseUrl() {
+  const envApiBaseUrl = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL)
+
+  if (envApiBaseUrl) {
+    if (shouldRewriteEnvApiBaseUrlForLan(envApiBaseUrl)) {
+      const parsedUrl = safeParseUrl(envApiBaseUrl)
+
+      if (parsedUrl) {
+        parsedUrl.hostname = window.location.hostname
+        return normalizeApiBaseUrl(parsedUrl.toString())
+      }
+    }
+
+    return envApiBaseUrl
+  }
+
+  if (typeof window === 'undefined') {
+    return '/api'
+  }
+
+  if (isLocalHostname(window.location.hostname)) {
+    return 'http://localhost:5000/api'
+  }
+
+  return `http://${window.location.hostname}:5000/api`
+}
+
+export const API_BASE_URL = getApiBaseUrl()
+
+if (import.meta.env.DEV) {
+  console.info(`Using API: ${API_BASE_URL}`)
+}
+
+export function buildApiUrl(path = '') {
+  const normalizedPath = String(path || '')
+
+  if (!normalizedPath) {
+    return API_BASE_URL
+  }
+
+  return normalizedPath.startsWith('/') ? `${API_BASE_URL}${normalizedPath}` : `${API_BASE_URL}/${normalizedPath}`
+}
 
 export const AUTH_TOKEN_KEY = 'dwarpal-auth-token'
 export const AUTH_USER_KEY = 'dwarpal-auth-user'
 export const BIOMETRIC_DEVICE_KEY = 'dwarpal-biometric-device-id'
+export const PORTAL_ACCESS_TOKEN_KEY = 'dwarpal-portal-access-token'
+export const PORTAL_ACCESS_TYPE_KEY = 'dwarpal-portal-access-type'
 const DEFAULT_PHONE_COUNTRY_CODE = '+91'
 export const DEFAULT_WORKSPACE_PAGE_SIZE = 10
 const DEFAULT_API_TIMEOUT_MS = Number(import.meta.env.VITE_API_REQUEST_TIMEOUT_MS) || 15000
+const DEFAULT_API_RETRY_ATTEMPTS = 2
 const DEFAULT_AUTH_TIMEOUT_MS = Number(import.meta.env.VITE_AUTH_REQUEST_TIMEOUT_MS) || 25000
 const DEFAULT_REGISTER_SEND_TIMEOUT_MS =
   Number(import.meta.env.VITE_REGISTER_SEND_TIMEOUT_MS) || Math.max(DEFAULT_AUTH_TIMEOUT_MS, 35000)
@@ -157,6 +234,24 @@ function createRequestSignal(signal, timeoutMs) {
   }
 }
 
+function shouldRetryRequest(method) {
+  return ['GET', 'HEAD', 'OPTIONS'].includes(String(method || '').trim().toUpperCase())
+}
+
+function shouldRetryStatus(status) {
+  return status === 408 || status === 425 || status === 429 || status >= 500
+}
+
+function delay(ms) {
+  if (!Number.isFinite(ms) || ms <= 0) {
+    return Promise.resolve()
+  }
+
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
+}
+
 function readAuthToken() {
   if (typeof window === 'undefined') return ''
 
@@ -176,8 +271,64 @@ function readAuthToken() {
   }
 }
 
+function readPortalAccessToken() {
+  if (typeof window === 'undefined') return ''
+
+  try {
+    return window.sessionStorage.getItem(PORTAL_ACCESS_TOKEN_KEY) || ''
+  } catch {
+    return ''
+  }
+}
+
+function readPortalAccessType() {
+  if (typeof window === 'undefined') return ''
+
+  try {
+    return window.sessionStorage.getItem(PORTAL_ACCESS_TYPE_KEY) || ''
+  } catch {
+    return ''
+  }
+}
+
 export function getStoredAuthToken() {
   return readAuthToken()
+}
+
+export function getPortalAccessSession() {
+  const token = readPortalAccessToken()
+  const accessType = readPortalAccessType()
+
+  if (!token || !accessType) {
+    return null
+  }
+
+  return {
+    token,
+    accessType,
+  }
+}
+
+export function storePortalAccessSession({ token, accessType }) {
+  if (typeof window === 'undefined' || !token || !accessType) return
+
+  try {
+    window.sessionStorage.setItem(PORTAL_ACCESS_TOKEN_KEY, token)
+    window.sessionStorage.setItem(PORTAL_ACCESS_TYPE_KEY, accessType)
+  } catch {
+    // Ignore storage write failures so access-gating remains recoverable.
+  }
+}
+
+export function clearPortalAccessSession() {
+  if (typeof window === 'undefined') return
+
+  try {
+    window.sessionStorage.removeItem(PORTAL_ACCESS_TOKEN_KEY)
+    window.sessionStorage.removeItem(PORTAL_ACCESS_TYPE_KEY)
+  } catch {
+    // Ignore storage cleanup failures.
+  }
 }
 
 export function getRealtimeBaseUrl() {
@@ -196,9 +347,14 @@ export function getRealtimeBaseUrl() {
 function buildHeaders(customHeaders = {}) {
   const headers = new Headers(customHeaders)
   const token = readAuthToken()
+  const portalAccessToken = readPortalAccessToken()
 
   if (token) {
     headers.set('Authorization', `Bearer ${token}`)
+  }
+
+  if (portalAccessToken) {
+    headers.set('x-portal-access-token', portalAccessToken)
   }
 
   return headers
@@ -546,113 +702,158 @@ function buildRegistrationIdentityPayload(payload = {}) {
   }
 }
 
-export async function apiRequest(path, { method = 'GET', body, headers, signal, timeoutMs } = {}) {
-  const requestHeaders = buildHeaders(headers)
-  const requestUrl = `${API_BASE_URL}${path}`
+export async function apiRequest(path, { method = 'GET', body, headers, signal, timeoutMs, retryAttempts } = {}) {
+  const normalizedMethod = String(method || 'GET').trim().toUpperCase() || 'GET'
+  const requestUrl = buildApiUrl(path)
   const resolvedTimeoutMs = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_API_TIMEOUT_MS
-  const requestController = createRequestSignal(signal, resolvedTimeoutMs)
   const isAuthRequest = shouldLogAuthRequest(path)
-  const requestInit = {
-    method,
-    headers: requestHeaders,
-    credentials: 'include',
-    signal: requestController.signal,
-  }
-
-  if (body !== undefined) {
-    if (body instanceof FormData) {
-      requestInit.body = body
-    } else {
-      requestHeaders.set('Content-Type', 'application/json')
-      requestInit.body = JSON.stringify(body)
-    }
-  }
+  const resolvedRetryAttempts =
+    Number.isInteger(retryAttempts) && retryAttempts >= 0
+      ? retryAttempts
+      : shouldRetryRequest(normalizedMethod)
+        ? DEFAULT_API_RETRY_ATTEMPTS
+        : 0
+  const totalAttempts = resolvedRetryAttempts + 1
 
   if (isAuthRequest) {
     logAuthDebug('request start', {
       body: sanitizeAuthDebugBody(body),
-      method,
+      method: normalizedMethod,
       path,
       requestUrl,
     })
   }
 
-  let response = null
-  let payload = null
-  let responsePreview = ''
-  let contentType = ''
-
-  try {
-    response = await fetch(requestUrl, requestInit)
-    const parsedResponse = await parseApiResponse(response)
-    payload = parsedResponse.payload
-    responsePreview = parsedResponse.rawText.slice(0, 240)
-    contentType = parsedResponse.contentType
-  } catch (error) {
-    if (requestController.didTimeout()) {
-      const seconds = Math.ceil(resolvedTimeoutMs / 1000)
-      throw new ApiError(
-        `The DwarPal backend did not respond within ${seconds} seconds.`,
-        408,
-        { code: 'REQUEST_TIMEOUT', path, requestUrl },
-      )
+  for (let attempt = 0; attempt < totalAttempts; attempt += 1) {
+    const requestHeaders = buildHeaders(headers)
+    const requestController = createRequestSignal(signal, resolvedTimeoutMs)
+    const requestInit = {
+      method: normalizedMethod,
+      headers: requestHeaders,
+      credentials: 'include',
+      signal: requestController.signal,
     }
 
-    if (signal?.aborted || error?.name === 'AbortError') {
-      throw error
+    if (body !== undefined) {
+      if (body instanceof FormData) {
+        requestInit.body = body
+      } else {
+        requestHeaders.set('Content-Type', 'application/json')
+        requestInit.body = JSON.stringify(body)
+      }
     }
 
-    if (!response) {
-      throw new ApiError(
-        `Unable to reach the DwarPal backend at ${API_BASE_URL}. Please start the backend server and try again.`,
-        0,
-        {
+    let response = null
+    let payload = null
+    let responsePreview = ''
+    let contentType = ''
+
+    try {
+      response = await fetch(requestUrl, requestInit)
+      const parsedResponse = await parseApiResponse(response)
+      payload = parsedResponse.payload
+      responsePreview = parsedResponse.rawText.slice(0, 240)
+      contentType = parsedResponse.contentType
+    } catch (error) {
+      requestController.cleanup()
+
+      if (requestController.didTimeout()) {
+        if (attempt < totalAttempts - 1) {
+          await delay(250 * (attempt + 1))
+          continue
+        }
+
+        const seconds = Math.ceil(resolvedTimeoutMs / 1000)
+        throw new ApiError(
+          `The DwarPal backend did not respond within ${seconds} seconds.`,
+          408,
+          { code: 'REQUEST_TIMEOUT', path, requestUrl },
+        )
+      }
+
+      if (signal?.aborted || error?.name === 'AbortError') {
+        throw error
+      }
+
+      if (!response) {
+        if (attempt < totalAttempts - 1) {
+          await delay(250 * (attempt + 1))
+          continue
+        }
+
+        throw new ApiError('Network error. Unable to reach the backend.', 0, {
           code: 'NETWORK_ERROR',
           cause: error?.message || String(error || ''),
           path,
           requestUrl,
-        },
+        })
+      }
+
+      payload = null
+    } finally {
+      requestController.cleanup()
+    }
+
+    if ((!response.ok || payload?.success === false) && attempt < totalAttempts - 1 && shouldRetryStatus(response.status)) {
+      await delay(250 * (attempt + 1))
+      continue
+    }
+
+    if (!response.ok || payload?.success === false) {
+      throw new ApiError(
+        payload?.message || getDefaultErrorMessage(response.status, path),
+        response.status,
+        buildApiErrorPayload(payload, {
+          contentType,
+          path,
+          requestUrl,
+          responsePreview,
+        }),
       )
     }
 
-    payload = null
-  } finally {
-    requestController.cleanup()
-  }
-
-  if (!response.ok || payload?.success === false) {
-    throw new ApiError(
-      payload?.message || getDefaultErrorMessage(response.status, path),
-      response.status,
-      buildApiErrorPayload(payload, {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throw new ApiError('DwarPal backend returned an invalid response.', 502, {
+        code: 'INVALID_API_RESPONSE',
         contentType,
         path,
         requestUrl,
         responsePreview,
-      }),
-    )
+      })
+    }
+
+    if (isAuthRequest) {
+      logAuthDebug('response success', {
+        message: payload?.message || '',
+        method: normalizedMethod,
+        path,
+        requestUrl,
+        status: response.status,
+      })
+    }
+
+    return payload
   }
 
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-    throw new ApiError('DwarPal backend returned an invalid response.', 502, {
-      code: 'INVALID_API_RESPONSE',
-      contentType,
-      path,
-      requestUrl,
-      responsePreview,
-    })
-  }
+  throw new ApiError('Network error. Unable to reach the backend.', 0, {
+    code: 'NETWORK_ERROR',
+    path,
+    requestUrl,
+  })
+}
 
-  if (isAuthRequest) {
-    logAuthDebug('response success', {
-      message: payload?.message || '',
-      method,
-      path,
-      requestUrl,
-      status: response.status,
-    })
-  }
+export async function checkBackendHealth({
+  signal,
+  timeoutMs = DEFAULT_BACKEND_WARMUP_TIMEOUT_MS,
+  retryAttempts = DEFAULT_API_RETRY_ATTEMPTS,
+} = {}) {
+  const payload = await apiRequest('/health', {
+    signal,
+    timeoutMs,
+    retryAttempts,
+  })
 
+  lastBackendWarmupAt = Date.now()
   return payload
 }
 
@@ -664,8 +865,7 @@ export async function warmBackendForAuth({ signal, force = false, timeoutMs = DE
   }
 
   try {
-    await apiRequest('/health', { signal, timeoutMs })
-    lastBackendWarmupAt = Date.now()
+    await checkBackendHealth({ signal, timeoutMs })
     return true
   } catch {
     return false
@@ -693,6 +893,8 @@ function toUiUser(user, session = null) {
     phone: user.phone || '',
     role: normalizedRole || 'student',
     semester: user.semester || null,
+    createdByCao: Boolean(user.createdByCao),
+    mustChangePassword: Boolean(user.mustChangePassword),
     profileImageUrl: user.profileImageUrl || user.profileImage || null,
     isActive: user.isActive ?? true,
     hasBiometricCredentials: Boolean(user.hasBiometricCredentials),
@@ -1421,6 +1623,82 @@ export async function loginUser(identifier, password) {
   return user
 }
 
+export async function requestPortalAccess(accessType, accessId, accessPassword) {
+  const response = await apiRequest('/auth/portal-access', {
+    method: 'POST',
+    timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
+    body: {
+      accessType,
+      accessId,
+      accessPassword,
+    },
+  })
+
+  const portalAccess = {
+    accessType: response?.data?.accessType || accessType,
+    token: response?.data?.token || '',
+  }
+
+  if (portalAccess.token && portalAccess.accessType) {
+    storePortalAccessSession(portalAccess)
+  }
+
+  return {
+    message: response?.message || 'Portal access granted successfully.',
+    ...portalAccess,
+  }
+}
+
+export async function startStudentLogin({ identifier = '', password = '', loginToken = '', resend = false } = {}) {
+  const response = await apiRequest('/auth/student-login-start', {
+    method: 'POST',
+    timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
+    body: loginToken
+      ? {
+          loginToken,
+          resend,
+        }
+      : {
+          identifier,
+          password,
+        },
+  })
+
+  return {
+    message: response?.message || 'OTP sent to the registered student email.',
+    loginToken: response?.data?.loginToken || loginToken || '',
+    maskedEmail: response?.data?.maskedEmail || '',
+    cooldownSeconds: Number(response?.data?.cooldownSeconds || 45),
+    expiresInSeconds: Number(response?.data?.expiresInSeconds || 300),
+  }
+}
+
+export async function verifyStudentLoginOtp(loginToken, otp) {
+  const response = await apiRequest('/auth/student-login-verify-otp', {
+    method: 'POST',
+    timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
+    body: {
+      loginToken,
+      otp,
+    },
+  })
+
+  if (response?.data?.token) {
+    storeAuthToken(response.data.token)
+  }
+
+  const user = toUiUser(response?.data?.user, { authMethod: 'student-email-otp' })
+
+  if (user) {
+    storeAuthUser(user)
+  }
+
+  return {
+    message: response?.message || 'Student login successful.',
+    user,
+  }
+}
+
 export async function checkRegistrationAvailability(payload) {
   const response = await apiRequest('/auth/register/check-availability', {
     method: 'POST',
@@ -1633,6 +1911,44 @@ export async function resetForgotPassword(email, otp, newPassword, confirmPasswo
   return {
     message: response?.message || 'Password reset successful. You can now sign in with your new password.',
     email: response?.data?.email || '',
+  }
+}
+
+export async function requestPasswordChange() {
+  const response = await apiRequest('/auth/request-password-change', {
+    method: 'POST',
+    timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
+  })
+
+  return {
+    message: response?.message || 'Password change OTP sent successfully.',
+    email: response?.data?.email || '',
+    maskedEmail: response?.data?.maskedEmail || '',
+    cooldownSeconds: Number(response?.data?.cooldownSeconds || 45),
+    expiresInSeconds: Number(response?.data?.expiresInSeconds || 300),
+  }
+}
+
+export async function confirmPasswordChange(otp, newPassword, confirmPassword = '') {
+  const response = await apiRequest('/auth/confirm-password-change', {
+    method: 'POST',
+    timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
+    body: {
+      otp,
+      newPassword,
+      confirmPassword,
+    },
+  })
+
+  const user = toUiUser(response?.data?.user)
+
+  if (user) {
+    storeAuthUser(user)
+  }
+
+  return {
+    message: response?.message || 'Password changed successfully.',
+    user,
   }
 }
 
@@ -2472,6 +2788,54 @@ function buildQueryString(params = {}) {
   return queryString ? `?${queryString}` : ''
 }
 
+function buildAdminStudentPayload(student = {}) {
+  return {
+    fullName: String(student.fullName || student.name || '').trim(),
+    email: String(student.email || '').trim().toLowerCase(),
+    enrollmentNo: String(student.enrollmentNo || student.enrollment || '').trim(),
+    phone: String(student.phone || '').trim(),
+    program: student.program,
+    department: student.department,
+    semester: student.semester,
+    temporaryPassword: String(student.temporaryPassword || '').trim(),
+  }
+}
+
+export async function fetchAdminStudents(params = {}, signal) {
+  const payload = await apiRequest(`/admin/students${buildQueryString(params)}`, { signal })
+  return {
+    students: Array.isArray(payload?.data?.students) ? payload.data.students : [],
+    options: payload?.data?.options || null,
+    meta: payload?.meta || {},
+  }
+}
+
+export async function createAdminStudent(student = {}) {
+  const payload = await apiRequest('/admin/students', {
+    method: 'POST',
+    body: buildAdminStudentPayload(student),
+  })
+
+  return payload?.data || null
+}
+
+export async function updateAdminStudent(studentId, student = {}) {
+  const payload = await apiRequest(`/admin/students/${studentId}`, {
+    method: 'PUT',
+    body: buildAdminStudentPayload(student),
+  })
+
+  return payload?.data || null
+}
+
+export async function deleteAdminStudent(studentId) {
+  const payload = await apiRequest(`/admin/students/${studentId}`, {
+    method: 'DELETE',
+  })
+
+  return payload?.data || null
+}
+
 export async function fetchAdminExportOptions(params = {}, signal) {
   const payload = await apiRequest(`/admin/export/options${buildQueryString(params)}`, { signal })
   return payload?.data || null
@@ -2552,7 +2916,7 @@ export async function downloadAdminExport(format, filters = {}) {
   const requestHeaders = buildHeaders()
   requestHeaders.set('Content-Type', 'application/json')
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(buildApiUrl(path), {
     method: 'POST',
     headers: requestHeaders,
     credentials: 'include',
@@ -2568,6 +2932,28 @@ export async function downloadAdminExport(format, filters = {}) {
     response,
     normalizedFormat === 'pdf' ? 'dwarpal-report.pdf' : 'dwarpal-report.xlsx',
   )
+
+  return {
+    blob,
+    fileName,
+    contentType: response.headers.get('content-type') || blob.type,
+  }
+}
+
+export async function downloadAdminStudentCredentials(filters = {}) {
+  const path = `/admin/students/export-credentials${buildQueryString(filters)}`
+  const response = await fetch(buildApiUrl(path), {
+    method: 'GET',
+    headers: buildHeaders(),
+    credentials: 'include',
+  })
+
+  if (!response.ok) {
+    throw await parseDownloadError(response, path)
+  }
+
+  const blob = await response.blob()
+  const fileName = parseDownloadFilename(response, 'dwarpal-student-credentials.xlsx')
 
   return {
     blob,

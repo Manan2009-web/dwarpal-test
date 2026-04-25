@@ -3,6 +3,7 @@ import {
   Bell,
   Check,
   ChevronDown,
+  CircleHelp,
   Clock3,
   LogOut,
   Menu,
@@ -136,7 +137,16 @@ export function EmptyState({ title, description, action }) {
   )
 }
 
-export function Sidebar({ currentUser, currentPage, onNavigate, onLogout, open, onClose, notificationCount = 0 }) {
+export function Sidebar({
+  currentUser,
+  currentPage,
+  onNavigate,
+  onLogout,
+  open,
+  onClose,
+  notificationCount = 0,
+  onOpenSupport = null,
+}) {
   const navItems = getNavItems(currentUser, notificationCount)
 
   function handleNavigate(page) {
@@ -183,6 +193,12 @@ export function Sidebar({ currentUser, currentPage, onNavigate, onLogout, open, 
           ))}
         </nav>
         <div className="sidebar-footer">
+          {onOpenSupport ? (
+            <button type="button" className="action-button secondary sidebar-support-button" onClick={onOpenSupport}>
+              <CircleHelp size={17} />
+              <span>Help</span>
+            </button>
+          ) : null}
           <button type="button" className="action-button danger sidebar-logout-button" onClick={handleLogout}>
             <LogOut size={17} />
             <span>Logout</span>

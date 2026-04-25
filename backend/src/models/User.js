@@ -291,6 +291,23 @@ const userSchema = new mongoose.Schema(
         message: 'Please provide a valid phone number'
       }
     },
+    createdByCao: {
+      type: Boolean,
+      default: false
+    },
+    mustChangePassword: {
+      type: Boolean,
+      default: false
+    },
+    temporaryCredentialEncrypted: {
+      type: String,
+      select: false,
+      default: null
+    },
+    temporaryCredentialCreatedAt: {
+      type: Date,
+      default: null
+    },
     profileImage: {
       type: String,
       default: null

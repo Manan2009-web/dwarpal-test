@@ -1,12 +1,15 @@
 const express = require('express');
 const { protect, requireVerifiedEmail } = require('../middleware/authMiddleware');
+const authorize = require('../middleware/authorize');
 const validateRequest = require('../middleware/validateRequest');
 const authController = require('../controllers/authController');
 const createRateLimiter = require('../middleware/rateLimit');
+const { requirePortalAccess } = require('../middleware/portalAccess');
 const { getClientFingerprint, getClientIp } = require('../utils/request');
 const {
   biometricDeviceIdParamValidation,
   changePasswordValidation,
+  confirmPasswordChangeValidation,
   emailVerificationSendOtpValidation,
   emailVerificationUpdateEmailValidation,
   emailVerificationVerifyOtpValidation,
@@ -15,10 +18,14 @@ const {
   forgotPasswordStartValidation,
   forgotPasswordVerifyOtpValidation,
   loginValidation,
+  portalAccessValidation,
+  requestPasswordChangeValidation,
   registrationAvailabilityValidation,
   registerResendOtpValidation,
   registerValidation,
   registerVerifyOtpValidation,
+  studentLoginStartValidation,
+  studentLoginVerifyOtpValidation,
   webAuthnAuthenticationOptionsValidation,
   webAuthnAuthenticationVerifyValidation,
   webAuthnRegistrationOptionsValidation,
@@ -206,8 +213,10 @@ const biometricRateLimit = createRateLimiter({
   errorCode: 'AUTH_WEBAUTHN_RATE_LIMITED'
 });
 
+router.post('/portal-access', portalAccessValidation, validateRequest, authController.portalAccess);
 router.post(
   '/register/check-availability',
+  requirePortalAccess('faculty'),
   registerNetworkRateLimit,
   registrationAvailabilityValidation,
   validateRequest,
@@ -215,6 +224,7 @@ router.post(
 );
 router.post(
   '/register/start',
+  requirePortalAccess('faculty'),
   registerNetworkRateLimit,
   registerIdentityRateLimit,
   registerValidation,
@@ -223,6 +233,7 @@ router.post(
 );
 router.post(
   '/register/verify-otp',
+  requirePortalAccess('faculty'),
   registerOtpVerifyRateLimit,
   registerVerifyOtpValidation,
   validateRequest,
@@ -230,6 +241,7 @@ router.post(
 );
 router.post(
   '/register/resend-otp',
+  requirePortalAccess('faculty'),
   registerOtpResendRateLimit,
   registerResendOtpValidation,
   validateRequest,
@@ -237,15 +249,39 @@ router.post(
 );
 router.post(
   '/register',
+  requirePortalAccess('faculty'),
   registerNetworkRateLimit,
   registerIdentityRateLimit,
   registerValidation,
   validateRequest,
   authController.register
 );
-router.post('/login', loginNetworkRateLimit, loginAccountRateLimit, loginValidation, validateRequest, authController.login);
+router.post(
+  '/login',
+  requirePortalAccess('faculty'),
+  loginNetworkRateLimit,
+  loginAccountRateLimit,
+  loginValidation,
+  validateRequest,
+  authController.login
+);
+router.post(
+  '/student-login-start',
+  requirePortalAccess('student'),
+  studentLoginStartValidation,
+  validateRequest,
+  authController.studentLoginStart
+);
+router.post(
+  '/student-login-verify-otp',
+  requirePortalAccess('student'),
+  studentLoginVerifyOtpValidation,
+  validateRequest,
+  authController.studentLoginVerifyOtp
+);
 router.post(
   '/forgot-password/account',
+  requirePortalAccess('faculty'),
   forgotPasswordStartRateLimit,
   forgotPasswordAccountValidation,
   validateRequest,
@@ -253,6 +289,7 @@ router.post(
 );
 router.post(
   '/forgot-password/start',
+  requirePortalAccess('faculty'),
   forgotPasswordStartRateLimit,
   forgotPasswordStartValidation,
   validateRequest,
@@ -260,6 +297,7 @@ router.post(
 );
 router.post(
   '/forgot-password/verify-otp',
+  requirePortalAccess('faculty'),
   forgotPasswordVerifyRateLimit,
   forgotPasswordVerifyOtpValidation,
   validateRequest,
@@ -267,10 +305,27 @@ router.post(
 );
 router.post(
   '/forgot-password/reset',
+  requirePortalAccess('faculty'),
   forgotPasswordResetRateLimit,
   forgotPasswordResetValidation,
   validateRequest,
   authController.resetForgotPassword
+);
+router.post(
+  '/request-password-change',
+  protect,
+  authorize('student'),
+  requestPasswordChangeValidation,
+  validateRequest,
+  authController.requestPasswordChange
+);
+router.post(
+  '/confirm-password-change',
+  protect,
+  authorize('student'),
+  confirmPasswordChangeValidation,
+  validateRequest,
+  authController.confirmPasswordChange
 );
 router.post(
   '/email-verification/send-otp',
@@ -327,6 +382,7 @@ router.post(
 );
 router.post(
   '/webauthn/authentication/options',
+  requirePortalAccess('faculty'),
   biometricRateLimit,
   webAuthnAuthenticationOptionsValidation,
   validateRequest,
@@ -334,6 +390,7 @@ router.post(
 );
 router.post(
   '/webauthn/authentication/verify',
+  requirePortalAccess('faculty'),
   biometricRateLimit,
   webAuthnAuthenticationVerifyValidation,
   validateRequest,

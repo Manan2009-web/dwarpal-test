@@ -28,6 +28,8 @@ function pickUser(user, req) {
     enrollmentNo: source.enrollmentNo || source.enrollment || null,
     employeeId: source.employeeId || null,
     phone: source.phone,
+    createdByCao: Boolean(source.createdByCao),
+    mustChangePassword: Boolean(source.mustChangePassword),
     profileImage: source.profileImage || null,
     profileImageUrl: req ? toPublicUrl(source.profileImage, req) : source.profileImage || null,
     emailVerified,

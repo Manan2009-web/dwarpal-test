@@ -171,8 +171,27 @@ async function sendPasswordResetOtpEmail({ email, name, otp, expiryMinutes = env
   });
 }
 
+async function sendStudentLoginOtpEmail({ email, name, otp, expiryMinutes = env.studentLoginOtpExpiryMinutes }) {
+  const template = buildOtpEmailTemplate({
+    previewLabel: 'DwarPal student login OTP',
+    heading: 'Complete your DwarPal student sign-in',
+    intro: 'Use the code below to verify your registered email and finish signing in to your student account.',
+    recipientName: name,
+    otp,
+    expiryMinutes
+  });
+
+  return sendMail({
+    to: email,
+    subject: 'DwarPal student login OTP',
+    html: template.html,
+    text: template.text
+  });
+}
+
 module.exports = {
   isSmtpConfigured,
   sendPasswordResetOtpEmail,
+  sendStudentLoginOtpEmail,
   sendVerificationOtpEmail
 };

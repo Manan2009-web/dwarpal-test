@@ -109,6 +109,13 @@ export default function LoginForm({
   success,
   fieldErrors,
   isSubmitting,
+  identifierLabel = 'Enrollment number / Employee ID',
+  identifierPlaceholder = 'Enter your enrollment number or employee ID',
+  title = 'DwarPal',
+  subtitle = 'Sign in to continue',
+  submitLabel = 'Sign in',
+  showForgotPassword = true,
+  showRegisterLink = true,
 }) {
   const reduceMotion = useReducedMotion()
 
@@ -139,19 +146,19 @@ export default function LoginForm({
               </div>
               <div className="tw:min-w-0 tw:space-y-1">
                 <p className="tw:font-display tw:text-[2rem] tw:font-semibold tw:leading-none tw:tracking-[-0.05em] tw:text-dwarpal-ink tw:sm:text-[2.25rem]">
-                  DwarPal
+                  {title}
                 </p>
-                <p className="tw:text-[0.96rem] tw:font-medium tw:text-dwarpal-muted">Sign in to continue</p>
+                <p className="tw:text-[0.96rem] tw:font-medium tw:text-dwarpal-muted">{subtitle}</p>
               </div>
             </motion.div>
 
             <motion.form variants={formVariants} onSubmit={onSubmit} noValidate className="tw:space-y-5">
               <FormField
                 id="login-identifier"
-                label="Enrollment number / Employee ID"
+                label={identifierLabel}
                 value={identifier}
                 onChange={onIdentifierChange}
-                placeholder="Enter your enrollment number or employee ID"
+                placeholder={identifierPlaceholder}
                 autoComplete="username"
                 error={fieldErrors.identifier}
                 disabled={isSubmitting}
@@ -190,14 +197,16 @@ export default function LoginForm({
                   Remember me
                 </label>
 
-                <button
-                  type="button"
-                  onClick={onForgotPassword}
-                  disabled={isSubmitting}
-                  className="tw:border-none tw:bg-transparent tw:p-0 tw:text-[0.92rem] tw:font-semibold tw:text-[#2f6db5] tw:underline tw:underline-offset-4 tw:transition tw:duration-200 tw:hover:text-[#214f84] tw:disabled:cursor-not-allowed tw:disabled:opacity-55"
-                >
-                  Forgot password?
-                </button>
+                {showForgotPassword ? (
+                  <button
+                    type="button"
+                    onClick={onForgotPassword}
+                    disabled={isSubmitting}
+                    className="tw:border-none tw:bg-transparent tw:p-0 tw:text-[0.92rem] tw:font-semibold tw:text-[#2f6db5] tw:underline tw:underline-offset-4 tw:transition tw:duration-200 tw:hover:text-[#214f84] tw:disabled:cursor-not-allowed tw:disabled:opacity-55"
+                  >
+                    Forgot password?
+                  </button>
+                ) : null}
               </motion.div>
 
               {error ? (
@@ -229,7 +238,7 @@ export default function LoginForm({
                 className="tw:flex tw:w-full tw:items-center tw:justify-center tw:gap-3 tw:rounded-[20px] tw:border-none tw:bg-[linear-gradient(135deg,#387dcc,#25578f)] tw:px-5 tw:py-4 tw:text-[1rem] tw:font-semibold tw:text-white tw:shadow-[0_20px_38px_rgba(37,87,143,0.28)] tw:transition tw:duration-200 tw:hover:shadow-[0_24px_44px_rgba(37,87,143,0.34)] tw:disabled:cursor-not-allowed tw:disabled:opacity-70"
               >
                 <ShieldCheck className="tw:h-4.5 tw:w-4.5" />
-                {isSubmitting ? 'Signing in...' : 'Sign in'}
+                {isSubmitting ? 'Signing in...' : submitLabel}
               </motion.button>
             </motion.form>
 
@@ -254,14 +263,16 @@ export default function LoginForm({
               </span>
             </motion.button>
 
-            <motion.div variants={itemVariants} className="tw:space-y-2 tw:text-center">
-              <p className="tw:text-[0.92rem] tw:text-dwarpal-muted">
-                Need an account?{' '}
-                <Link to="/register" replace className="tw:font-semibold tw:text-[#2f6db5] tw:underline tw:underline-offset-4">
-                  Sign up
-                </Link>
-              </p>
-            </motion.div>
+            {showRegisterLink ? (
+              <motion.div variants={itemVariants} className="tw:space-y-2 tw:text-center">
+                <p className="tw:text-[0.92rem] tw:text-dwarpal-muted">
+                  Need an account?{' '}
+                  <Link to="/register" replace className="tw:font-semibold tw:text-[#2f6db5] tw:underline tw:underline-offset-4">
+                    Sign up
+                  </Link>
+                </p>
+              </motion.div>
+            ) : null}
           </div>
         </motion.div>
       </motion.div>

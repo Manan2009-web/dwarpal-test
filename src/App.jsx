@@ -17,7 +17,11 @@ import {
 import './App.css'
 import AppBrand from './components/AppBrand'
 import AdminPortal from './components/AdminPortal'
+import SupportModal from './components/SupportModal'
+import StudentLoginOtpModal from './components/StudentLoginOtpModal'
+import StudentPasswordChangeModal from './components/StudentPasswordChangeModal'
 import AuthPage from './components/auth/AuthPage'
+import AccessPortalScreen from './components/auth/AccessPortalScreen'
 import LoginForm from './components/auth/LoginForm'
 import MascotPanel from './components/auth/MascotPanel'
 import FacultyLeaveWizard from './components/FacultyLeaveWizard'
@@ -67,7 +71,9 @@ import {
 import {
   ApiError,
   clearBiometricDeviceId,
+  clearPortalAccessSession,
   clearStoredAuthToken,
+  confirmPasswordChange,
   createBiometricAuthenticationOptions,
   createBiometricRegistrationOptions,
   DEFAULT_WORKSPACE_PAGE_SIZE,
@@ -75,16 +81,20 @@ import {
   getBiometricDevices,
   getApiErrorDetails,
   getApiErrorMessage,
+  getPortalAccessSession,
   hasStoredAuthToken,
   loginUser,
   logoutUser,
   normalizePhoneNumberInput,
+  requestPasswordChange,
+  requestPortalAccess,
   resolveForgotPasswordAccount,
   resetForgotPassword,
   resendRegistrationOtp,
   readBiometricDeviceId,
   removeBiometricDevice,
   sendEmailVerificationOtp,
+  startStudentLogin,
   startForgotPassword,
   startRegistration,
   submitRequest,
@@ -98,6 +108,7 @@ import {
   verifyGatepassQr,
   verifyGatepassById,
   verifyRegistrationOtp,
+  verifyStudentLoginOtp,
   verifySession,
 } from './lib/dwarpalApi'
 import {
@@ -119,6 +130,7 @@ import {
   getNotificationKicker,
   getNotificationSurfaceTone,
 } from './lib/notificationPresentation'
+import { SUPPORT_CONFIG } from './lib/supportConfig'
 
 const DASHBOARD_REFRESH_MS = 10000
 const REFRESH_ERROR_TOAST_COOLDOWN_MS = 30000
@@ -470,6 +482,9 @@ function App() {
   const [summary, setSummary] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
   const [authReady, setAuthReady] = useState(false)
+  const [portalAccess, setPortalAccess] = useState(() => getPortalAccessSession())
+  const [supportModalOpen, setSupportModalOpen] = useState(false)
+  const [studentPasswordPromptOpen, setStudentPasswordPromptOpen] = useState(false)
   const [cookieConsent, setCookieConsent] = useState(() => readCookieConsent())
   const [cookieBannerForcedOpen, setCookieBannerForcedOpen] = useState(false)
   const [notificationPermissionState, setNotificationPermissionState] = useState(() =>
@@ -490,10 +505,22 @@ function App() {
 
   const clearSession = useCallback(() => {
     clearStoredAuthToken()
+    setStudentPasswordPromptOpen(false)
+    setSupportModalOpen(false)
     setCurrentUser(null)
     refreshRequestRef.current += 1
     resetWorkspace()
   }, [resetWorkspace])
+
+  const savePortalAccess = useCallback((nextPortalAccess) => {
+    if (!nextPortalAccess?.token || !nextPortalAccess?.accessType) {
+      clearPortalAccessSession()
+      setPortalAccess(null)
+      return
+    }
+
+    setPortalAccess(nextPortalAccess)
+  }, [])
 
   const refreshNotificationPermissionState = useCallback(() => {
     setNotificationPermissionState(getResolvedNotificationPermissionState())
@@ -520,6 +547,12 @@ function App() {
     },
     [toast],
   )
+
+  useEffect(() => {
+    if (!currentUser || currentUser.role !== 'student' || !currentUser.mustChangePassword) {
+      setStudentPasswordPromptOpen(false)
+    }
+  }, [currentUser])
 
   const handleOpenCookiePreferences = useCallback(() => {
     setCookieBannerForcedOpen(true)
@@ -885,8 +918,86 @@ function App() {
     return () => controller.abort()
   }, [currentUser?.emailVerified, currentUser?.id, currentUser?.role, refreshAppData, resetWorkspace])
 
-  async function login(identifier, password) {
+  async function submitPortalAccess({ accessType, accessId, accessPassword }) {
+    try {
+      const result = await requestPortalAccess(accessType, accessId, accessPassword)
+      savePortalAccess({
+        accessType: result.accessType,
+        token: result.token,
+      })
+      toast.success({
+        title: 'Access verified',
+        message:
+          accessType === 'student'
+            ? 'Student access confirmed. Continue with enrollment login and email OTP.'
+            : 'Faculty access confirmed. Continue with login or registration.',
+      })
+
+      return {
+        ok: true,
+        ...result,
+      }
+    } catch (error) {
+      const errorDetails = resolveApiError(error, {
+        fallbackMessage: 'Unable to verify portal access right now.',
+      })
+      const resolvedMessage =
+        errorDetails.code === 'PORTAL_ACCESS_DENIED' ? 'Invalid access ID or password.' : errorDetails.message
+
+      if (['PORTAL_ACCESS_INVALID', 'PORTAL_ACCESS_DENIED', 'PORTAL_ACCESS_REQUIRED'].includes(errorDetails.code)) {
+        savePortalAccess(null)
+      }
+
+      toast.error({
+        title: 'Access denied',
+        message: resolvedMessage,
+      })
+
+      return {
+        ok: false,
+        error: resolvedMessage,
+      }
+    }
+  }
+
+  async function login(identifier, password, accessType = portalAccess?.accessType || 'faculty') {
     const normalizedIdentifier = String(identifier || '').trim()
+
+    if (accessType === 'student') {
+      try {
+        const result = await startStudentLogin({
+          identifier: normalizedIdentifier,
+          password,
+        })
+
+        return {
+          ok: true,
+          requiresOtp: true,
+          ...result,
+        }
+      } catch (error) {
+        const errorDetails = resolveApiError(error, {
+          fallbackMessage: 'Unable to start student sign-in right now.',
+          authMode: 'login',
+        })
+
+        if (['PORTAL_ACCESS_INVALID', 'PORTAL_ACCESS_REQUIRED'].includes(errorDetails.code)) {
+          savePortalAccess(null)
+        }
+
+        toast.error({
+          title: 'Student login failed',
+          message: errorDetails.message,
+        })
+
+        return {
+          ok: false,
+          error: errorDetails.message,
+          code: errorDetails.code,
+          status: errorDetails.status,
+        }
+      }
+    }
 
     try {
       const user = await loginUser(normalizedIdentifier, password)
@@ -904,6 +1015,11 @@ function App() {
         fallbackMessage: 'Unable to complete DwarPal sign-in. Please try again.',
         authMode: 'login',
       })
+
+      if (['PORTAL_ACCESS_INVALID', 'PORTAL_ACCESS_REQUIRED'].includes(errorDetails.code)) {
+        savePortalAccess(null)
+      }
+
       toast.error({
         title: 'Login failed',
         message: errorDetails.message,
@@ -914,6 +1030,134 @@ function App() {
         error: errorDetails.message,
         code: errorDetails.code,
         status: errorDetails.status,
+      }
+    }
+  }
+
+  async function resendStudentLoginOtpCode(loginToken) {
+    try {
+      const result = await startStudentLogin({
+        loginToken,
+        resend: true,
+      })
+
+      return {
+        ok: true,
+        message: result.message,
+        loginToken: result.loginToken || loginToken,
+        maskedEmail: result.maskedEmail || '',
+        cooldownSeconds: result.cooldownSeconds || 45,
+      }
+    } catch (error) {
+      const errorDetails = resolveApiError(error, {
+        fallbackMessage: 'Unable to resend the student login OTP right now.',
+        authMode: 'student-login',
+      })
+
+      if (['PORTAL_ACCESS_INVALID', 'PORTAL_ACCESS_REQUIRED'].includes(errorDetails.code)) {
+        savePortalAccess(null)
+      }
+
+      return {
+        ok: false,
+        error: errorDetails.message,
+        fieldErrors: errorDetails.fieldErrors,
+      }
+    }
+  }
+
+  async function verifyStudentLoginOtpCode({ loginToken, otp }) {
+    try {
+      const result = await verifyStudentLoginOtp(loginToken, otp)
+      const verifiedUser = result.user || null
+
+      if (verifiedUser) {
+        setCurrentUser(verifiedUser)
+        if (verifiedUser.mustChangePassword) {
+          setStudentPasswordPromptOpen(true)
+        }
+      }
+
+      toast.success({
+        title: 'Student login successful',
+        message: result.message || `Welcome back to DwarPal, ${verifiedUser?.name || 'student'}.`,
+      })
+
+      return {
+        ok: true,
+        message: result.message,
+        user: verifiedUser,
+        dashboardPath: getLandingPathForUser(verifiedUser),
+      }
+    } catch (error) {
+      const errorDetails = resolveApiError(error, {
+        fallbackMessage: 'Unable to verify this student OTP right now.',
+        authMode: 'student-login',
+      })
+
+      if (['PORTAL_ACCESS_INVALID', 'PORTAL_ACCESS_REQUIRED'].includes(errorDetails.code)) {
+        savePortalAccess(null)
+      }
+
+      return {
+        ok: false,
+        error: errorDetails.message,
+        fieldErrors: errorDetails.fieldErrors,
+      }
+    }
+  }
+
+  async function requestStudentPasswordChangeOtp() {
+    try {
+      const result = await requestPasswordChange()
+
+      return {
+        ok: true,
+        message: result.message,
+        maskedEmail: result.maskedEmail || '',
+        cooldownSeconds: result.cooldownSeconds || 45,
+      }
+    } catch (error) {
+      const errorDetails = resolveApiError(error, {
+        fallbackMessage: 'Unable to send the password change OTP right now.',
+      })
+
+      return {
+        ok: false,
+        error: errorDetails.message,
+        fieldErrors: errorDetails.fieldErrors,
+      }
+    }
+  }
+
+  async function confirmStudentPasswordChange({ otp, newPassword, confirmPassword: confirmNewPassword }) {
+    try {
+      const result = await confirmPasswordChange(otp, newPassword, confirmNewPassword)
+
+      if (result.user) {
+        setCurrentUser(result.user)
+      }
+
+      setStudentPasswordPromptOpen(false)
+      toast.success({
+        title: 'Password updated',
+        message: result.message || 'Your password has been changed successfully.',
+      })
+
+      return {
+        ok: true,
+        message: result.message,
+        user: result.user || currentUser,
+      }
+    } catch (error) {
+      const errorDetails = resolveApiError(error, {
+        fallbackMessage: 'Unable to update your password right now.',
+      })
+
+      return {
+        ok: false,
+        error: errorDetails.message,
+        fieldErrors: errorDetails.fieldErrors,
       }
     }
   }
@@ -1456,6 +1700,7 @@ function App() {
             onOpenNotificationPrompt={handleOpenNotificationPrompt}
             onAllowNotificationPermission={handleAllowNotificationPrompt}
             onDeferNotificationPermission={handleDeferNotificationPrompt}
+            onOpenSupport={() => setSupportModalOpen(true)}
           />
         </div>
         <ForceEmailVerificationModal
@@ -1487,7 +1732,7 @@ function App() {
     return (
       <AdminRoute currentUser={currentUser} authReady={authReady}>
         <div className={requiresEmailVerification ? 'app-shell-lock-surface' : ''} aria-hidden={requiresEmailVerification}>
-          <AdminPortal currentUser={currentUser} onLogout={logout} />
+          <AdminPortal currentUser={currentUser} onLogout={logout} onOpenSupport={() => setSupportModalOpen(true)} />
         </div>
         <ForceEmailVerificationModal
           open={requiresEmailVerification}
@@ -1519,14 +1764,21 @@ function App() {
           path="/login"
           element={
             <PublicAuthRoute currentUser={currentUser} authReady={authReady}>
-              <LoginScreen
-                onBiometricLogin={loginWithBiometric}
-                onForgotPasswordResolveAccount={resolveForgotPasswordAccountFlow}
-                onForgotPasswordReset={resetForgotPasswordFlow}
-                onForgotPasswordStart={startForgotPasswordFlow}
-                onForgotPasswordVerifyOtp={verifyForgotPasswordOtpCode}
-                onLogin={login}
-              />
+              {['student', 'faculty'].includes(portalAccess?.accessType) ? (
+                <LoginScreen
+                  accessType={portalAccess?.accessType || 'faculty'}
+                  onBiometricLogin={loginWithBiometric}
+                  onForgotPasswordResolveAccount={resolveForgotPasswordAccountFlow}
+                  onForgotPasswordReset={resetForgotPasswordFlow}
+                  onForgotPasswordStart={startForgotPasswordFlow}
+                  onForgotPasswordVerifyOtp={verifyForgotPasswordOtpCode}
+                  onLogin={login}
+                  onStudentLoginResendOtp={resendStudentLoginOtpCode}
+                  onStudentLoginVerifyOtp={verifyStudentLoginOtpCode}
+                />
+              ) : (
+                <AccessPortalScreen currentPortalAccess={portalAccess} onSubmitPortalAccess={submitPortalAccess} />
+              )}
             </PublicAuthRoute>
           }
         />
@@ -1534,11 +1786,15 @@ function App() {
           path="/register"
           element={
             <PublicAuthRoute currentUser={currentUser} authReady={authReady}>
-              <RegisterScreen
-                onRegister={registerAccount}
-                onResendOtp={resendRegistrationOtpCode}
-                onVerifyOtp={verifyRegistrationOtpCode}
-              />
+              {portalAccess?.accessType === 'faculty' ? (
+                <RegisterScreen
+                  onRegister={registerAccount}
+                  onResendOtp={resendRegistrationOtpCode}
+                  onVerifyOtp={verifyRegistrationOtpCode}
+                />
+              ) : (
+                <AccessPortalScreen currentPortalAccess={portalAccess} onSubmitPortalAccess={submitPortalAccess} />
+              )}
             </PublicAuthRoute>
           }
         />
@@ -1563,6 +1819,20 @@ function App() {
           onReject={() => handleCookiePreferenceChange('rejected')}
         />
       </FeatureBoundary>
+      <SupportModal open={supportModalOpen} onClose={() => setSupportModalOpen(false)} support={SUPPORT_CONFIG} />
+      <StudentPasswordChangeModal
+        open={studentPasswordPromptOpen && currentUser?.role === 'student'}
+        currentUser={currentUser}
+        onClose={() => setStudentPasswordPromptOpen(false)}
+        onRequestOtp={requestStudentPasswordChangeOtp}
+        onConfirmPasswordChange={confirmStudentPasswordChange}
+        onPasswordChanged={(updatedUser) => {
+          if (updatedUser) {
+            setCurrentUser(updatedUser)
+          }
+          setStudentPasswordPromptOpen(false)
+        }}
+      />
     </BrowserRouter>
   )
 }
@@ -1650,20 +1920,33 @@ function AuthBootstrapScreen() {
 }
 
 function LoginScreen({
+  accessType = 'faculty',
   onLogin,
   onForgotPasswordResolveAccount,
   onForgotPasswordStart,
   onForgotPasswordVerifyOtp,
   onForgotPasswordReset,
+  onStudentLoginResendOtp,
+  onStudentLoginVerifyOtp,
 }) {
   const navigate = useNavigate()
   const location = useLocation()
+  const isStudentAccess = accessType === 'student'
+  const identifierLabel = isStudentAccess ? 'Enrollment Number' : 'Employee ID'
+  const identifierPlaceholder = isStudentAccess ? 'Enter your registered enrollment number' : 'Enter your employee ID'
+  const identifierUsageLabel = isStudentAccess ? 'enrollment number' : 'employee ID'
   const [form, setForm] = useState({ identifier: '', password: '' })
   const [rememberMe, setRememberMe] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
   const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false)
+  const [studentLoginSession, setStudentLoginSession] = useState({
+    open: false,
+    loginToken: '',
+    maskedEmail: '',
+    cooldownSeconds: 45,
+  })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const submitLockRef = useRef(false)
 
@@ -1697,6 +1980,23 @@ function LoginScreen({
     navigate(location.pathname, { replace: true, state: null })
   }, [location.pathname, location.state, navigate])
 
+  useEffect(() => {
+    setError('')
+    setSuccess('')
+    setFieldErrors({})
+    setForgotPasswordOpen(false)
+    setStudentLoginSession({
+      open: false,
+      loginToken: '',
+      maskedEmail: '',
+      cooldownSeconds: 45,
+    })
+    setForm((previousForm) => ({
+      ...previousForm,
+      password: '',
+    }))
+  }, [accessType])
+
   function updateFormField(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
     setFieldErrors((prev) => clearFieldError(prev, field))
@@ -1718,9 +2018,9 @@ function LoginScreen({
     if (!normalizedIdentifier) {
       setFieldErrors((previousErrors) => ({
         ...previousErrors,
-        identifier: 'Enter your enrollment number or employee ID before using Forgot Password.',
+        identifier: `Enter your ${identifierUsageLabel} before using Forgot Password.`,
       }))
-      setError('Please enter your enrollment number or employee ID first.')
+      setError(`Please enter your ${identifierUsageLabel} first.`)
       setSuccess('')
       return
     }
@@ -1728,9 +2028,9 @@ function LoginScreen({
     if (isEmailStyleIdentifier(normalizedIdentifier)) {
       setFieldErrors((previousErrors) => ({
         ...previousErrors,
-        identifier: 'Forgot password works only with your enrollment number or employee ID.',
+        identifier: `Forgot password works only with your ${identifierUsageLabel}.`,
       }))
-      setError('Email login is not allowed. Use your enrollment number or employee ID.')
+      setError(`Email login is not allowed. Use your ${identifierUsageLabel}.`)
       setSuccess('')
       return
     }
@@ -1765,15 +2065,15 @@ function LoginScreen({
 
     if (Object.keys(nextFieldErrors).length) {
       setFieldErrors(nextFieldErrors)
-      setError('Please enter both your enrollment number or employee ID and password.')
+      setError(`Please enter both your ${identifierUsageLabel} and password.`)
       return
     }
 
     if (isEmailStyleIdentifier(form.identifier)) {
       setFieldErrors({
-        identifier: 'Email login is not allowed. Use your enrollment number or employee ID.',
+        identifier: `Email login is not allowed. Use your ${identifierUsageLabel}.`,
       })
-      setError('Email login is not allowed. Use your enrollment number or employee ID.')
+      setError(`Email login is not allowed. Use your ${identifierUsageLabel}.`)
       return
     }
 
@@ -1785,7 +2085,7 @@ function LoginScreen({
 
     try {
       const normalizedIdentifier = String(form.identifier || '').trim()
-      const result = await onLogin(normalizedIdentifier, form.password)
+      const result = await onLogin(normalizedIdentifier, form.password, accessType)
       if (!result?.ok) {
         setError(result?.error || 'Unable to sign in. Please try again.')
         return
@@ -1797,6 +2097,21 @@ function LoginScreen({
         } else {
           window.localStorage.removeItem(REMEMBERED_LOGIN_IDENTIFIER_STORAGE_KEY)
         }
+      }
+
+      if (result.requiresOtp) {
+        setStudentLoginSession({
+          open: true,
+          loginToken: result.loginToken || '',
+          maskedEmail: result.maskedEmail || '',
+          cooldownSeconds: result.cooldownSeconds || 45,
+        })
+        setForm((previousForm) => ({
+          ...previousForm,
+          password: '',
+        }))
+        setSuccess(result.message || 'OTP sent to the registered student email.')
+        return
       }
 
       const dashboardPath = result.dashboardPath || getLandingPathForUser(result.user)
@@ -1827,10 +2142,21 @@ function LoginScreen({
           success={success}
           fieldErrors={fieldErrors}
           isSubmitting={isSubmitting}
+          identifierLabel={identifierLabel}
+          identifierPlaceholder={identifierPlaceholder}
+          title={isStudentAccess ? 'Student Access' : 'Faculty Access'}
+          subtitle={
+            isStudentAccess
+              ? 'Sign in with your enrollment number, then verify the OTP sent to your registered email.'
+              : 'Sign in with your employee ID to continue to DwarPal.'
+          }
+          submitLabel={isStudentAccess ? 'Continue with OTP' : 'Sign in'}
+          showForgotPassword={!isStudentAccess}
+          showRegisterLink={!isStudentAccess}
         />
       } />
       <ForgotPasswordModal
-        open={forgotPasswordOpen}
+        open={!isStudentAccess && forgotPasswordOpen}
         identifier={String(form.identifier || '').trim()}
         onClose={() => setForgotPasswordOpen(false)}
         onResolveAccount={onForgotPasswordResolveAccount}
@@ -1838,6 +2164,49 @@ function LoginScreen({
         onVerifyOtp={onForgotPasswordVerifyOtp}
         onResetPassword={onForgotPasswordReset}
         onComplete={handleForgotPasswordComplete}
+      />
+      <StudentLoginOtpModal
+        open={studentLoginSession.open}
+        maskedEmail={studentLoginSession.maskedEmail}
+        cooldownSeconds={studentLoginSession.cooldownSeconds}
+        onClose={() =>
+          setStudentLoginSession((previousSession) => ({
+            ...previousSession,
+            open: false,
+          }))
+        }
+        onResend={async () => {
+          const result = await onStudentLoginResendOtp?.(studentLoginSession.loginToken)
+
+          if (result?.ok) {
+            setStudentLoginSession((previousSession) => ({
+              ...previousSession,
+              loginToken: result.loginToken || previousSession.loginToken,
+              maskedEmail: result.maskedEmail || previousSession.maskedEmail,
+              cooldownSeconds: result.cooldownSeconds || previousSession.cooldownSeconds,
+            }))
+          }
+
+          return result
+        }}
+        onVerify={async (otp) => {
+          const result = await onStudentLoginVerifyOtp?.({
+            loginToken: studentLoginSession.loginToken,
+            otp,
+          })
+
+          if (result?.ok) {
+            setStudentLoginSession({
+              open: false,
+              loginToken: '',
+              maskedEmail: '',
+              cooldownSeconds: 45,
+            })
+            navigate(result.dashboardPath || '/user/dashboard', { replace: true })
+          }
+
+          return result
+        }}
       />
     </>
   )
@@ -2800,28 +3169,6 @@ function CoordinatorAssignmentPanel({ currentUser, onUpdateCurrentUserProfile })
   )
 }
 
-function SupportPanel({ currentUser }) {
-  return (
-    <section className="profile-subcard support-card">
-      <div className="support-card-header">
-        <div>
-          <h3>Help & Support</h3>
-          <p>Need help with approvals, QR verification, or account issues? Reach the DwarPal support desk.</p>
-        </div>
-      </div>
-      <div className="support-card-grid">
-        <IdentityField label="Support Email" value="support@dwarpal.edu" />
-        <IdentityField label="Support Phone" value="+91-98765-43210" />
-        <IdentityField label="Support Hours" value="Mon-Sat, 9:00 AM to 6:00 PM" />
-        <IdentityField label="Your Role Queue" value={ROLE_META[currentUser.role].title} />
-      </div>
-      <p className="field-hint">
-        Include your gatepass ID and a short issue description for faster resolution.
-      </p>
-    </section>
-  )
-}
-
 function AppShell({
   currentUser,
   summary,
@@ -2841,6 +3188,7 @@ function AppShell({
   onOpenNotificationPrompt,
   onAllowNotificationPermission,
   onDeferNotificationPermission,
+  onOpenSupport,
 }) {
   const toast = useToast()
   const navigate = useNavigate()
@@ -3153,6 +3501,7 @@ function AppShell({
         notificationCount={unreadCount}
         open={navOpen}
         onClose={() => setNavOpen(false)}
+        onOpenSupport={onOpenSupport}
       />
 
       <div className="app-main">
@@ -3235,7 +3584,6 @@ function AppShell({
                   />
                 ) : null}
                 <BiometricSettingsPanel currentUser={currentUser} onCurrentUserPatch={onCurrentUserPatch} />
-                <SupportPanel currentUser={currentUser} />
               </>
             </ProfileCard>
           ) : null}

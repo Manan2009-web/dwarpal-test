@@ -49,6 +49,30 @@ function identifierValidation(field = 'identifier', message = 'Enrollment number
     });
 }
 
+function enrollmentValidation(field = 'identifier', message = 'Enrollment number is required') {
+  return body(field)
+    .customSanitizer((value, { req }) => String(value || req.body.enrollmentNo || req.body.enrollment || '').trim())
+    .notEmpty()
+    .withMessage(message)
+    .custom((value) => {
+      if (String(value || '').includes('@')) {
+        throw new Error('Use your registered enrollment number.');
+      }
+
+      return true;
+    });
+}
+
+const portalAccessValidation = [
+  body('accessType')
+    .trim()
+    .toLowerCase()
+    .isIn(['student', 'faculty'])
+    .withMessage('Access type must be either student or faculty.'),
+  body('accessId').trim().notEmpty().withMessage('Access ID is required.'),
+  body('accessPassword').isString().notEmpty().withMessage('Access password is required.')
+];
+
 const registerValidation = [
   body('fullName')
     .trim()
@@ -143,6 +167,31 @@ const loginValidation = [
   body('password').notEmpty().withMessage('Password is required')
 ];
 
+const studentLoginStartValidation = [
+  body('loginToken').optional({ values: 'falsy' }).trim(),
+  body('resend').optional().toBoolean().isBoolean().withMessage('resend must be true or false.'),
+  body().custom((_, { req }) => {
+    const hasLoginToken = Boolean(String(req.body?.loginToken || '').trim());
+
+    if (req.body?.resend === true && !hasLoginToken) {
+      throw new Error('Student login session is required to resend OTP.');
+    }
+
+    return true;
+  }),
+  enrollmentValidation('identifier', 'Enrollment number is required for student login')
+    .if((_, { req }) => !String(req.body?.loginToken || '').trim()),
+  body('password')
+    .if((_, { req }) => !String(req.body?.loginToken || '').trim())
+    .notEmpty()
+    .withMessage('Password is required')
+];
+
+const studentLoginVerifyOtpValidation = [
+  body('loginToken').trim().notEmpty().withMessage('Student login session is required.'),
+  otpValidation()
+];
+
 const changePasswordValidation = [
   body('currentPassword').notEmpty().withMessage('Current password is required'),
   body('newPassword')
@@ -230,6 +279,26 @@ const forgotPasswordResetValidation = [
     })
 ];
 
+const requestPasswordChangeValidation = [];
+
+const confirmPasswordChangeValidation = [
+  otpValidation(),
+  body('newPassword')
+    .matches(PASSWORD_REGEX)
+    .withMessage(
+      'New password must be at least 8 characters and include uppercase, lowercase, number, and special character'
+    ),
+  body('confirmPassword')
+    .optional()
+    .custom((value, { req }) => {
+      if (value !== undefined && value !== req.body.newPassword) {
+        throw new Error('Confirm password must match the new password');
+      }
+
+      return true;
+    })
+];
+
 const webAuthnRegistrationOptionsValidation = [
   body('deviceName')
     .optional({ values: 'falsy' })
@@ -285,14 +354,19 @@ module.exports = {
   emailVerificationUpdateEmailValidation,
   emailVerificationVerifyOtpValidation,
   forgotPasswordAccountValidation,
+  portalAccessValidation,
+  requestPasswordChangeValidation,
   forgotPasswordResetValidation,
   forgotPasswordStartValidation,
   forgotPasswordVerifyOtpValidation,
   loginValidation,
+  confirmPasswordChangeValidation,
   registrationAvailabilityValidation,
   registerResendOtpValidation,
   registerValidation,
   registerVerifyOtpValidation,
+  studentLoginStartValidation,
+  studentLoginVerifyOtpValidation,
   webAuthnAuthenticationOptionsValidation,
   webAuthnAuthenticationVerifyValidation,
   webAuthnRegistrationOptionsValidation,

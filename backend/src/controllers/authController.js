@@ -1,5 +1,6 @@
 const { sendSuccess } = require('../utils/apiResponse');
 const asyncHandler = require('../utils/asyncHandler');
+const AppError = require('../utils/appError');
 const { clearAuthCookie, setAuthCookie } = require('../utils/token');
 const { getRequestMeta } = require('../utils/request');
 const {
@@ -11,6 +12,13 @@ const authService = require('../services/authService');
 const emailVerificationService = require('../services/emailVerificationService');
 const passwordResetService = require('../services/passwordResetService');
 const registrationOtpService = require('../services/registrationOtpService');
+const studentAuthService = require('../services/studentAuthService');
+const {
+  createPortalAccessToken,
+  getPortalAccessCredentials,
+  isPortalAccessConfigured,
+  normalizePortalAccessType
+} = require('../middleware/portalAccess');
 
 function maskEmail(email) {
   const normalizedEmail = String(email || '').trim().toLowerCase();
@@ -109,6 +117,43 @@ const resendRegisterOtp = asyncHandler(async (req, res) => {
   });
 });
 
+const portalAccess = asyncHandler(async (req, res) => {
+  const accessType = normalizePortalAccessType(req.body?.accessType);
+  const credentials = getPortalAccessCredentials(accessType);
+
+  if (!accessType) {
+    throw new AppError('Access type must be either student or faculty.', 400);
+  }
+
+  if (!isPortalAccessConfigured(accessType)) {
+    const error = new AppError(`Portal access is not configured for ${accessType} access yet.`, 503);
+    error.code = 'PORTAL_ACCESS_NOT_CONFIGURED';
+    throw error;
+  }
+
+  if (
+    String(req.body?.accessId || '').trim() !== credentials.accessId ||
+    String(req.body?.accessPassword || '') !== credentials.accessPassword
+  ) {
+    const error = new AppError('Invalid access ID or password.', 401, [
+      {
+        field: 'accessId',
+        message: 'Invalid access ID or password.'
+      }
+    ]);
+    error.code = 'PORTAL_ACCESS_DENIED';
+    throw error;
+  }
+
+  return sendSuccess(res, {
+    message: `${accessType === 'student' ? 'Student' : 'Faculty'} portal access granted successfully.`,
+    data: {
+      accessType,
+      token: createPortalAccessToken(accessType)
+    }
+  });
+});
+
 const login = asyncHandler(async (req, res) => {
   const startedAt = Date.now();
   const identifier = req.body?.identifier || req.body?.enrollment || req.body?.employeeId;
@@ -138,6 +183,25 @@ const login = asyncHandler(async (req, res) => {
     });
     throw error;
   }
+});
+
+const studentLoginStart = asyncHandler(async (req, res) => {
+  const result = await studentAuthService.startStudentLogin(req.body, getRequestMeta(req));
+
+  return sendSuccess(res, {
+    message: result.message,
+    data: result
+  });
+});
+
+const studentLoginVerifyOtp = asyncHandler(async (req, res) => {
+  const result = await studentAuthService.verifyStudentLoginOtp(req.body, req, getRequestMeta(req));
+  setAuthCookie(res, result.token);
+
+  return sendSuccess(res, {
+    message: 'Student login successful',
+    data: result
+  });
 });
 
 const logout = asyncHandler(async (req, res) => {
@@ -207,6 +271,29 @@ const verifyForgotPasswordOtp = asyncHandler(async (req, res) => {
 
 const resetForgotPassword = asyncHandler(async (req, res) => {
   const result = await passwordResetService.resetPassword(req.body, getRequestMeta(req));
+
+  return sendSuccess(res, {
+    message: result.message,
+    data: result
+  });
+});
+
+const requestPasswordChange = asyncHandler(async (req, res) => {
+  const result = await passwordResetService.requestAuthenticatedPasswordChange(req.user._id);
+
+  return sendSuccess(res, {
+    message: result.message,
+    data: result
+  });
+});
+
+const confirmPasswordChange = asyncHandler(async (req, res) => {
+  const result = await passwordResetService.confirmAuthenticatedPasswordChange(
+    req.user._id,
+    req.body,
+    req,
+    getRequestMeta(req)
+  );
 
   return sendSuccess(res, {
     message: result.message,
@@ -334,9 +421,12 @@ const removeWebAuthnDevice = asyncHandler(async (req, res) => {
 module.exports = {
   checkRegistrationAvailability,
   changePassword,
+  confirmPasswordChange,
   forgotPasswordStart,
   resolveForgotPasswordAccount,
   getMe,
+  portalAccess,
+  requestPasswordChange,
   resetForgotPassword,
   sendEmailVerificationOtp,
   getWebAuthnAuthenticationOptions,
@@ -348,6 +438,8 @@ module.exports = {
   registerStart,
   resendRegisterOtp,
   removeWebAuthnDevice,
+  studentLoginStart,
+  studentLoginVerifyOtp,
   updateEmailVerificationEmail,
   verifyEmailVerificationOtp,
   verifyForgotPasswordOtp,

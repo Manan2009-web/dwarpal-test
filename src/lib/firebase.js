@@ -1,18 +1,14 @@
 import { getApp, getApps, initializeApp } from 'firebase/app'
 import { getMessaging, getToken, isSupported, onMessage } from 'firebase/messaging'
+import { buildApiUrl } from './dwarpalApi'
 import { isSecureBrowserContext } from './preferences'
 
-function normalizeApiBaseUrl(value) {
-  return String(value || '').trim().replace(/\/+$/, '')
-}
-
-const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL) || '/api'
 const PUBLIC_FRONTEND_CONFIG_PATH = '/public/frontend-config'
 let messagingSupportPromise = null
 let publicFirebaseConfigPromise = null
 
 function buildPublicFrontendConfigUrl() {
-  return `${API_BASE_URL}${PUBLIC_FRONTEND_CONFIG_PATH}`
+  return buildApiUrl(PUBLIC_FRONTEND_CONFIG_PATH)
 }
 
 function normalizePublicFirebaseConfig(payload = null) {

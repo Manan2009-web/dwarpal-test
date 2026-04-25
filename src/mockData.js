@@ -57,7 +57,7 @@ export const STATUS_COLORS = {
 
 export const ROLE_OPTIONS = ['student', 'faculty', 'hod', 'cao', 'principal', 'security']
 
-export const PUBLIC_ROLE_OPTIONS = [...ROLE_OPTIONS]
+export const PUBLIC_ROLE_OPTIONS = ROLE_OPTIONS.filter((role) => role !== 'student')
 
 export const SEMESTER_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8]
 

@@ -475,6 +475,14 @@ async function loginUser(payload, req, requestMeta) {
     user.role = normalizedRole;
   }
 
+  if (user.role === 'student') {
+    throw createFieldErrorResponse(
+      'identifier',
+      'Student login requires your registered enrollment number and email OTP. Please use Student Access.',
+      403
+    );
+  }
+
   const loginTimestamp = new Date();
 
   if (!isHashedPassword(user.password)) {
@@ -647,6 +655,13 @@ async function getWebAuthnAuthenticationOptions(payload, req) {
     throw new AppError('Your account is inactive. Please contact administration.', 403);
   }
 
+  if (normalizeRole(user.role) === 'student') {
+    throw new AppError(
+      'Student biometric login is not available. Please use Student Access with email OTP.',
+      403
+    );
+  }
+
   if (!Array.isArray(user.webAuthnCredentials) || user.webAuthnCredentials.length === 0) {
     throw new AppError(
       'No biometric credential found for this account on this device. Please login manually and enable it first.',
@@ -682,6 +697,13 @@ async function verifyWebAuthnAuthentication(payload, req, flowState, requestMeta
 
   if (!user.isActive) {
     throw new AppError('Your account is inactive. Please contact administration.', 403);
+  }
+
+  if (normalizeRole(user.role) === 'student') {
+    throw new AppError(
+      'Student biometric login is not available. Please use Student Access with email OTP.',
+      403
+    );
   }
 
   const responseCredentialId = String(payload?.response?.id || '').trim();

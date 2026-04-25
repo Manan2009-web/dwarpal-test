@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import { ToastProvider } from './components/ToastProvider.jsx'
+import { checkBackendHealth } from './lib/dwarpalApi'
 import './index.css'
 
 const rootElement = document.getElementById('root')
@@ -177,6 +178,14 @@ function showBootstrapFailure(message) {
   })
 }
 
+function showBackendUnavailableScreen() {
+  renderStatusScreen({
+    title: 'Backend Unreachable',
+    message: 'Backend is not reachable. Please check server or network.',
+    showReload: true,
+  })
+}
+
 function StatusScreen({ title, message, details = '', showReload = false }) {
   return (
     <div
@@ -298,9 +307,17 @@ if (!rootElement) {
   throw new Error('DwarPal could not find the #root element in index.html.')
 }
 
-function bootstrap() {
+async function bootstrap() {
   logBootstrapStatus('Bootstrapping React root')
   renderBootStatus()
+
+  try {
+    await checkBackendHealth()
+  } catch (error) {
+    console.error('DwarPal backend health check failed', error)
+    showBackendUnavailableScreen()
+    return
+  }
 
   try {
     ReactDOM.createRoot(rootElement).render(
@@ -318,4 +335,4 @@ function bootstrap() {
   }
 }
 
-bootstrap()
+void bootstrap()

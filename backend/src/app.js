@@ -50,13 +50,18 @@ const corsOptions = {
       return callback(null, true);
     }
 
+    if (env.isDevelopment) {
+      console.info(`[cors] Allowing development origin: ${origin}`);
+      return callback(null, true);
+    }
+
     console.warn(`[cors] Blocked origin: ${origin}`);
 
     return callback(null, false);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-portal-access-token'],
   maxAge: 24 * 60 * 60,
   optionsSuccessStatus: 204
 };
@@ -97,11 +102,10 @@ app.get('/api/health', (req, res) => {
   const databaseState = connectDatabase.getDatabaseState ? connectDatabase.getDatabaseState() : null;
   const databaseReady = ['external', 'in-memory'].includes(databaseState?.mode);
 
-  return res.status(databaseReady ? 200 : 503).json({
-    success: databaseReady,
-    message: databaseReady
-      ? 'DwarPal backend is healthy'
-      : 'DwarPal backend is running without a ready database connection',
+  return res.status(200).json({
+    status: 'ok',
+    success: true,
+    message: 'DwarPal backend is reachable',
     timestamp: new Date().toISOString(),
     data: {
       apiBasePath: '/api',
@@ -109,7 +113,8 @@ app.get('/api/health', (req, res) => {
       serverUrl: env.serverUrl || null,
       environment: env.nodeEnv,
       degradedMode: Boolean(app.locals.degradedMode),
-      database: databaseState
+      database: databaseState,
+      databaseReady
     }
   });
 });

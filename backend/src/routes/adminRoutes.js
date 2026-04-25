@@ -6,6 +6,11 @@ const adminController = require('../controllers/adminController');
 const exportController = require('../controllers/exportController');
 const { updateUserStatusValidation } = require('../validators/userValidators');
 const {
+  adminStudentCreateValidation,
+  adminStudentDeleteValidation,
+  adminStudentUpdateValidation
+} = require('../validators/adminStudentValidators');
+const {
   allowAdminAccess,
   allowExportAccess,
   requireAuth,
@@ -18,6 +23,11 @@ router.post('/seed-default-admins', adminController.seedDefaultAdmins);
 router.get('/analytics', protect, requireVerifiedEmail, authorize('principal', 'hod', 'cao'), adminController.getAnalytics);
 router.get('/users', protect, requireVerifiedEmail, authorize('principal', 'cao'), adminController.listUsers);
 router.patch('/users/:id/status', protect, requireVerifiedEmail, authorize('principal', 'cao'), updateUserStatusValidation, validateRequest, adminController.updateUserStatus);
+router.get('/students/export-credentials', protect, requireVerifiedEmail, authorize('cao'), adminController.exportStudentCredentials);
+router.get('/students', protect, requireVerifiedEmail, authorize('cao'), adminController.listStudents);
+router.post('/students', protect, requireVerifiedEmail, authorize('cao'), adminStudentCreateValidation, validateRequest, adminController.createStudent);
+router.put('/students/:id', protect, requireVerifiedEmail, authorize('cao'), adminStudentUpdateValidation, validateRequest, adminController.updateStudent);
+router.delete('/students/:id', protect, requireVerifiedEmail, authorize('cao'), adminStudentDeleteValidation, validateRequest, adminController.deleteStudent);
 router.get('/export/options', requireAuth, requireVerifiedEmail, allowAdminAccess, scopeFilterMiddleware, exportController.getOptions);
 router.get('/export/preview', requireAuth, requireVerifiedEmail, allowAdminAccess, scopeFilterMiddleware, exportController.getPreview);
 router.post('/export/preview', requireAuth, requireVerifiedEmail, allowAdminAccess, scopeFilterMiddleware, exportController.getPreview);

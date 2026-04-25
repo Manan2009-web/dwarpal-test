@@ -68,6 +68,11 @@ function createRealtimeServer(server) {
           return;
         }
 
+        if (env.isDevelopment) {
+          callback(null, true);
+          return;
+        }
+
         callback(new Error(`Origin ${origin} is not allowed by CORS`));
       },
       credentials: true

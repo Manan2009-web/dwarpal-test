@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   BarChart3,
   Building2,
+  CircleHelp,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
@@ -22,6 +23,7 @@ import {
   UserRoundCog,
 } from 'lucide-react'
 import AppBrand from './AppBrand'
+import StudentManagementPanel from './StudentManagementPanel'
 import { useToast } from './ToastProvider'
 import {
   downloadAdminExport,
@@ -214,7 +216,7 @@ function buildExportPayload(filters, activeSection, selectedRows, exportScope) {
   return request
 }
 
-function AdminSidebar({ currentUser, activeSection, onLogout }) {
+function AdminSidebar({ currentUser, activeSection, onLogout, onOpenSupport }) {
   const navItems = getAdminNavItems(currentUser)
 
   return (
@@ -239,6 +241,12 @@ function AdminSidebar({ currentUser, activeSection, onLogout }) {
         ))}
       </nav>
       <div className="admin-sidebar-footer">
+        {onOpenSupport ? (
+          <button type="button" className="admin-secondary-link" onClick={onOpenSupport}>
+            <CircleHelp size={16} />
+            <span>Help</span>
+          </button>
+        ) : null}
         <Link className="admin-secondary-link" to={`/${currentUser.role}/dashboard`}>
           User Panel
         </Link>
@@ -960,11 +968,12 @@ function ExportWorkspace({
   )
 }
 
-export default function AdminPortal({ currentUser, onLogout }) {
+export default function AdminPortal({ currentUser, onLogout, onOpenSupport = null }) {
   const location = useLocation()
   const navigate = useNavigate()
   const toast = useToast()
   const activeSection = getAdminSection(location.pathname)
+  const showStudentManagement = activeSection === 'students' && currentUser.role === 'cao'
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [options, setOptions] = useState(null)
   const [preview, setPreview] = useState(null)
@@ -984,7 +993,7 @@ export default function AdminPortal({ currentUser, onLogout }) {
   const effectiveFilters = useMemo(() => applySectionFilters(filters, activeSection), [filters, activeSection])
   const requestFilters = useMemo(() => buildFiltersForRequest(effectiveFilters), [effectiveFilters])
 
-  const dataSection = ['export', 'students', 'faculty', 'coordinators'].includes(activeSection)
+  const dataSection = ['export', 'students', 'faculty', 'coordinators'].includes(activeSection) && !showStudentManagement
   const refreshBusy = optionsLoading || previewLoading || recordsLoading
 
   useEffect(() => {
@@ -1196,7 +1205,7 @@ export default function AdminPortal({ currentUser, onLogout }) {
 
   return (
     <div className="admin-shell">
-      <AdminSidebar currentUser={currentUser} activeSection={activeSection} onLogout={onLogout} />
+      <AdminSidebar currentUser={currentUser} activeSection={activeSection} onLogout={onLogout} onOpenSupport={onOpenSupport} />
       <main className="admin-main">
         <AdminHeader
           currentUser={currentUser}
@@ -1217,6 +1226,8 @@ export default function AdminPortal({ currentUser, onLogout }) {
         {activeSection === 'dashboard' ? <DashboardOverview preview={preview} options={options} /> : null}
 
         {activeSection === 'reports' || activeSection === 'gatepasses' ? <ReportsPage preview={preview} /> : null}
+
+        {showStudentManagement ? <StudentManagementPanel /> : null}
 
         {activeSection === 'settings' ? <SettingsPage currentUser={currentUser} options={options} /> : null}
 

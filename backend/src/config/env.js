@@ -13,7 +13,6 @@ const DEFAULT_FRONTEND_PORTS = ['5173', '4173'];
 const DEFAULT_AUTH_ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
-  'http://10.118.50.198:5173',
   'https://dwarpal-test.vercel.app',
   'http://localhost:4173',
   'http://127.0.0.1:4173'
@@ -181,6 +180,24 @@ const env = {
   defaultHodProgram: normalizeEnvString(process.env.DEFAULT_HOD_PROGRAM) || 'Degree',
   defaultHodDepartment: normalizeEnvString(process.env.DEFAULT_HOD_DEPARTMENT) || 'Computer Engineering',
   defaultCoordinatorSemester: parsePositiveIntegerEnv(process.env.DEFAULT_COORDINATOR_SEMESTER, 6),
+  studentPortalAccessId: normalizeEnvString(process.env.STUDENT_PORTAL_ACCESS_ID),
+  studentPortalAccessPassword: normalizeEnvString(process.env.STUDENT_PORTAL_ACCESS_PASSWORD),
+  facultyPortalAccessId: normalizeEnvString(process.env.FACULTY_PORTAL_ACCESS_ID),
+  facultyPortalAccessPassword: normalizeEnvString(process.env.FACULTY_PORTAL_ACCESS_PASSWORD),
+  portalAccessTokenExpiresIn: normalizeEnvString(process.env.PORTAL_ACCESS_TOKEN_EXPIRES_IN) || '12h',
+  studentLoginOtpExpiryMinutes: parsePositiveIntegerEnv(process.env.STUDENT_LOGIN_OTP_EXPIRY_MINUTES, 5),
+  studentLoginOtpResendCooldownSeconds: parsePositiveIntegerEnv(
+    process.env.STUDENT_LOGIN_OTP_RESEND_COOLDOWN_SECONDS,
+    45
+  ),
+  studentLoginOtpVerifyAttemptLimit: parsePositiveIntegerEnv(
+    process.env.STUDENT_LOGIN_OTP_VERIFY_ATTEMPT_LIMIT,
+    5
+  ),
+  temporaryCredentialSecret:
+    normalizeEnvString(process.env.TEMPORARY_CREDENTIAL_SECRET) ||
+    normalizeEnvString(process.env.JWT_SECRET) ||
+    'dwarpal-dev-temporary-credential-secret',
   otpSecret:
     normalizeEnvString(process.env.OTP_SECRET) ||
     normalizeEnvString(process.env.JWT_SECRET) ||

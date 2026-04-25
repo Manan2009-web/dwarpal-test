@@ -3,6 +3,7 @@ const env = require('../config/env');
 const User = require('../models/User');
 const PasswordResetOtp = require('../models/PasswordResetOtp');
 const AppError = require('../utils/appError');
+const pickUser = require('../utils/pickUser');
 const { PASSWORD_REGEX } = require('../constants/appConstants');
 const { logAction } = require('./auditService');
 const authService = require('./authService');
@@ -252,7 +253,7 @@ async function resetPassword(payload, requestMeta = {}) {
   const [user, resetRequest] = await Promise.all([
     User.findOne({
       email
-    }).select('+password'),
+    }).select('+password +temporaryCredentialEncrypted'),
     PasswordResetOtp.findOne({
       email
     }).select('+otpHash')
@@ -269,6 +270,9 @@ async function resetPassword(payload, requestMeta = {}) {
   }
 
   user.password = newPassword;
+  user.mustChangePassword = false;
+  user.temporaryCredentialEncrypted = null;
+  user.temporaryCredentialCreatedAt = null;
   await user.save();
 
   resetRequest.used = true;
@@ -292,7 +296,145 @@ async function resetPassword(payload, requestMeta = {}) {
   };
 }
 
+async function requestAuthenticatedPasswordChange(userId) {
+  const user = await User.findById(userId).select('_id fullName email isActive');
+
+  if (!user) {
+    throw new AppError('User not found', 404);
+  }
+
+  if (!user.isActive) {
+    throw new AppError('This account is inactive. Please contact administration.', 403);
+  }
+
+  const email = normalizeEmail(user.email);
+
+  if (!email) {
+    throw createFieldError('No registered email was found for this account.', 'email', 400);
+  }
+
+  const existingRequest = await PasswordResetOtp.findOne({
+    email
+  }).select('+otpHash');
+
+  if (existingRequest?.lastSentAt) {
+    const retryAt = new Date(
+      new Date(existingRequest.lastSentAt).getTime() + env.passwordResetOtpResendCooldownSeconds * 1000
+    );
+    const retryAfterSeconds = getRemainingSecondsUntil(retryAt);
+
+    if (retryAfterSeconds > 0) {
+      throw createRetryAfterError(
+        `Please wait ${retryAfterSeconds} seconds before requesting a new OTP.`,
+        'otp',
+        retryAfterSeconds
+      );
+    }
+  }
+
+  const otp = generateOtp();
+
+  await PasswordResetOtp.findOneAndUpdate(
+    {
+      email
+    },
+    {
+      $set: {
+        email,
+        otpHash: hashOtp(email, otp),
+        otpExpiresAt: getOtpExpiryDate(env.passwordResetOtpExpiryMinutes),
+        lastSentAt: new Date(),
+        attempts: 0,
+        used: false
+      }
+    },
+    {
+      upsert: true,
+      new: true,
+      setDefaultsOnInsert: true
+    }
+  );
+
+  await sendPasswordResetOtpEmail({
+    email,
+    name: user.fullName,
+    otp,
+    expiryMinutes: env.passwordResetOtpExpiryMinutes
+  });
+
+  return {
+    email,
+    maskedEmail: maskEmail(email),
+    cooldownSeconds: env.passwordResetOtpResendCooldownSeconds,
+    expiresInSeconds: env.passwordResetOtpExpiryMinutes * 60,
+    message: 'Password change OTP sent successfully.'
+  };
+}
+
+async function confirmAuthenticatedPasswordChange(userId, payload, req, requestMeta = {}) {
+  const otp = normalizeOtp(payload.otp);
+  const newPassword = String(payload.newPassword || '');
+
+  if (!PASSWORD_REGEX.test(newPassword)) {
+    throw createFieldError(
+      'New password must be at least 8 characters and include uppercase, lowercase, number, and special character',
+      'newPassword',
+      400
+    );
+  }
+
+  const user = await User.findById(userId).select('+password +temporaryCredentialEncrypted');
+
+  if (!user) {
+    throw new AppError('User not found', 404);
+  }
+
+  const email = normalizeEmail(user.email);
+
+  if (!email) {
+    throw createFieldError('No registered email was found for this account.', 'email', 400);
+  }
+
+  const resetRequest = await PasswordResetOtp.findOne({
+    email
+  }).select('+otpHash');
+
+  await validateResetOtpRecord(resetRequest, email, otp);
+
+  if (await compareWithStoredPassword(newPassword, user.password)) {
+    throw createFieldError('New password cannot be the same as your old password.', 'newPassword', 400);
+  }
+
+  user.password = newPassword;
+  user.mustChangePassword = false;
+  user.temporaryCredentialEncrypted = null;
+  user.temporaryCredentialCreatedAt = null;
+  await user.save();
+
+  resetRequest.used = true;
+  await resetRequest.save();
+
+  await logAction({
+    actorId: user._id,
+    resourceType: 'auth',
+    resourceId: user._id,
+    action: 'authenticated_password_change',
+    message: 'Authenticated password change completed successfully',
+    metadata: {
+      email: user.email
+    },
+    requestMeta
+  });
+
+  return {
+    message: 'Password changed successfully.',
+    user: pickUser(user, req)
+  };
+}
+
 module.exports = {
+  confirmAuthenticatedPasswordChange,
+  requestAuthenticatedPasswordChange,
   resolvePasswordResetAccount,
   resetPassword,
   startPasswordReset,
