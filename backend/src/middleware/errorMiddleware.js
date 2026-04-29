@@ -47,6 +47,10 @@ function errorHandler(err, req, res, next) {
     response.code = error.code;
   }
 
+  if (error.publicErrorCode || error.code) {
+    response.errorCode = error.publicErrorCode || error.code;
+  }
+
   if (error.errors) {
     response.errors = error.errors;
   }

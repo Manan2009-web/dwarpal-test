@@ -4,9 +4,9 @@ const AppError = require('../utils/appError');
 
 let transporter = null;
 let hasLoggedSmtpConfiguration = false;
+const DEFAULT_SMTP_TIMEOUT_MS = 10000;
 const OTP_EMAIL_FAILURE_MESSAGE = 'OTP email could not be sent. Please try again later.';
-const EMAIL_SERVICE_NOT_CONFIGURED_MESSAGE = 'Email service is not configured.';
-const EMAIL_LOGIN_FAILED_MESSAGE = 'Email login failed. Check Gmail App Password.';
+const OTP_EMAIL_FAILURE_CODE = 'EMAIL_SEND_FAILED';
 
 function escapeHtml(value) {
   return String(value || '')
@@ -71,26 +71,19 @@ function formatFromAddress() {
 }
 
 function getSmtpDiagnostics() {
-  const resolvedFromEmail = getEffectiveFromEmail();
-  const normalizedSmtpUser = normalizeEmailAddress(env.smtpUser);
-
   return {
     emailFromPresent: hasEnvValue('EMAIL_FROM'),
-    smtpHostPresent: hasEnvValue('SMTP_HOST'),
-    smtpPortPresent: hasEnvValue('SMTP_PORT'),
-    smtpSecurePresent: hasEnvValue('SMTP_SECURE'),
+    smtpHost: env.smtpHost || '',
+    smtpPort: Number(env.smtpPort) || 0,
+    smtpSecure: Boolean(env.smtpSecure),
     smtpUserPresent: hasEnvValue('SMTP_USER'),
     smtpPassPresent: hasEnvValue('SMTP_PASS'),
     smtpFromNamePresent: hasEnvValue('SMTP_FROM_NAME'),
     smtpFromEmailPresent: hasEnvValue('SMTP_FROM_EMAIL'),
-    smtpHost: env.smtpHost || '',
-    smtpPort: Number(env.smtpPort) || 0,
-    smtpSecure: Boolean(env.smtpSecure),
-    smtpUserMasked: maskEmail(normalizedSmtpUser),
-    resolvedFromEmailMasked: maskEmail(resolvedFromEmail),
-    smtpUserLooksLikeGmail: looksLikeGmailAddress(normalizedSmtpUser),
-    smtpPassLooksLikeAppPassword: looksLikeGmailAppPassword(process.env.SMTP_PASS),
-    fromMatchesSmtpUser: Boolean(resolvedFromEmail && normalizedSmtpUser && resolvedFromEmail === normalizedSmtpUser)
+    smtpConnectionTimeoutMs: Number(env.smtpConnectionTimeoutMs) || DEFAULT_SMTP_TIMEOUT_MS,
+    smtpGreetingTimeoutMs: Number(env.smtpGreetingTimeoutMs) || DEFAULT_SMTP_TIMEOUT_MS,
+    smtpSocketTimeoutMs: Number(env.smtpSocketTimeoutMs) || DEFAULT_SMTP_TIMEOUT_MS,
+    smtpOperationTimeoutMs: Number(env.smtpOperationTimeoutMs) || DEFAULT_SMTP_TIMEOUT_MS
   };
 }
 
@@ -131,79 +124,67 @@ function getSmtpConfigurationWarnings() {
 function logSmtpConfigurationSummary(context = 'runtime') {
   console.info('[email] SMTP configuration summary', {
     context,
-    diagnostics: getSmtpDiagnostics(),
-    warnings: getSmtpConfigurationWarnings()
+    diagnostics: getSmtpDiagnostics()
   });
 }
 
 function buildSmtpFailureDetails(error) {
-  const responseCode = Number(error?.responseCode);
-
   return {
     command: String(error?.command || '').trim(),
     errorCode: String(error?.code || '').trim().toUpperCase(),
-    errorMessage: String(error?.message || '').trim(),
-    name: String(error?.name || '').trim(),
-    responseCode: Number.isFinite(responseCode) ? responseCode : null
+    errorMessage: String(error?.message || '').trim()
   };
 }
 
-function classifySmtpFailure(error) {
-  const smtpFailure = buildSmtpFailureDetails(error);
+function getSmtpFailureCode(error) {
+  const smtpErrorCode = String(error?.code || '').trim().toUpperCase();
+  const responseCode = Number(error?.responseCode);
 
-  if (smtpFailure.errorCode === 'EAUTH' || smtpFailure.responseCode === 534 || smtpFailure.responseCode === 535) {
-    return {
-      code: 'SMTP_AUTH_FAILED',
-      message: EMAIL_LOGIN_FAILED_MESSAGE,
-      statusCode: 502
-    };
+  if (smtpErrorCode === 'EAUTH' || responseCode === 534 || responseCode === 535) {
+    return 'SMTP_AUTH_FAILED';
   }
 
-  if (smtpFailure.errorCode === 'ETIMEDOUT') {
-    return {
-      code: 'SMTP_TIMEOUT',
-      message: OTP_EMAIL_FAILURE_MESSAGE,
-      statusCode: 504
-    };
+  if (smtpErrorCode === 'ETIMEDOUT') {
+    return 'SMTP_TIMEOUT';
   }
 
-  if (['ECONNECTION', 'ESOCKET', 'EDNS'].includes(smtpFailure.errorCode)) {
-    return {
-      code: 'SMTP_CONNECTION_FAILED',
-      message: OTP_EMAIL_FAILURE_MESSAGE,
-      statusCode: 502
-    };
+  if (['ECONNECTION', 'ESOCKET', 'EDNS'].includes(smtpErrorCode)) {
+    return 'SMTP_CONNECTION_FAILED';
   }
 
-  return {
-    code: 'SMTP_DELIVERY_FAILED',
-    message: OTP_EMAIL_FAILURE_MESSAGE,
-    statusCode: 502
-  };
+  return 'SMTP_DELIVERY_FAILED';
 }
 
-function createOtpEmailError(code, statusCode = 502, message = OTP_EMAIL_FAILURE_MESSAGE, extras = {}) {
+function createOtpEmailError(code, statusCode = 503, message = OTP_EMAIL_FAILURE_MESSAGE, extras = {}) {
   const error = new AppError(message, statusCode);
   error.code = code;
+  error.publicErrorCode = OTP_EMAIL_FAILURE_CODE;
   Object.assign(error, extras);
   return error;
 }
 
+function createSmtpOperationTimeoutError(timeoutMs) {
+  const error = new Error(`SMTP operation timed out after ${timeoutMs}ms.`);
+  error.code = 'ETIMEDOUT';
+  error.command = 'SENDMAIL';
+  return error;
+}
+
 function withOperationTimeout(promise, timeoutMs) {
-  return new Promise((resolve, reject) => {
-    const timeoutId = setTimeout(() => {
-      reject(new Error(`SMTP operation timed out after ${timeoutMs}ms.`));
+  let timeoutId = null;
+
+  const timeoutPromise = new Promise((resolve, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(createSmtpOperationTimeoutError(timeoutMs));
     }, timeoutMs);
 
-    Promise.resolve(promise)
-      .then((value) => {
-        clearTimeout(timeoutId);
-        resolve(value);
-      })
-      .catch((error) => {
-        clearTimeout(timeoutId);
-        reject(error);
-      });
+    timeoutId.unref?.();
+  });
+
+  return Promise.race([Promise.resolve(promise), timeoutPromise]).finally(() => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
   });
 }
 
@@ -211,11 +192,10 @@ function getTransporter() {
   if (!isSmtpConfigured()) {
     const diagnostics = getSmtpDiagnostics();
     const warnings = getSmtpConfigurationWarnings();
-    console.error('[email] OTP delivery attempted without complete SMTP configuration.', {
-      diagnostics,
-      warnings
+    console.error('[email] SMTP configuration is incomplete for OTP delivery.', {
+      diagnostics
     });
-    throw createOtpEmailError('SMTP_NOT_CONFIGURED', 503, EMAIL_SERVICE_NOT_CONFIGURED_MESSAGE, {
+    throw createOtpEmailError('SMTP_NOT_CONFIGURED', 503, OTP_EMAIL_FAILURE_MESSAGE, {
       smtpDiagnostics: diagnostics,
       smtpWarnings: warnings
     });
@@ -322,25 +302,21 @@ async function sendMail({ to, subject, html, text, context = 'otp' }) {
   } catch (error) {
     const smtpFailure = buildSmtpFailureDetails(error);
     const diagnostics = getSmtpDiagnostics();
-    const warnings = getSmtpConfigurationWarnings();
-    const classifiedFailure = classifySmtpFailure(error);
 
     console.error('[email] Email delivery failed.', {
       context,
       to: maskEmail(to),
-      ...smtpFailure,
       diagnostics,
-      warnings
+      smtpFailure
     });
 
     throw createOtpEmailError(
-      classifiedFailure.code,
-      classifiedFailure.statusCode,
-      classifiedFailure.message,
+      getSmtpFailureCode(error),
+      503,
+      OTP_EMAIL_FAILURE_MESSAGE,
       {
         smtpFailure,
-        smtpDiagnostics: diagnostics,
-        smtpWarnings: warnings
+        smtpDiagnostics: diagnostics
       }
     );
   }
@@ -350,7 +326,7 @@ async function sendDebugEmail() {
   const to = normalizeEmailAddress(env.smtpUser);
 
   if (!to) {
-    throw createOtpEmailError('SMTP_NOT_CONFIGURED', 503, EMAIL_SERVICE_NOT_CONFIGURED_MESSAGE, {
+    throw createOtpEmailError('SMTP_NOT_CONFIGURED', 503, OTP_EMAIL_FAILURE_MESSAGE, {
       smtpDiagnostics: getSmtpDiagnostics(),
       smtpWarnings: getSmtpConfigurationWarnings()
     });
