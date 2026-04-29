@@ -28,6 +28,11 @@ function createFieldError(message, field = 'field', statusCode = 422) {
   return new AppError(message, statusCode, buildFieldError(field, message));
 }
 
+function createInvalidStudentCredentialsError() {
+  const message = 'Invalid enrollment number or password.';
+  return new AppError(message, 401, buildFieldError('identifier', message));
+}
+
 function createRetryAfterError(message, field, retryAfterSeconds) {
   const error = new AppError(message, 429, buildFieldError(field, message));
   error.retryAfterSeconds = retryAfterSeconds;
@@ -104,7 +109,7 @@ async function getStudentByEnrollment(enrollmentNo, selection = '+password') {
   }).select(selection);
 
   if (!student) {
-    throw createFieldError('This enrollment number is not registered.', 'identifier', 404);
+    throw createInvalidStudentCredentialsError();
   }
 
   if (!student.isActive) {
@@ -206,7 +211,7 @@ async function startStudentLogin(payload, requestMeta = {}) {
   const passwordMatches = await student.comparePassword(String(payload.password || ''));
 
   if (!passwordMatches) {
-    throw new AppError('Invalid credentials. Please check your enrollment number and password and try again.', 401);
+    throw createInvalidStudentCredentialsError();
   }
 
   const result = await sendStudentOtp(student);

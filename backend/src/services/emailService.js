@@ -3,6 +3,7 @@ const env = require('../config/env');
 const AppError = require('../utils/appError');
 
 let transporter = null;
+const OTP_EMAIL_FAILURE_MESSAGE = 'OTP email could not be sent. Please try again later.';
 
 function escapeHtml(value) {
   return String(value || '')
@@ -22,14 +23,34 @@ function formatFromAddress() {
   return name ? `"${name}" <${env.smtpFromEmail}>` : env.smtpFromEmail;
 }
 
+function createOtpEmailError(code, statusCode = 502) {
+  const error = new AppError(OTP_EMAIL_FAILURE_MESSAGE, statusCode);
+  error.code = code;
+  return error;
+}
+
+function withOperationTimeout(promise, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error(`SMTP operation timed out after ${timeoutMs}ms.`));
+    }, timeoutMs);
+
+    Promise.resolve(promise)
+      .then((value) => {
+        clearTimeout(timeoutId);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
+}
+
 function getTransporter() {
   if (!isSmtpConfigured()) {
-    const error = new AppError(
-      'Email delivery is not configured on the server. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, and either SMTP_FROM_EMAIL/SMTP_FROM_NAME or EMAIL_FROM before using OTP flows.',
-      503
-    );
-    error.code = 'SMTP_NOT_CONFIGURED';
-    throw error;
+    console.error('[email] OTP delivery attempted without complete SMTP configuration.');
+    throw createOtpEmailError('SMTP_NOT_CONFIGURED', 503);
   }
 
   if (!transporter) {
@@ -37,6 +58,9 @@ function getTransporter() {
       host: env.smtpHost,
       port: env.smtpPort,
       secure: env.smtpSecure || Number(env.smtpPort) === 465,
+      connectionTimeout: env.smtpConnectionTimeoutMs,
+      greetingTimeout: env.smtpGreetingTimeoutMs,
+      socketTimeout: env.smtpSocketTimeoutMs,
       auth: {
         user: env.smtpUser,
         pass: env.smtpPass
@@ -112,26 +136,25 @@ async function sendMail({ to, subject, html, text }) {
   const mailer = getTransporter();
 
   try {
-    return await mailer.sendMail({
-      from: formatFromAddress(),
-      to,
-      subject,
-      html,
-      text
-    });
+    return await withOperationTimeout(
+      mailer.sendMail({
+        from: formatFromAddress(),
+        to,
+        subject,
+        html,
+        text
+      }),
+      env.smtpOperationTimeoutMs
+    );
   } catch (error) {
     const smtpResponse = String(error?.response || '').trim();
     const smtpMessage = String(error?.message || '').trim();
-    const appError = new AppError(
-      smtpResponse
-        ? `OTP email could not be sent. SMTP server response: ${smtpResponse}`
-        : smtpMessage
-          ? `OTP email could not be sent. ${smtpMessage}`
-          : 'OTP email could not be sent. Please verify the SMTP settings and try again.',
-      502
-    );
-    appError.code = 'SMTP_DELIVERY_FAILED';
-    throw appError;
+    console.error('[email] OTP email delivery failed.', {
+      smtpMessage,
+      smtpResponse,
+      to
+    });
+    throw createOtpEmailError('SMTP_DELIVERY_FAILED', 502);
   }
 }
 

@@ -655,8 +655,21 @@ function App() {
   const resolveApiError = useCallback(
     (error, { fallbackMessage, authMode = 'session' } = {}) => {
       const errorDetails = getApiErrorDetails(error, fallbackMessage)
+      const requestPath = String(errorDetails.payload?.path || errorDetails.payload?.authPath || '').trim()
+      const isAuthRequest = requestPath.startsWith('/auth/')
 
       if (error instanceof ApiError) {
+        if (
+          ['SMTP_NOT_CONFIGURED', 'SMTP_DELIVERY_FAILED', 'OTP_EMAIL_DELIVERY_FAILED'].includes(errorDetails.code) ||
+          /otp email could not be sent/i.test(errorDetails.message)
+        ) {
+          return {
+            ...errorDetails,
+            fieldErrors: {},
+            message: 'OTP email could not be sent. Please check email configuration or try again.',
+          }
+        }
+
         if (errorDetails.code === 'INVALID_API_RESPONSE') {
           return {
             ...errorDetails,
@@ -667,6 +680,14 @@ function App() {
         }
 
         if (error.status === 0) {
+          if (isAuthRequest) {
+            return {
+              ...errorDetails,
+              fieldErrors: {},
+              message: 'Starting DwarPal secure server. Please try again in a few seconds.',
+            }
+          }
+
           const requestUrl = String(errorDetails.payload?.requestUrl || '').trim()
           let backendTarget = ''
 
@@ -688,11 +709,18 @@ function App() {
         }
 
         if (error.status === 408) {
+          if (isAuthRequest) {
+            return {
+              ...errorDetails,
+              fieldErrors: {},
+              message: 'Starting DwarPal secure server. Please try again in a few seconds.',
+            }
+          }
+
           return {
             ...errorDetails,
             fieldErrors: {},
-            message:
-              'DwarPal backend took too long to respond. If this is the first request, the server may be waking up. Please retry in a few seconds.',
+            message: 'The request timed out. Please try again.',
           }
         }
 
@@ -709,6 +737,14 @@ function App() {
         }
 
         if (error.status === 401) {
+          if (authMode === 'student-login') {
+            return {
+              ...errorDetails,
+              fieldErrors: {},
+              message: 'Invalid enrollment number or password.',
+            }
+          }
+
           if (authMode === 'login') {
             return {
               ...errorDetails,
@@ -978,7 +1014,7 @@ function App() {
       } catch (error) {
         const errorDetails = resolveApiError(error, {
           fallbackMessage: 'Unable to start student sign-in right now.',
-          authMode: 'login',
+          authMode: 'student-login',
         })
 
         if (['PORTAL_ACCESS_INVALID', 'PORTAL_ACCESS_REQUIRED'].includes(errorDetails.code)) {

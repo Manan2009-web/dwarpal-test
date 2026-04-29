@@ -4,6 +4,7 @@ function normalizeApiBaseUrl(value) {
   return String(value || '').trim().replace(/\/+$/, '')
 }
 
+const PRODUCTION_API_BASE_URL = 'https://dwarpal-test.onrender.com/api'
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
 
 function isLocalHostname(value) {
@@ -27,6 +28,10 @@ function shouldRewriteEnvApiBaseUrlForLan(url) {
     return false
   }
 
+  if (!import.meta.env.DEV) {
+    return false
+  }
+
   const currentHostname = window.location.hostname
 
   if (!currentHostname || isLocalHostname(currentHostname)) {
@@ -39,14 +44,17 @@ function shouldRewriteEnvApiBaseUrlForLan(url) {
 
 export function getApiBaseUrl() {
   const envApiBaseUrl = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL)
+  const parsedEnvApiBaseUrl = envApiBaseUrl ? safeParseUrl(envApiBaseUrl) : null
 
   if (envApiBaseUrl) {
-    if (shouldRewriteEnvApiBaseUrlForLan(envApiBaseUrl)) {
-      const parsedUrl = safeParseUrl(envApiBaseUrl)
+    if (!import.meta.env.DEV && parsedEnvApiBaseUrl && isLocalHostname(parsedEnvApiBaseUrl.hostname)) {
+      return PRODUCTION_API_BASE_URL
+    }
 
-      if (parsedUrl) {
-        parsedUrl.hostname = window.location.hostname
-        return normalizeApiBaseUrl(parsedUrl.toString())
+    if (shouldRewriteEnvApiBaseUrlForLan(envApiBaseUrl)) {
+      if (parsedEnvApiBaseUrl) {
+        parsedEnvApiBaseUrl.hostname = window.location.hostname
+        return normalizeApiBaseUrl(parsedEnvApiBaseUrl.toString())
       }
     }
 
@@ -54,14 +62,18 @@ export function getApiBaseUrl() {
   }
 
   if (typeof window === 'undefined') {
-    return '/api'
+    return import.meta.env.DEV ? 'http://localhost:5000/api' : PRODUCTION_API_BASE_URL
   }
 
-  if (isLocalHostname(window.location.hostname)) {
-    return 'http://localhost:5000/api'
+  if (import.meta.env.DEV) {
+    if (isLocalHostname(window.location.hostname)) {
+      return 'http://localhost:5000/api'
+    }
+
+    return `http://${window.location.hostname}:5000/api`
   }
 
-  return `http://${window.location.hostname}:5000/api`
+  return PRODUCTION_API_BASE_URL
 }
 
 export const API_BASE_URL = getApiBaseUrl()
@@ -89,9 +101,9 @@ const DEFAULT_PHONE_COUNTRY_CODE = '+91'
 export const DEFAULT_WORKSPACE_PAGE_SIZE = 10
 const DEFAULT_API_TIMEOUT_MS = Number(import.meta.env.VITE_API_REQUEST_TIMEOUT_MS) || 15000
 const DEFAULT_API_RETRY_ATTEMPTS = 2
-const DEFAULT_AUTH_TIMEOUT_MS = Number(import.meta.env.VITE_AUTH_REQUEST_TIMEOUT_MS) || 25000
-const DEFAULT_REGISTER_SEND_TIMEOUT_MS =
-  Number(import.meta.env.VITE_REGISTER_SEND_TIMEOUT_MS) || Math.max(DEFAULT_AUTH_TIMEOUT_MS, 35000)
+const DEFAULT_AUTH_TIMEOUT_MS = Number(import.meta.env.VITE_AUTH_REQUEST_TIMEOUT_MS) || 60000
+const DEFAULT_REGISTER_SEND_TIMEOUT_MS = Number(import.meta.env.VITE_REGISTER_SEND_TIMEOUT_MS) || DEFAULT_AUTH_TIMEOUT_MS
+const DEFAULT_AUTH_RETRY_DELAY_MS = 2000
 const DEFAULT_BACKEND_WARMUP_TIMEOUT_MS = Number(import.meta.env.VITE_BACKEND_WARMUP_TIMEOUT_MS) || 8000
 const BACKEND_WARMUP_CACHE_MS = 2 * 60 * 1000
 const MAX_WORKSPACE_COLLECTION_PAGE_SIZE = 50
@@ -250,6 +262,19 @@ function delay(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms)
   })
+}
+
+function isTimeoutApiError(error) {
+  const payload = getApiErrorPayload(error)
+  return error instanceof ApiError && (error.status === 408 || payload?.code === 'REQUEST_TIMEOUT')
+}
+
+function enrichApiError(error, extras = {}) {
+  if (error instanceof ApiError) {
+    error.payload = buildApiErrorPayload(getApiErrorPayload(error), extras)
+  }
+
+  return error
 }
 
 function readAuthToken() {
@@ -869,6 +894,63 @@ export async function warmBackendForAuth({ signal, force = false, timeoutMs = DE
     return true
   } catch {
     return false
+  }
+}
+
+async function authApiRequest(path, options = {}) {
+  const resolvedTimeoutMs =
+    Number.isFinite(options.timeoutMs) && options.timeoutMs > 0 ? options.timeoutMs : DEFAULT_AUTH_TIMEOUT_MS
+  const requestOptions = {
+    ...options,
+    retryAttempts: Number.isInteger(options.retryAttempts) && options.retryAttempts >= 0 ? options.retryAttempts : 0,
+    timeoutMs: resolvedTimeoutMs,
+  }
+
+  try {
+    return await apiRequest(path, requestOptions)
+  } catch (initialError) {
+    if (!isTimeoutApiError(initialError)) {
+      throw enrichApiError(initialError, {
+        authPath: path,
+        authRetried: false,
+      })
+    }
+
+    if (requestOptions.signal?.aborted) {
+      throw initialError
+    }
+
+    await delay(DEFAULT_AUTH_RETRY_DELAY_MS)
+
+    if (requestOptions.signal?.aborted) {
+      throw initialError
+    }
+
+    let backendHealthReachable = false
+    let backendHealthError = null
+
+    try {
+      await checkBackendHealth({
+        signal: requestOptions.signal,
+        timeoutMs: DEFAULT_BACKEND_WARMUP_TIMEOUT_MS,
+        retryAttempts: 0,
+      })
+      backendHealthReachable = true
+    } catch (healthError) {
+      backendHealthError = healthError
+    }
+
+    try {
+      return await apiRequest(path, requestOptions)
+    } catch (retryError) {
+      throw enrichApiError(retryError, {
+        authPath: path,
+        authRetried: true,
+        authRetryDelayMs: DEFAULT_AUTH_RETRY_DELAY_MS,
+        backendHealthCode: getApiErrorPayload(backendHealthError)?.code || backendHealthError?.code || '',
+        backendHealthReachable,
+      })
+    }
   }
 }
 
@@ -1601,7 +1683,7 @@ export async function verifySession({ signal, timeoutMs = DEFAULT_AUTH_SESSION_T
 }
 
 export async function loginUser(identifier, password) {
-  const payload = await apiRequest('/auth/login', {
+  const payload = await authApiRequest('/auth/login', {
     method: 'POST',
     timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
     body: {
@@ -1624,7 +1706,7 @@ export async function loginUser(identifier, password) {
 }
 
 export async function requestPortalAccess(accessType, accessId, accessPassword) {
-  const response = await apiRequest('/auth/portal-access', {
+  const response = await authApiRequest('/auth/portal-access', {
     method: 'POST',
     timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
     body: {
@@ -1650,7 +1732,7 @@ export async function requestPortalAccess(accessType, accessId, accessPassword) 
 }
 
 export async function startStudentLogin({ identifier = '', password = '', loginToken = '', resend = false } = {}) {
-  const response = await apiRequest('/auth/student-login-start', {
+  const response = await authApiRequest('/auth/student-login-start', {
     method: 'POST',
     timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
     body: loginToken
@@ -1674,7 +1756,7 @@ export async function startStudentLogin({ identifier = '', password = '', loginT
 }
 
 export async function verifyStudentLoginOtp(loginToken, otp) {
-  const response = await apiRequest('/auth/student-login-verify-otp', {
+  const response = await authApiRequest('/auth/student-login-verify-otp', {
     method: 'POST',
     timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
     body: {
@@ -1700,7 +1782,7 @@ export async function verifyStudentLoginOtp(loginToken, otp) {
 }
 
 export async function checkRegistrationAvailability(payload) {
-  const response = await apiRequest('/auth/register/check-availability', {
+  const response = await authApiRequest('/auth/register/check-availability', {
     method: 'POST',
     timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
     body: buildRegistrationIdentityPayload(payload),
@@ -1716,7 +1798,7 @@ export async function registerUser(
   payload,
   { signal, timeoutMs = DEFAULT_REGISTER_SEND_TIMEOUT_MS } = {},
 ) {
-  const response = await apiRequest('/auth/register', {
+  const response = await authApiRequest('/auth/register', {
     method: 'POST',
     signal,
     timeoutMs,
@@ -1737,7 +1819,7 @@ export async function startRegistration(
   payload,
   { signal, timeoutMs = DEFAULT_REGISTER_SEND_TIMEOUT_MS } = {},
 ) {
-  const response = await apiRequest('/auth/register/start', {
+  const response = await authApiRequest('/auth/register/start', {
     method: 'POST',
     signal,
     timeoutMs,
@@ -1756,7 +1838,7 @@ export async function startRegistration(
 }
 
 export async function verifyRegistrationOtp(email, otp) {
-  const response = await apiRequest('/auth/register/verify-otp', {
+  const response = await authApiRequest('/auth/register/verify-otp', {
     method: 'POST',
     timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
     body: {
@@ -1772,7 +1854,7 @@ export async function verifyRegistrationOtp(email, otp) {
 }
 
 export async function resendRegistrationOtp(email) {
-  const response = await apiRequest('/auth/register/resend-otp', {
+  const response = await authApiRequest('/auth/register/resend-otp', {
     method: 'POST',
     timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
     body: {
@@ -1789,7 +1871,7 @@ export async function resendRegistrationOtp(email) {
 }
 
 export async function sendEmailVerificationOtp() {
-  const response = await apiRequest('/auth/email-verification/send-otp', {
+  const response = await authApiRequest('/auth/email-verification/send-otp', {
     method: 'POST',
     timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
   })
@@ -1806,7 +1888,7 @@ export async function sendEmailVerificationOtp() {
 }
 
 export async function updateEmailVerificationEmail(email) {
-  const response = await apiRequest('/auth/email-verification/email', {
+  const response = await authApiRequest('/auth/email-verification/email', {
     method: 'PATCH',
     timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
     body: {
@@ -1826,7 +1908,7 @@ export async function updateEmailVerificationEmail(email) {
 }
 
 export async function verifyCurrentUserEmailOtp(otp) {
-  const response = await apiRequest('/auth/email-verification/verify-otp', {
+  const response = await authApiRequest('/auth/email-verification/verify-otp', {
     method: 'POST',
     timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
     body: {
@@ -1844,7 +1926,7 @@ export async function verifyCurrentUserEmailOtp(otp) {
 }
 
 export async function resolveForgotPasswordAccount(identifier) {
-  const response = await apiRequest('/auth/forgot-password/account', {
+  const response = await authApiRequest('/auth/forgot-password/account', {
     method: 'POST',
     timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
     body: {
@@ -1861,7 +1943,7 @@ export async function resolveForgotPasswordAccount(identifier) {
 }
 
 export async function startForgotPassword({ identifier, email }) {
-  const response = await apiRequest('/auth/forgot-password/start', {
+  const response = await authApiRequest('/auth/forgot-password/start', {
     method: 'POST',
     timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
     body: {
@@ -1881,7 +1963,7 @@ export async function startForgotPassword({ identifier, email }) {
 }
 
 export async function verifyForgotPasswordOtp(email, otp) {
-  const response = await apiRequest('/auth/forgot-password/verify-otp', {
+  const response = await authApiRequest('/auth/forgot-password/verify-otp', {
     method: 'POST',
     timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
     body: {
@@ -1897,7 +1979,7 @@ export async function verifyForgotPasswordOtp(email, otp) {
 }
 
 export async function resetForgotPassword(email, otp, newPassword, confirmPassword = '') {
-  const response = await apiRequest('/auth/forgot-password/reset', {
+  const response = await authApiRequest('/auth/forgot-password/reset', {
     method: 'POST',
     timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
     body: {
@@ -1915,7 +1997,7 @@ export async function resetForgotPassword(email, otp, newPassword, confirmPasswo
 }
 
 export async function requestPasswordChange() {
-  const response = await apiRequest('/auth/request-password-change', {
+  const response = await authApiRequest('/auth/request-password-change', {
     method: 'POST',
     timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
   })
@@ -1930,7 +2012,7 @@ export async function requestPasswordChange() {
 }
 
 export async function confirmPasswordChange(otp, newPassword, confirmPassword = '') {
-  const response = await apiRequest('/auth/confirm-password-change', {
+  const response = await authApiRequest('/auth/confirm-password-change', {
     method: 'POST',
     timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
     body: {

@@ -186,12 +186,34 @@ const login = asyncHandler(async (req, res) => {
 });
 
 const studentLoginStart = asyncHandler(async (req, res) => {
-  const result = await studentAuthService.startStudentLogin(req.body, getRequestMeta(req));
+  const startedAt = Date.now();
+  const identifier = req.body?.identifier || req.body?.enrollmentNo || req.body?.loginToken || '';
 
-  return sendSuccess(res, {
-    message: result.message,
-    data: result
+  console.info('[auth] POST /auth/student-login-start route entered', {
+    identifier: maskIdentifier(identifier),
+    resend: req.body?.resend === true
   });
+
+  try {
+    const result = await studentAuthService.startStudentLogin(req.body, getRequestMeta(req));
+
+    console.info('[auth] POST /auth/student-login-start route completed', {
+      durationMs: Math.max(Date.now() - startedAt, 0),
+      identifier: maskIdentifier(identifier)
+    });
+
+    return sendSuccess(res, {
+      message: result.message,
+      data: result
+    });
+  } catch (error) {
+    console.error('[auth] POST /auth/student-login-start route failed', {
+      durationMs: Math.max(Date.now() - startedAt, 0),
+      error: error?.stack || error?.message || error,
+      identifier: maskIdentifier(identifier)
+    });
+    throw error;
+  }
 });
 
 const studentLoginVerifyOtp = asyncHandler(async (req, res) => {
