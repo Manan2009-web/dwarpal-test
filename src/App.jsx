@@ -659,14 +659,32 @@ function App() {
       const isAuthRequest = requestPath.startsWith('/auth/')
 
       if (error instanceof ApiError) {
+        if (errorDetails.code === 'SMTP_NOT_CONFIGURED') {
+          return {
+            ...errorDetails,
+            fieldErrors: {},
+            message: 'Email service is not configured.',
+          }
+        }
+
+        if (errorDetails.code === 'SMTP_AUTH_FAILED') {
+          return {
+            ...errorDetails,
+            fieldErrors: {},
+            message: 'Email login failed. Check Gmail App Password.',
+          }
+        }
+
         if (
-          ['SMTP_NOT_CONFIGURED', 'SMTP_DELIVERY_FAILED', 'OTP_EMAIL_DELIVERY_FAILED'].includes(errorDetails.code) ||
+          ['SMTP_DELIVERY_FAILED', 'SMTP_TIMEOUT', 'SMTP_CONNECTION_FAILED', 'OTP_EMAIL_DELIVERY_FAILED'].includes(
+            errorDetails.code,
+          ) ||
           /otp email could not be sent/i.test(errorDetails.message)
         ) {
           return {
             ...errorDetails,
             fieldErrors: {},
-            message: 'OTP email could not be sent. Please check email configuration or try again.',
+            message: errorDetails.message || 'OTP email could not be sent. Please try again later.',
           }
         }
 

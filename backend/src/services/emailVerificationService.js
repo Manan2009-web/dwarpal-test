@@ -36,6 +36,25 @@ function createRetryAfterError(message, field, retryAfterSeconds) {
   return error;
 }
 
+function captureEmailVerificationOtpState(user) {
+  return {
+    emailVerificationOtpHash: user.emailVerificationOtpHash || null,
+    emailVerificationOtpExpiresAt: user.emailVerificationOtpExpiresAt || null,
+    emailVerificationOtpSentAt: user.emailVerificationOtpSentAt || null,
+    emailVerificationOtpAttempts: Number(user.emailVerificationOtpAttempts || 0),
+    emailVerificationOtpResendCount: Number(user.emailVerificationOtpResendCount || 0)
+  };
+}
+
+async function restoreEmailVerificationOtpState(user, snapshot) {
+  user.emailVerificationOtpHash = snapshot.emailVerificationOtpHash;
+  user.emailVerificationOtpExpiresAt = snapshot.emailVerificationOtpExpiresAt;
+  user.emailVerificationOtpSentAt = snapshot.emailVerificationOtpSentAt;
+  user.emailVerificationOtpAttempts = snapshot.emailVerificationOtpAttempts;
+  user.emailVerificationOtpResendCount = snapshot.emailVerificationOtpResendCount;
+  await user.save();
+}
+
 function maskEmail(email) {
   const normalizedEmail = normalizeEmail(email);
   const [localPart = '', domain = ''] = normalizedEmail.split('@');
@@ -135,6 +154,7 @@ async function dispatchVerificationOtp(user, req, options = {}) {
   }
 
   const otp = generateOtp();
+  const previousOtpState = captureEmailVerificationOtpState(user);
 
   user.emailVerificationOtpHash = hashOtp(verificationEmail, otp);
   user.emailVerificationOtpExpiresAt = getOtpExpiryDate(env.registerOtpExpiryMinutes);
@@ -144,12 +164,17 @@ async function dispatchVerificationOtp(user, req, options = {}) {
     resetCooldownWindow || !hadPreviousOtp ? 0 : Number(user.emailVerificationOtpResendCount || 0) + 1;
   await user.save();
 
-  await sendVerificationOtpEmail({
-    email: verificationEmail,
-    name: user.fullName,
-    otp,
-    expiryMinutes: env.registerOtpExpiryMinutes
-  });
+  try {
+    await sendVerificationOtpEmail({
+      email: verificationEmail,
+      name: user.fullName,
+      otp,
+      expiryMinutes: env.registerOtpExpiryMinutes
+    });
+  } catch (error) {
+    await restoreEmailVerificationOtpState(user, previousOtpState);
+    throw error;
+  }
 
   return buildVerificationResponse(user, req, {
     message:

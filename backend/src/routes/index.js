@@ -1,10 +1,12 @@
 const express = require('express');
+const env = require('../config/env');
 const authRoutes = require('./authRoutes');
 const userRoutes = require('./userRoutes');
 const gatepassRoutes = require('./gatepassRoutes');
 const facultyLeaveRoutes = require('./facultyLeaveRoutes');
 const dashboardRoutes = require('./dashboardRoutes');
 const adminRoutes = require('./adminRoutes');
+const debugRoutes = require('./debugRoutes');
 const notificationRoutes = require('./notificationRoutes');
 const publicRoutes = require('./publicRoutes');
 
@@ -18,5 +20,9 @@ router.use('/dashboard', dashboardRoutes);
 router.use('/admin', adminRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/public', publicRoutes);
+
+if (env.isDevelopment) {
+  router.use('/debug', debugRoutes);
+}
 
 module.exports = router;

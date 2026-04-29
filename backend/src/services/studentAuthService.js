@@ -39,6 +39,15 @@ function createRetryAfterError(message, field, retryAfterSeconds) {
   return error;
 }
 
+async function restoreStudentLoginOtpSnapshot(userId, snapshot) {
+  if (snapshot?._id) {
+    await StudentLoginOtp.replaceOne({ _id: snapshot._id }, snapshot, { upsert: true });
+    return;
+  }
+
+  await StudentLoginOtp.deleteOne({ userId });
+}
+
 function normalizeEnrollmentNumber(value) {
   return String(value || '').trim();
 }
@@ -136,6 +145,7 @@ function getStudentLoginEmail(user) {
 async function sendStudentOtp(user, options = {}) {
   const email = getStudentLoginEmail(user);
   const existingOtpRecord = await StudentLoginOtp.findOne({ userId: user._id }).select('+otpHash');
+  const previousSnapshot = existingOtpRecord ? existingOtpRecord.toObject() : null;
 
   if (existingOtpRecord?.lastSentAt) {
     const retryAt = new Date(
@@ -176,12 +186,17 @@ async function sendStudentOtp(user, options = {}) {
     }
   );
 
-  await sendStudentLoginOtpEmail({
-    email,
-    name: user.fullName,
-    otp,
-    expiryMinutes: env.studentLoginOtpExpiryMinutes
-  });
+  try {
+    await sendStudentLoginOtpEmail({
+      email,
+      name: user.fullName,
+      otp,
+      expiryMinutes: env.studentLoginOtpExpiryMinutes
+    });
+  } catch (error) {
+    await restoreStudentLoginOtpSnapshot(user._id, previousSnapshot);
+    throw error;
+  }
 
   return {
     loginToken: createStudentLoginChallengeToken(user._id),

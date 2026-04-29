@@ -63,6 +63,15 @@ function createRetryAfterError(message, field, retryAfterSeconds) {
   return error;
 }
 
+async function restorePendingRegistrationSnapshot(email, snapshot) {
+  if (snapshot?._id) {
+    await PendingRegistration.replaceOne({ _id: snapshot._id }, snapshot, { upsert: true });
+    return;
+  }
+
+  await PendingRegistration.deleteOne({ email });
+}
+
 async function startRegistration(payload) {
   const normalizedPayload = normalizeRegistrationPayload(payload);
 
@@ -80,6 +89,9 @@ async function startRegistration(payload) {
   const otpExpiresAt = getOtpExpiryDate(env.registerOtpExpiryMinutes);
   const lastOtpSentAt = new Date();
   const passwordHash = await bcrypt.hash(normalizedPayload.password, env.bcryptSaltRounds);
+  const previousPendingRegistration = await PendingRegistration.findOne({
+    email: normalizedPayload.email
+  }).lean();
 
   await PendingRegistration.findOneAndUpdate(
     {
@@ -103,12 +115,17 @@ async function startRegistration(payload) {
     }
   );
 
-  await sendVerificationOtpEmail({
-    email: normalizedPayload.email,
-    name: normalizedPayload.fullName,
-    otp,
-    expiryMinutes: env.registerOtpExpiryMinutes
-  });
+  try {
+    await sendVerificationOtpEmail({
+      email: normalizedPayload.email,
+      name: normalizedPayload.fullName,
+      otp,
+      expiryMinutes: env.registerOtpExpiryMinutes
+    });
+  } catch (error) {
+    await restorePendingRegistrationSnapshot(normalizedPayload.email, previousPendingRegistration);
+    throw error;
+  }
 
   return {
     email: normalizedPayload.email,
@@ -250,6 +267,7 @@ async function resendRegistrationOtp(payload) {
   });
 
   const otp = generateOtp();
+  const previousPendingRegistration = pendingRegistration.toObject();
 
   pendingRegistration.otpHash = hashOtp(email, otp);
   pendingRegistration.otpExpiresAt = getOtpExpiryDate(env.registerOtpExpiryMinutes);
@@ -258,12 +276,17 @@ async function resendRegistrationOtp(payload) {
   pendingRegistration.verifyAttempts = 0;
   await pendingRegistration.save();
 
-  await sendVerificationOtpEmail({
-    email: pendingRegistration.email,
-    name: pendingRegistration.fullName,
-    otp,
-    expiryMinutes: env.registerOtpExpiryMinutes
-  });
+  try {
+    await sendVerificationOtpEmail({
+      email: pendingRegistration.email,
+      name: pendingRegistration.fullName,
+      otp,
+      expiryMinutes: env.registerOtpExpiryMinutes
+    });
+  } catch (error) {
+    await restorePendingRegistrationSnapshot(email, previousPendingRegistration);
+    throw error;
+  }
 
   return {
     email: pendingRegistration.email,

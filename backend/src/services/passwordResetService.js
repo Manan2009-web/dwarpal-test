@@ -35,6 +35,15 @@ function createRetryAfterError(message, field, retryAfterSeconds) {
   return error;
 }
 
+async function restorePasswordResetSnapshot(email, snapshot) {
+  if (snapshot?._id) {
+    await PasswordResetOtp.replaceOne({ _id: snapshot._id }, snapshot, { upsert: true });
+    return;
+  }
+
+  await PasswordResetOtp.deleteOne({ email });
+}
+
 function normalizeIdentifier(value) {
   return String(value || '').trim();
 }
@@ -165,6 +174,7 @@ async function startPasswordReset(payload) {
   const existingRequest = await PasswordResetOtp.findOne({
     email
   }).select('+otpHash');
+  const previousSnapshot = existingRequest ? existingRequest.toObject() : null;
 
   if (existingRequest?.lastSentAt) {
     const retryAt = new Date(
@@ -204,12 +214,17 @@ async function startPasswordReset(payload) {
     }
   );
 
-  await sendPasswordResetOtpEmail({
-    email,
-    name: user.fullName,
-    otp,
-    expiryMinutes: env.passwordResetOtpExpiryMinutes
-  });
+  try {
+    await sendPasswordResetOtpEmail({
+      email,
+      name: user.fullName,
+      otp,
+      expiryMinutes: env.passwordResetOtpExpiryMinutes
+    });
+  } catch (error) {
+    await restorePasswordResetSnapshot(email, previousSnapshot);
+    throw error;
+  }
 
   return {
     identifier,
@@ -316,6 +331,7 @@ async function requestAuthenticatedPasswordChange(userId) {
   const existingRequest = await PasswordResetOtp.findOne({
     email
   }).select('+otpHash');
+  const previousSnapshot = existingRequest ? existingRequest.toObject() : null;
 
   if (existingRequest?.lastSentAt) {
     const retryAt = new Date(
@@ -355,12 +371,17 @@ async function requestAuthenticatedPasswordChange(userId) {
     }
   );
 
-  await sendPasswordResetOtpEmail({
-    email,
-    name: user.fullName,
-    otp,
-    expiryMinutes: env.passwordResetOtpExpiryMinutes
-  });
+  try {
+    await sendPasswordResetOtpEmail({
+      email,
+      name: user.fullName,
+      otp,
+      expiryMinutes: env.passwordResetOtpExpiryMinutes
+    });
+  } catch (error) {
+    await restorePasswordResetSnapshot(email, previousSnapshot);
+    throw error;
+  }
 
   return {
     email,
