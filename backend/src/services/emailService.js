@@ -7,6 +7,7 @@ let hasLoggedSmtpConfiguration = false;
 const DEFAULT_SMTP_TIMEOUT_MS = 10000;
 const OTP_EMAIL_FAILURE_MESSAGE = 'OTP email could not be sent. Please try again later.';
 const OTP_EMAIL_FAILURE_CODE = 'EMAIL_SEND_FAILED';
+const TEMP_DISABLE_AUTH_OTP_EMAIL = true;
 
 function escapeHtml(value) {
   return String(value || '')
@@ -367,6 +368,18 @@ async function sendDebugEmail() {
 }
 
 async function sendVerificationOtpEmail({ email, name, otp, expiryMinutes = env.registerOtpExpiryMinutes }) {
+  if (TEMP_DISABLE_AUTH_OTP_EMAIL) {
+    // TEMP_DISABLED_OTP
+    console.info('[email] Registration verification OTP email skipped temporarily.', {
+      to: maskEmail(email)
+    });
+    return {
+      skipped: true,
+      email: maskEmail(email),
+      context: 'registration-verification'
+    };
+  }
+
   const template = buildOtpEmailTemplate({
     previewLabel: 'DwarPal verification OTP',
     heading: 'Verify your DwarPal account',
@@ -403,6 +416,18 @@ async function sendPasswordResetOtpEmail({ email, name, otp, expiryMinutes = env
 }
 
 async function sendStudentLoginOtpEmail({ email, name, otp, expiryMinutes = env.studentLoginOtpExpiryMinutes }) {
+  if (TEMP_DISABLE_AUTH_OTP_EMAIL) {
+    // TEMP_DISABLED_OTP
+    console.info('[email] Student login OTP email skipped temporarily.', {
+      to: maskEmail(email)
+    });
+    return {
+      skipped: true,
+      email: maskEmail(email),
+      context: 'student-login'
+    };
+  }
+
   const template = buildOtpEmailTemplate({
     previewLabel: 'DwarPal student login OTP',
     heading: 'Complete your DwarPal student sign-in',

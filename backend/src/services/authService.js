@@ -205,6 +205,16 @@ function applyRegistrationDetailsToUser(user, normalizedPayload) {
   user.enrollment = normalizedPayload.role === 'student' ? normalizedPayload.enrollmentNo : undefined;
   user.employeeId = normalizedPayload.role === 'student' ? undefined : normalizedPayload.employeeId;
   user.phone = normalizedPayload.phone;
+  // TEMP_DISABLED_OTP
+  user.emailVerified = true;
+  user.isEmailVerified = true;
+  user.emailVerifiedAt = user.emailVerifiedAt || new Date();
+  user.pendingEmail = null;
+  user.emailVerificationOtpHash = null;
+  user.emailVerificationOtpExpiresAt = null;
+  user.emailVerificationOtpSentAt = null;
+  user.emailVerificationOtpAttempts = 0;
+  user.emailVerificationOtpResendCount = 0;
 
   return user;
 }
@@ -473,14 +483,6 @@ async function loginUser(payload, req, requestMeta) {
   const normalizedRole = normalizeRole(user.role);
   if (normalizedRole) {
     user.role = normalizedRole;
-  }
-
-  if (user.role === 'student') {
-    throw createFieldErrorResponse(
-      'identifier',
-      'Student login requires your registered enrollment number and email OTP. Please use Student Access.',
-      403
-    );
   }
 
   const loginTimestamp = new Date();

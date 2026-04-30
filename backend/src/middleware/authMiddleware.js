@@ -7,6 +7,8 @@ const { normalizeRole } = require('../constants/appConstants');
 const { isUserEmailVerified } = require('../utils/emailVerificationState');
 const { clearAuthCookie } = require('../utils/token');
 
+const TEMP_DISABLE_EMAIL_VERIFICATION_GUARD = true;
+
 function getTokenFromRequest(req) {
   const authorizationHeader = req.headers.authorization || '';
 
@@ -80,6 +82,18 @@ const protect = asyncHandler(async (req, res, next) => {
 });
 
 function requireVerifiedEmail(req, res, next) {
+  if (TEMP_DISABLE_EMAIL_VERIFICATION_GUARD) {
+    // TEMP_DISABLED_OTP
+    if (req.user && typeof req.user === 'object') {
+      req.user.emailVerified = true;
+      req.user.isEmailVerified = true;
+      req.user.emailVerifiedAt = req.user.emailVerifiedAt || new Date();
+      req.user.pendingEmail = null;
+    }
+
+    return next();
+  }
+
   if (isUserEmailVerified(req.user)) {
     return next();
   }

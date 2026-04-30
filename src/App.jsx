@@ -18,16 +18,11 @@ import './App.css'
 import AppBrand from './components/AppBrand'
 import AdminPortal from './components/AdminPortal'
 import SupportModal from './components/SupportModal'
-import StudentLoginOtpModal from './components/StudentLoginOtpModal'
-import StudentPasswordChangeModal from './components/StudentPasswordChangeModal'
 import AuthPage from './components/auth/AuthPage'
-import AccessPortalScreen from './components/auth/AccessPortalScreen'
 import LoginForm from './components/auth/LoginForm'
 import MascotPanel from './components/auth/MascotPanel'
 import FacultyLeaveWizard from './components/FacultyLeaveWizard'
 import FeatureBoundary from './components/FeatureBoundary'
-import ForceEmailVerificationModal from './components/ForceEmailVerificationModal'
-import ForgotPasswordModal from './components/ForgotPasswordModal'
 import GatepassQrModal from './components/GatepassQrModal'
 import NotificationCenterPanel from './components/NotificationCenterPanel'
 import { NotificationProvider, useNotifications } from './components/NotificationProvider'
@@ -38,7 +33,6 @@ import NotificationPermissionPrompt, {
 import PreferencesPanel from './components/PreferencesPanel'
 import PrivacyPreferencesBanner from './components/PrivacyPreferencesBanner'
 import PasswordInput from './components/PasswordInput'
-import RegisterOtpModal from './components/RegisterOtpModal'
 import SecurityVerificationPanel from './components/SecurityVerificationPanel'
 import { useToast } from './components/ToastProvider'
 import {
@@ -81,11 +75,11 @@ import {
   getBiometricDevices,
   getApiErrorDetails,
   getApiErrorMessage,
-  getPortalAccessSession,
   hasStoredAuthToken,
   loginUser,
   logoutUser,
   normalizePhoneNumberInput,
+  registerUser,
   requestPasswordChange,
   requestPortalAccess,
   resolveForgotPasswordAccount,
@@ -96,7 +90,6 @@ import {
   sendEmailVerificationOtp,
   startStudentLogin,
   startForgotPassword,
-  startRegistration,
   submitRequest,
   updateEmailVerificationEmail,
   updateCurrentUserProfile,
@@ -482,7 +475,7 @@ function App() {
   const [summary, setSummary] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
   const [authReady, setAuthReady] = useState(false)
-  const [portalAccess, setPortalAccess] = useState(() => getPortalAccessSession())
+  const [portalAccess, setPortalAccess] = useState(null)
   const [supportModalOpen, setSupportModalOpen] = useState(false)
   const [studentPasswordPromptOpen, setStudentPasswordPromptOpen] = useState(false)
   const [cookieConsent, setCookieConsent] = useState(() => readCookieConsent())
@@ -495,7 +488,7 @@ function App() {
   const refreshInFlightRef = useRef(false)
   const lastRefreshErrorToastAtRef = useRef(0)
   const workspaceRequestOptionsRef = useRef(DEFAULT_WORKSPACE_REQUEST_OPTIONS)
-  const requiresEmailVerification = currentUser?.emailVerified === false
+  const requiresEmailVerification = false // TEMP_DISABLED_OTP
 
   const resetWorkspace = useCallback(() => {
     setGatepasses([])
@@ -505,6 +498,8 @@ function App() {
 
   const clearSession = useCallback(() => {
     clearStoredAuthToken()
+    clearPortalAccessSession() // TEMP_DISABLED_ACCESS_PORTAL
+    setPortalAccess(null)
     setStudentPasswordPromptOpen(false)
     setSupportModalOpen(false)
     setCurrentUser(null)
@@ -547,6 +542,12 @@ function App() {
     },
     [toast],
   )
+
+  useEffect(() => {
+    // TEMP_DISABLED_ACCESS_PORTAL
+    clearPortalAccessSession()
+    setPortalAccess(null)
+  }, [])
 
   useEffect(() => {
     if (!currentUser || currentUser.role !== 'student' || !currentUser.mustChangePassword) {
@@ -843,7 +844,7 @@ function App() {
 
   const refreshAppData = useCallback(
     async (signal, { force = false, requestOptions = null } = {}) => {
-      if (!currentUser?.role || currentUser?.emailVerified === false) return
+      if (!currentUser?.role) return
 
       if (!force && refreshInFlightRef.current) {
         return
@@ -881,7 +882,7 @@ function App() {
         refreshInFlightRef.current = false
       }
     },
-    [currentUser?.emailVerified, currentUser?.role, loadWorkspace, resolveApiError, toast],
+    [currentUser?.role, loadWorkspace, resolveApiError, toast],
   )
 
   useEffect(() => {
@@ -959,7 +960,7 @@ function App() {
   }, [resolveApiError])
 
   useEffect(() => {
-    if (!currentUser?.role || currentUser?.emailVerified === false) {
+    if (!currentUser?.role) {
       refreshRequestRef.current += 1
       workspaceRequestOptionsRef.current = DEFAULT_WORKSPACE_REQUEST_OPTIONS
       resetWorkspace()
@@ -970,7 +971,7 @@ function App() {
     refreshAppData(controller.signal)
 
     return () => controller.abort()
-  }, [currentUser?.emailVerified, currentUser?.id, currentUser?.role, refreshAppData, resetWorkspace])
+  }, [currentUser?.id, currentUser?.role, refreshAppData, resetWorkspace])
 
   async function submitPortalAccess({ accessType, accessId, accessPassword }) {
     try {
@@ -1014,54 +1015,15 @@ function App() {
     }
   }
 
-  async function login(identifier, password, accessType = portalAccess?.accessType || 'faculty') {
+  async function login(identifier, password) {
     const normalizedIdentifier = String(identifier || '').trim()
-
-    if (accessType === 'student') {
-      try {
-        const result = await startStudentLogin({
-          identifier: normalizedIdentifier,
-          password,
-        })
-
-        return {
-          ok: true,
-          requiresOtp: true,
-          ...result,
-        }
-      } catch (error) {
-        const errorDetails = resolveApiError(error, {
-          fallbackMessage: 'Unable to start student sign-in right now.',
-          authMode: 'student-login',
-        })
-
-        if (['PORTAL_ACCESS_INVALID', 'PORTAL_ACCESS_REQUIRED'].includes(errorDetails.code)) {
-          savePortalAccess(null)
-        }
-
-        toast.error({
-          title: 'Student login failed',
-          message: errorDetails.message,
-        })
-
-        return {
-          ok: false,
-          error: errorDetails.message,
-          code: errorDetails.code,
-          status: errorDetails.status,
-        }
-      }
-    }
 
     try {
       const user = await loginUser(normalizedIdentifier, password)
-      const verificationRequired = user?.emailVerified === false
       setCurrentUser(user)
-      toast[verificationRequired ? 'warning' : 'success']?.({
-        title: verificationRequired ? 'Email verification required' : 'Login successful',
-        message: verificationRequired
-          ? 'Please verify your email to continue using DwarPal.'
-          : `Welcome back to DwarPal, ${user.name}.`,
+      toast.success({
+        title: 'Login successful',
+        message: `Welcome back to DwarPal, ${user.name}.`,
       })
       return { ok: true, user, dashboardPath: getLandingPathForUser(user) }
     } catch (error) {
@@ -1221,13 +1183,10 @@ function App() {
       const options = await createBiometricAuthenticationOptions(identifier)
       const response = await beginBiometricAuthentication(options)
       const user = await verifyBiometricAuthentication(response)
-      const verificationRequired = user?.emailVerified === false
       setCurrentUser(user)
-      toast[verificationRequired ? 'warning' : 'success']?.({
-        title: verificationRequired ? 'Email verification required' : 'Login successful',
-        message: verificationRequired
-          ? 'Please verify your email to continue using DwarPal.'
-          : `Signed in with ${mode === 'face' ? 'face recognition' : 'fingerprint'} successfully.`,
+      toast.success({
+        title: 'Login successful',
+        message: `Signed in with ${mode === 'face' ? 'face recognition' : 'fingerprint'} successfully.`,
       })
       return { ok: true, user, dashboardPath: getLandingPathForUser(user) }
     } catch (error) {
@@ -1304,7 +1263,7 @@ function App() {
     }
 
     try {
-      const result = await startRegistration({
+      const result = await registerUser({
         ...payload,
         email: normalizedEmail,
         enrollment: normalizedEnrollment,
@@ -1316,10 +1275,8 @@ function App() {
 
       return {
         ok: true,
-        message: result.message,
+        message: result.message || 'Account created successfully. You can sign in now.',
         email: result.email || normalizedEmail,
-        cooldownSeconds: result.cooldownSeconds || 45,
-        expiresInSeconds: result.expiresInSeconds || 300,
       }
     } catch (error) {
       const { message, fieldErrors } = resolveApiError(error, {
@@ -1757,13 +1714,7 @@ function App() {
             onOpenSupport={() => setSupportModalOpen(true)}
           />
         </div>
-        <ForceEmailVerificationModal
-          open={requiresEmailVerification}
-          currentUser={currentUser}
-          onSendOtp={sendCurrentUserVerificationOtp}
-          onUpdateEmail={updateCurrentUserVerificationEmail}
-          onVerifyOtp={verifyCurrentUserEmailOtpCode}
-        />
+        {/* TEMP_DISABLED_OTP */}
       </NotificationProvider>
     )
 
@@ -1788,13 +1739,7 @@ function App() {
         <div className={requiresEmailVerification ? 'app-shell-lock-surface' : ''} aria-hidden={requiresEmailVerification}>
           <AdminPortal currentUser={currentUser} onLogout={logout} onOpenSupport={() => setSupportModalOpen(true)} />
         </div>
-        <ForceEmailVerificationModal
-          open={requiresEmailVerification}
-          currentUser={currentUser}
-          onSendOtp={sendCurrentUserVerificationOtp}
-          onUpdateEmail={updateCurrentUserVerificationEmail}
-          onVerifyOtp={verifyCurrentUserEmailOtpCode}
-        />
+        {/* TEMP_DISABLED_OTP */}
       </AdminRoute>
     )
   }
@@ -1818,21 +1763,7 @@ function App() {
           path="/login"
           element={
             <PublicAuthRoute currentUser={currentUser} authReady={authReady}>
-              {['student', 'faculty'].includes(portalAccess?.accessType) ? (
-                <LoginScreen
-                  accessType={portalAccess?.accessType || 'faculty'}
-                  onBiometricLogin={loginWithBiometric}
-                  onForgotPasswordResolveAccount={resolveForgotPasswordAccountFlow}
-                  onForgotPasswordReset={resetForgotPasswordFlow}
-                  onForgotPasswordStart={startForgotPasswordFlow}
-                  onForgotPasswordVerifyOtp={verifyForgotPasswordOtpCode}
-                  onLogin={login}
-                  onStudentLoginResendOtp={resendStudentLoginOtpCode}
-                  onStudentLoginVerifyOtp={verifyStudentLoginOtpCode}
-                />
-              ) : (
-                <AccessPortalScreen currentPortalAccess={portalAccess} onSubmitPortalAccess={submitPortalAccess} />
-              )}
+              <LoginScreen onLogin={login} />
             </PublicAuthRoute>
           }
         />
@@ -1840,15 +1771,7 @@ function App() {
           path="/register"
           element={
             <PublicAuthRoute currentUser={currentUser} authReady={authReady}>
-              {portalAccess?.accessType === 'faculty' ? (
-                <RegisterScreen
-                  onRegister={registerAccount}
-                  onResendOtp={resendRegistrationOtpCode}
-                  onVerifyOtp={verifyRegistrationOtpCode}
-                />
-              ) : (
-                <AccessPortalScreen currentPortalAccess={portalAccess} onSubmitPortalAccess={submitPortalAccess} />
-              )}
+              <RegisterScreen onRegister={registerAccount} />
             </PublicAuthRoute>
           }
         />
@@ -1874,19 +1797,7 @@ function App() {
         />
       </FeatureBoundary>
       <SupportModal open={supportModalOpen} onClose={() => setSupportModalOpen(false)} support={SUPPORT_CONFIG} />
-      <StudentPasswordChangeModal
-        open={studentPasswordPromptOpen && currentUser?.role === 'student'}
-        currentUser={currentUser}
-        onClose={() => setStudentPasswordPromptOpen(false)}
-        onRequestOtp={requestStudentPasswordChangeOtp}
-        onConfirmPasswordChange={confirmStudentPasswordChange}
-        onPasswordChanged={(updatedUser) => {
-          if (updatedUser) {
-            setCurrentUser(updatedUser)
-          }
-          setStudentPasswordPromptOpen(false)
-        }}
-      />
+      {/* TEMP_DISABLED_OTP */}
     </BrowserRouter>
   )
 }
@@ -1973,34 +1884,17 @@ function AuthBootstrapScreen() {
   )
 }
 
-function LoginScreen({
-  accessType = 'faculty',
-  onLogin,
-  onForgotPasswordResolveAccount,
-  onForgotPasswordStart,
-  onForgotPasswordVerifyOtp,
-  onForgotPasswordReset,
-  onStudentLoginResendOtp,
-  onStudentLoginVerifyOtp,
-}) {
+function LoginScreen({ onLogin }) {
   const navigate = useNavigate()
   const location = useLocation()
-  const isStudentAccess = accessType === 'student'
-  const identifierLabel = isStudentAccess ? 'Enrollment Number' : 'Employee ID'
-  const identifierPlaceholder = isStudentAccess ? 'Enter your registered enrollment number' : 'Enter your employee ID'
-  const identifierUsageLabel = isStudentAccess ? 'enrollment number' : 'employee ID'
+  const identifierLabel = 'Enrollment Number / Employee ID'
+  const identifierPlaceholder = 'Enter your enrollment number or employee ID'
+  const identifierUsageLabel = 'enrollment number or employee ID'
   const [form, setForm] = useState({ identifier: '', password: '' })
   const [rememberMe, setRememberMe] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
-  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false)
-  const [studentLoginSession, setStudentLoginSession] = useState({
-    open: false,
-    loginToken: '',
-    maskedEmail: '',
-    cooldownSeconds: 45,
-  })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const submitLockRef = useRef(false)
 
@@ -2038,18 +1932,11 @@ function LoginScreen({
     setError('')
     setSuccess('')
     setFieldErrors({})
-    setForgotPasswordOpen(false)
-    setStudentLoginSession({
-      open: false,
-      loginToken: '',
-      maskedEmail: '',
-      cooldownSeconds: 45,
-    })
     setForm((previousForm) => ({
       ...previousForm,
       password: '',
     }))
-  }, [accessType])
+  }, [])
 
   function updateFormField(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -2064,45 +1951,6 @@ function LoginScreen({
     if (!nextValue && typeof window !== 'undefined') {
       window.localStorage.removeItem(REMEMBERED_LOGIN_IDENTIFIER_STORAGE_KEY)
     }
-  }
-
-  function handleForgotPasswordClick() {
-    const normalizedIdentifier = String(form.identifier || '').trim()
-
-    if (!normalizedIdentifier) {
-      setFieldErrors((previousErrors) => ({
-        ...previousErrors,
-        identifier: `Enter your ${identifierUsageLabel} before using Forgot Password.`,
-      }))
-      setError(`Please enter your ${identifierUsageLabel} first.`)
-      setSuccess('')
-      return
-    }
-
-    if (isEmailStyleIdentifier(normalizedIdentifier)) {
-      setFieldErrors((previousErrors) => ({
-        ...previousErrors,
-        identifier: `Forgot password works only with your ${identifierUsageLabel}.`,
-      }))
-      setError(`Email login is not allowed. Use your ${identifierUsageLabel}.`)
-      setSuccess('')
-      return
-    }
-
-    setError('')
-    setSuccess('')
-    setForgotPasswordOpen(true)
-  }
-
-  function handleForgotPasswordComplete(result) {
-    setForgotPasswordOpen(false)
-    setForm((previousForm) => ({
-      ...previousForm,
-      password: '',
-    }))
-    setFieldErrors({})
-    setError('')
-    setSuccess(result?.message || 'Password reset successful. Please sign in with your new password.')
   }
 
   async function handleLogin(event) {
@@ -2139,7 +1987,7 @@ function LoginScreen({
 
     try {
       const normalizedIdentifier = String(form.identifier || '').trim()
-      const result = await onLogin(normalizedIdentifier, form.password, accessType)
+      const result = await onLogin(normalizedIdentifier, form.password)
       if (!result?.ok) {
         setError(result?.error || 'Unable to sign in. Please try again.')
         return
@@ -2151,21 +1999,6 @@ function LoginScreen({
         } else {
           window.localStorage.removeItem(REMEMBERED_LOGIN_IDENTIFIER_STORAGE_KEY)
         }
-      }
-
-      if (result.requiresOtp) {
-        setStudentLoginSession({
-          open: true,
-          loginToken: result.loginToken || '',
-          maskedEmail: result.maskedEmail || '',
-          cooldownSeconds: result.cooldownSeconds || 45,
-        })
-        setForm((previousForm) => ({
-          ...previousForm,
-          password: '',
-        }))
-        setSuccess(result.message || 'OTP sent to the registered student email.')
-        return
       }
 
       const dashboardPath = result.dashboardPath || getLandingPathForUser(result.user)
@@ -2190,7 +2023,7 @@ function LoginScreen({
           onIdentifierChange={(value) => updateFormField('identifier', value)}
           onPasswordChange={(value) => updateFormField('password', value)}
           onRememberMeChange={handleRememberMeChange}
-          onForgotPassword={handleForgotPasswordClick}
+          onForgotPassword={() => {}}
           onSubmit={handleLogin}
           error={error}
           success={success}
@@ -2198,75 +2031,19 @@ function LoginScreen({
           isSubmitting={isSubmitting}
           identifierLabel={identifierLabel}
           identifierPlaceholder={identifierPlaceholder}
-          title={isStudentAccess ? 'Student Access' : 'Faculty Access'}
-          subtitle={
-            isStudentAccess
-              ? 'Sign in with your enrollment number, then verify the OTP sent to your registered email.'
-              : 'Sign in with your employee ID to continue to DwarPal.'
-          }
-          submitLabel={isStudentAccess ? 'Continue with OTP' : 'Sign in'}
-          showForgotPassword={!isStudentAccess}
-          showRegisterLink={!isStudentAccess}
+          title="DwarPal"
+          subtitle="Sign in to continue to your dashboard"
+          submitLabel="Sign in"
+          showForgotPassword={false}
+          showRegisterLink
         />
       } />
-      <ForgotPasswordModal
-        open={!isStudentAccess && forgotPasswordOpen}
-        identifier={String(form.identifier || '').trim()}
-        onClose={() => setForgotPasswordOpen(false)}
-        onResolveAccount={onForgotPasswordResolveAccount}
-        onStart={onForgotPasswordStart}
-        onVerifyOtp={onForgotPasswordVerifyOtp}
-        onResetPassword={onForgotPasswordReset}
-        onComplete={handleForgotPasswordComplete}
-      />
-      <StudentLoginOtpModal
-        open={studentLoginSession.open}
-        maskedEmail={studentLoginSession.maskedEmail}
-        cooldownSeconds={studentLoginSession.cooldownSeconds}
-        onClose={() =>
-          setStudentLoginSession((previousSession) => ({
-            ...previousSession,
-            open: false,
-          }))
-        }
-        onResend={async () => {
-          const result = await onStudentLoginResendOtp?.(studentLoginSession.loginToken)
-
-          if (result?.ok) {
-            setStudentLoginSession((previousSession) => ({
-              ...previousSession,
-              loginToken: result.loginToken || previousSession.loginToken,
-              maskedEmail: result.maskedEmail || previousSession.maskedEmail,
-              cooldownSeconds: result.cooldownSeconds || previousSession.cooldownSeconds,
-            }))
-          }
-
-          return result
-        }}
-        onVerify={async (otp) => {
-          const result = await onStudentLoginVerifyOtp?.({
-            loginToken: studentLoginSession.loginToken,
-            otp,
-          })
-
-          if (result?.ok) {
-            setStudentLoginSession({
-              open: false,
-              loginToken: '',
-              maskedEmail: '',
-              cooldownSeconds: 45,
-            })
-            navigate(result.dashboardPath || '/user/dashboard', { replace: true })
-          }
-
-          return result
-        }}
-      />
+      {/* TEMP_DISABLED_OTP */}
     </>
   )
 }
 
-function RegisterScreen({ onRegister, onVerifyOtp, onResendOtp }) {
+function RegisterScreen({ onRegister }) {
   const navigate = useNavigate()
   const [form, setForm] = useState({
     name: '',
@@ -2281,9 +2058,6 @@ function RegisterScreen({ onRegister, onVerifyOtp, onResendOtp }) {
   })
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
-  const [otpModalOpen, setOtpModalOpen] = useState(false)
-  const [pendingVerificationEmail, setPendingVerificationEmail] = useState('')
-  const [otpCooldownSeconds, setOtpCooldownSeconds] = useState(45)
   const [isRegistering, setIsRegistering] = useState(false)
   const hasSelectedRole = Boolean(form.role)
   const isStudentRole = form.role === 'student'
@@ -2445,9 +2219,13 @@ function RegisterScreen({ onRegister, onVerifyOtp, onResendOtp }) {
         setError(result?.error || 'Unable to create your account right now.')
         return
       }
-      setPendingVerificationEmail(result.email || submissionPayload.email)
-      setOtpCooldownSeconds(result.cooldownSeconds || 45)
-      setOtpModalOpen(true)
+      resetForm()
+      navigate('/login', {
+        replace: true,
+        state: {
+          authNotice: result?.message || 'Account created successfully. You can sign in now.',
+        },
+      })
     } catch (error) {
       const errorDetails = getApiErrorDetails(error, 'Unable to create your account right now.')
 
@@ -2657,24 +2435,7 @@ function RegisterScreen({ onRegister, onVerifyOtp, onResendOtp }) {
           Login
         </Link>
       </p>
-      <RegisterOtpModal
-        open={otpModalOpen}
-        email={pendingVerificationEmail}
-        initialCooldownSeconds={otpCooldownSeconds}
-        onClose={() => setOtpModalOpen(false)}
-        onVerify={onVerifyOtp}
-        onResend={onResendOtp}
-        onVerified={(result) => {
-          resetForm()
-          setOtpModalOpen(false)
-          navigate('/login', {
-            replace: true,
-            state: {
-              authNotice: result?.message || 'Email verified successfully. You can sign in now.',
-            },
-          })
-        }}
-      />
+      {/* TEMP_DISABLED_OTP */}
     </AuthShell>
   )
 }

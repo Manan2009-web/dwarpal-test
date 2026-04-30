@@ -958,14 +958,15 @@ function toUiUser(user, session = null) {
   if (!user) return null
 
   const normalizedRole = normalizeRole(user.role)
+  const emailVerified = true // TEMP_DISABLED_OTP
 
   return {
     id: user.id,
     name: user.fullName,
     email: user.email,
-    emailVerified: user.emailVerified ?? user.isEmailVerified ?? false,
-    isEmailVerified: user.emailVerified ?? user.isEmailVerified ?? false,
-    emailVerifiedAt: user.emailVerifiedAt || null,
+    emailVerified,
+    isEmailVerified: emailVerified,
+    emailVerifiedAt: user.emailVerifiedAt || new Date().toISOString(),
     pendingEmail: user.pendingEmail || null,
     verificationEmail: user.verificationEmail || user.pendingEmail || user.email || '',
     program: normalizeProgram(user.program),

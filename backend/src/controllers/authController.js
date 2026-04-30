@@ -13,6 +13,7 @@ const emailVerificationService = require('../services/emailVerificationService')
 const passwordResetService = require('../services/passwordResetService');
 const registrationOtpService = require('../services/registrationOtpService');
 const studentAuthService = require('../services/studentAuthService');
+const pickUser = require('../utils/pickUser');
 const {
   createPortalAccessToken,
   getPortalAccessCredentials,
@@ -90,35 +91,50 @@ const checkRegistrationAvailability = asyncHandler(async (req, res) => {
 });
 
 const registerStart = asyncHandler(async (req, res) => {
-  const result = await registrationOtpService.startRegistration(req.body);
+  // TEMP_DISABLED_OTP
+  const result = await authService.registerUser(req.body, req, getRequestMeta(req));
 
   return sendSuccess(res, {
+    statusCode: result?.statusCode || 201,
     message: result.message,
     data: result
   });
 });
 
 const verifyRegisterOtp = asyncHandler(async (req, res) => {
-  const result = await registrationOtpService.verifyRegistrationOtp(req.body, getRequestMeta(req));
-
   return sendSuccess(res, {
-    statusCode: 201,
-    message: result.message,
-    data: result
+    message: 'Registration OTP verification is temporarily disabled. You can sign in now.',
+    data: {
+      email: String(req.body?.email || '').trim().toLowerCase()
+    }
   });
 });
 
 const resendRegisterOtp = asyncHandler(async (req, res) => {
-  const result = await registrationOtpService.resendRegistrationOtp(req.body);
-
   return sendSuccess(res, {
-    message: result.message,
-    data: result
+    message: 'Registration OTP delivery is temporarily disabled.',
+    data: {
+      email: String(req.body?.email || '').trim().toLowerCase()
+    }
   });
 });
 
 const portalAccess = asyncHandler(async (req, res) => {
   const accessType = normalizePortalAccessType(req.body?.accessType);
+
+  if (!accessType) {
+    throw new AppError('Access type must be either student or faculty.', 400);
+  }
+
+  // TEMP_DISABLED_ACCESS_PORTAL
+  return sendSuccess(res, {
+    message: `${accessType === 'student' ? 'Student' : 'Faculty'} portal access is temporarily bypassed.`,
+    data: {
+      accessType,
+      token: createPortalAccessToken(accessType)
+    }
+  });
+
   const credentials = getPortalAccessCredentials(accessType);
 
   if (!accessType) {
@@ -186,6 +202,11 @@ const login = asyncHandler(async (req, res) => {
 });
 
 const studentLoginStart = asyncHandler(async (req, res) => {
+  if (String(req.body?.loginToken || '').trim() || req.body?.resend === true) {
+    // TEMP_DISABLED_OTP
+    throw new AppError('Student OTP login is temporarily disabled. Please sign in again with your password.', 400);
+  }
+
   const startedAt = Date.now();
   const identifier = req.body?.identifier || req.body?.enrollmentNo || req.body?.loginToken || '';
 
@@ -195,7 +216,9 @@ const studentLoginStart = asyncHandler(async (req, res) => {
   });
 
   try {
-    const result = await studentAuthService.startStudentLogin(req.body, getRequestMeta(req));
+    // TEMP_DISABLED_OTP
+    const result = await authService.loginUser(req.body, req, getRequestMeta(req));
+    setAuthCookie(res, result.token);
 
     console.info('[auth] POST /auth/student-login-start route completed', {
       durationMs: Math.max(Date.now() - startedAt, 0),
@@ -203,7 +226,7 @@ const studentLoginStart = asyncHandler(async (req, res) => {
     });
 
     return sendSuccess(res, {
-      message: result.message,
+      message: 'Login successful',
       data: result
     });
   } catch (error) {
@@ -217,13 +240,8 @@ const studentLoginStart = asyncHandler(async (req, res) => {
 });
 
 const studentLoginVerifyOtp = asyncHandler(async (req, res) => {
-  const result = await studentAuthService.verifyStudentLoginOtp(req.body, req, getRequestMeta(req));
-  setAuthCookie(res, result.token);
-
-  return sendSuccess(res, {
-    message: 'Student login successful',
-    data: result
-  });
+  // TEMP_DISABLED_OTP
+  throw new AppError('Student OTP verification is temporarily disabled. Please sign in again with your password.', 400);
 });
 
 const logout = asyncHandler(async (req, res) => {
@@ -324,6 +342,19 @@ const confirmPasswordChange = asyncHandler(async (req, res) => {
 });
 
 const sendEmailVerificationOtp = asyncHandler(async (req, res) => {
+  // TEMP_DISABLED_OTP
+  const user = pickUser(req.user, req);
+
+  return sendSuccess(res, {
+    message: 'Email verification is temporarily disabled. Your account is already verified.',
+    data: {
+      email: user?.email || '',
+      verificationEmail: user?.email || '',
+      maskedVerificationEmail: user?.email || '',
+      user
+    }
+  });
+
   const result = await emailVerificationService.sendEmailVerificationOtp(req.user._id, req, getRequestMeta(req));
 
   return sendSuccess(res, {
@@ -333,6 +364,26 @@ const sendEmailVerificationOtp = asyncHandler(async (req, res) => {
 });
 
 const updateEmailVerificationEmail = asyncHandler(async (req, res) => {
+  // TEMP_DISABLED_OTP
+  if (req.body?.email) {
+    req.user.email = String(req.body.email || '').trim().toLowerCase();
+    req.user.emailVerified = true;
+    req.user.isEmailVerified = true;
+    req.user.emailVerifiedAt = req.user.emailVerifiedAt || new Date();
+    req.user.pendingEmail = null;
+    await req.user.save();
+  }
+
+  return sendSuccess(res, {
+    message: 'Email verification is temporarily disabled. Your email has been updated.',
+    data: {
+      email: req.user.email || '',
+      verificationEmail: req.user.email || '',
+      maskedVerificationEmail: req.user.email || '',
+      user: pickUser(req.user, req)
+    }
+  });
+
   const result = await emailVerificationService.updateVerificationEmail(
     req.user._id,
     req.body,
@@ -347,6 +398,23 @@ const updateEmailVerificationEmail = asyncHandler(async (req, res) => {
 });
 
 const verifyEmailVerificationOtp = asyncHandler(async (req, res) => {
+  // TEMP_DISABLED_OTP
+  req.user.emailVerified = true;
+  req.user.isEmailVerified = true;
+  req.user.emailVerifiedAt = req.user.emailVerifiedAt || new Date();
+  req.user.pendingEmail = null;
+  await req.user.save();
+
+  return sendSuccess(res, {
+    message: 'Email verification is temporarily disabled. Your account is already verified.',
+    data: {
+      email: req.user.email || '',
+      verificationEmail: req.user.email || '',
+      maskedVerificationEmail: req.user.email || '',
+      user: pickUser(req.user, req)
+    }
+  });
+
   const result = await emailVerificationService.verifyEmailVerificationOtp(
     req.user._id,
     req.body,

@@ -4,7 +4,14 @@ function normalizeEmailValue(value) {
     .toLowerCase();
 }
 
+const TEMP_DISABLE_EMAIL_VERIFICATION = true;
+
 function isUserEmailVerified(user) {
+  if (TEMP_DISABLE_EMAIL_VERIFICATION) {
+    // TEMP_DISABLED_OTP
+    return true;
+  }
+
   if (typeof user?.emailVerified === 'boolean') {
     return user.emailVerified;
   }
@@ -40,6 +47,16 @@ function clearEmailVerificationChallenge(user) {
 
 function syncEmailVerificationFields(user) {
   if (!user || typeof user !== 'object') {
+    return user;
+  }
+
+  if (TEMP_DISABLE_EMAIL_VERIFICATION) {
+    // TEMP_DISABLED_OTP
+    user.emailVerified = true;
+    user.isEmailVerified = true;
+    user.emailVerifiedAt = user.emailVerifiedAt || new Date();
+    user.pendingEmail = null;
+    clearEmailVerificationChallenge(user);
     return user;
   }
 

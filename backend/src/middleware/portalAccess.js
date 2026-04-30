@@ -8,6 +8,7 @@ const AppError = require('../utils/appError');
 const PORTAL_ACCESS_HEADER = 'x-portal-access-token';
 const PORTAL_ACCESS_TYPES = Object.freeze(['student', 'faculty']);
 const PORTAL_CREDENTIALS_CONFIG_PATH = path.resolve(__dirname, '../../../src/config/portalCredentials.js');
+const TEMP_DISABLE_ACCESS_PORTAL = true;
 
 function normalizePortalAccessType(value) {
   const normalizedValue = String(value || '')
@@ -123,6 +124,16 @@ function requirePortalAccess(...allowedTypes) {
   const normalizedAllowedTypes = allowedTypes.map(normalizePortalAccessType).filter(Boolean);
 
   return function requirePortalAccessMiddleware(req, res, next) {
+    if (TEMP_DISABLE_ACCESS_PORTAL) {
+      // TEMP_DISABLED_ACCESS_PORTAL
+      req.portalAccess = {
+        accessType: normalizedAllowedTypes[0] || 'faculty',
+        expiresAt: null,
+        bypassed: true
+      };
+      return next();
+    }
+
     const token = readPortalAccessToken(req);
 
     if (!token) {
