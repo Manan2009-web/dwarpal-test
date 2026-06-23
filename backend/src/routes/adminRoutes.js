@@ -20,14 +20,14 @@ const {
 const router = express.Router();
 
 router.post('/seed-default-admins', adminController.seedDefaultAdmins);
-router.get('/analytics', protect, requireVerifiedEmail, authorize('principal', 'hod', 'cao'), adminController.getAnalytics);
-router.get('/users', protect, requireVerifiedEmail, authorize('principal', 'cao'), adminController.listUsers);
-router.patch('/users/:id/status', protect, requireVerifiedEmail, authorize('principal', 'cao'), updateUserStatusValidation, validateRequest, adminController.updateUserStatus);
-router.get('/students/export-credentials', protect, requireVerifiedEmail, authorize('cao'), adminController.exportStudentCredentials);
-router.get('/students', protect, requireVerifiedEmail, authorize('cao'), adminController.listStudents);
-router.post('/students', protect, requireVerifiedEmail, authorize('cao'), adminStudentCreateValidation, validateRequest, adminController.createStudent);
-router.put('/students/:id', protect, requireVerifiedEmail, authorize('cao'), adminStudentUpdateValidation, validateRequest, adminController.updateStudent);
-router.delete('/students/:id', protect, requireVerifiedEmail, authorize('cao'), adminStudentDeleteValidation, validateRequest, adminController.deleteStudent);
+router.get('/analytics', protect, requireVerifiedEmail, authorize('principal', 'hod', 'cao', 'admin'), adminController.getAnalytics);
+router.get('/users', protect, requireVerifiedEmail, authorize('principal', 'cao', 'admin'), adminController.listUsers);
+router.patch('/users/:id/status', protect, requireVerifiedEmail, authorize('principal', 'cao', 'admin'), updateUserStatusValidation, validateRequest, adminController.updateUserStatus);
+router.get('/students/export-credentials', protect, requireVerifiedEmail, authorize('cao', 'admin'), adminController.exportStudentCredentials);
+router.get('/students', protect, requireVerifiedEmail, authorize('cao', 'admin'), adminController.listStudents);
+router.post('/students', protect, requireVerifiedEmail, authorize('cao', 'admin'), adminStudentCreateValidation, validateRequest, adminController.createStudent);
+router.put('/students/:id', protect, requireVerifiedEmail, authorize('cao', 'admin'), adminStudentUpdateValidation, validateRequest, adminController.updateStudent);
+router.delete('/students/:id', protect, requireVerifiedEmail, authorize('cao', 'admin'), adminStudentDeleteValidation, validateRequest, adminController.deleteStudent);
 router.get('/export/options', requireAuth, requireVerifiedEmail, allowAdminAccess, scopeFilterMiddleware, exportController.getOptions);
 router.get('/export/preview', requireAuth, requireVerifiedEmail, allowAdminAccess, scopeFilterMiddleware, exportController.getPreview);
 router.post('/export/preview', requireAuth, requireVerifiedEmail, allowAdminAccess, scopeFilterMiddleware, exportController.getPreview);

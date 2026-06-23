@@ -41,6 +41,13 @@ export const ROLE_META = {
     accent: 'var(--accent-security)',
     idLabel: 'Employee ID',
   },
+  admin: {
+    title: 'Admin',
+    shortTitle: 'Admin',
+    panelTitle: 'Admin Dashboard',
+    accent: 'var(--accent-admin)',
+    idLabel: 'Employee ID',
+  },
 }
 
 export const STATUS_COLORS = {
@@ -55,39 +62,56 @@ export const STATUS_COLORS = {
   Cancelled: 'rejected',
 }
 
-export const ROLE_OPTIONS = ['student', 'faculty', 'hod', 'cao', 'principal', 'security']
+export const ROLE_OPTIONS = ['student', 'faculty', 'hod', 'cao', 'principal', 'security', 'admin']
 
 export const PUBLIC_ROLE_OPTIONS = ROLE_OPTIONS.filter((role) => role !== 'student')
 
 export const SEMESTER_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8]
 
-export const PROGRAM_OPTIONS = ['Diploma', 'Degree']
-
-export const ROUTING_DEPARTMENTS = ['Computer', 'Civil', 'Mechanical', 'Electrical']
-
-export const DEPARTMENTS = [
-  ...ROUTING_DEPARTMENTS,
-  'Nursing',
-  'Physiotherapy',
+export const PROGRAM_OPTIONS = [
+  'Diploma Engineering',
+  'Degree Engineering',
+  'Management Studies',
+  'Pharmacy',
+  'Computer Applications',
+  'Science',
+  'Commerce',
+  'Arts',
 ]
 
+export const DEPARTMENTS = [
+  'Computer Engineering',
+  'Information Technology',
+  'Mechanical Engineering',
+  'Civil Engineering',
+  'Electrical Engineering',
+  'Electronics & Communication',
+  'Artificial Intelligence',
+  'Data Science',
+]
+
+export const ROUTING_DEPARTMENTS = DEPARTMENTS
+
 const DEPARTMENT_ALIAS_MAP = {
-  computer: 'Computer',
-  'computer engineering': 'Computer',
-  'computer science': 'Computer',
-  'information technology': 'Computer',
-  cse: 'Computer',
-  it: 'Computer',
-  civil: 'Civil',
-  'civil engineering': 'Civil',
-  mechanical: 'Mechanical',
-  'mechanical engineering': 'Mechanical',
-  electrical: 'Electrical',
-  'electrical engineering': 'Electrical',
+  computer: 'Computer Engineering',
+  'computer engineering': 'Computer Engineering',
+  'computer science': 'Computer Engineering',
+  'information technology': 'Information Technology',
+  cse: 'Computer Engineering',
+  it: 'Information Technology',
+  civil: 'Civil Engineering',
+  'civil engineering': 'Civil Engineering',
+  mechanical: 'Mechanical Engineering',
+  'mechanical engineering': 'Mechanical Engineering',
+  electrical: 'Electrical Engineering',
+  'electrical engineering': 'Electrical Engineering',
+  'electronics & communication': 'Electronics & Communication',
+  'artificial intelligence': 'Artificial Intelligence',
+  'data science': 'Data Science',
   nursing: 'Nursing',
   physiotherapy: 'Physiotherapy',
-  administration: 'Computer',
-  security: 'Computer',
+  administration: 'Computer Engineering',
+  security: 'Computer Engineering',
 }
 
 export function normalizeRole(role) {
@@ -103,8 +127,9 @@ export function normalizeProgram(program) {
     .trim()
     .toLowerCase()
 
-  if (normalizedProgram === 'diploma') return 'Diploma'
-  if (normalizedProgram === 'degree') return 'Degree'
+  if (!normalizedProgram) return ''
+  if (normalizedProgram.includes('diploma')) return 'Diploma Engineering'
+  if (normalizedProgram.includes('degree')) return 'Degree Engineering'
   return ''
 }
 

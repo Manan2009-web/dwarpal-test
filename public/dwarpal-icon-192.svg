@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#387dcc"/>
+      <stop offset="100%" stop-color="#1f5a8f"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.3)"/>
+      <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+    </linearGradient>
+  </defs>
+  <rect width="192" height="192" rx="42" fill="url(#bg)"/>
+  <rect width="192" height="192" rx="42" fill="url(#shine)"/>
+  <g transform="translate(96,96)">
+    <!-- Shield shape -->
+    <path d="M0-52 L40-36 L40,8 C40,34 20,54 0,64 C-20,54 -40,34 -40,8 L-40-36 Z" 
+          fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.5)" stroke-width="2.5"/>
+    <!-- Gate pillars -->
+    <rect x="-20" y="-22" width="8" height="50" rx="2" fill="rgba(255,255,255,0.85)"/>
+    <rect x="12" y="-22" width="8" height="50" rx="2" fill="rgba(255,255,255,0.85)"/>
+    <!-- Gate arch -->
+    <path d="M-20-18 Q0-42 20-18" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="3" stroke-linecap="round"/>
+    <!-- Horizontal bar -->
+    <rect x="-20" y="4" width="40" height="3" rx="1.5" fill="rgba(255,255,255,0.6)"/>
+    <!-- Star on top -->
+    <circle cx="0" cy="-42" r="4" fill="#ffd700"/>
+  </g>
+</svg>

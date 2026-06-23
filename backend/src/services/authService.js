@@ -147,9 +147,20 @@ async function collectRegistrationConflictErrors(payload = {}) {
     return [];
   }
 
+  // --- DEBUG LOGS (requested) ---
+  const mongoose = require('mongoose');
+  console.log('[register-debug] Database:', mongoose.connection.name);
+  console.log('[register-debug] Collection:', User.collection.name);
+  console.log('[register-debug] Email Query:', normalizedPayload.email);
+  console.log('[register-debug] Phone Query:', normalizedPayload.phone);
+  console.log('[register-debug] Employee Query:', normalizedPayload.employeeId);
+  // --- END DEBUG LOGS ---
+
   const existingUsers = await User.find({ $or: duplicateLookup }).select('_id email phone enrollmentNo enrollment employeeId').lean();
   const errors = [];
   const conflictingUsers = existingUsers.filter((user) => String(user?._id || '') !== ignoredUserId);
+
+  console.log('[register-debug] Existing User(s) found:', JSON.stringify(conflictingUsers));
 
   if (normalizedPayload.email && conflictingUsers.some((user) => user.email === normalizedPayload.email)) {
     errors.push(buildFieldError('email', DUPLICATE_REGISTRATION_MESSAGES.email));
@@ -198,7 +209,13 @@ function applyRegistrationDetailsToUser(user, normalizedPayload) {
   user.email = normalizedPayload.email;
   user.password = normalizedPayload.password;
   user.role = normalizedPayload.role;
-  user.program = ['student', 'hod'].includes(normalizedPayload.role) ? normalizedPayload.program : undefined;
+
+  // FIX: principal and admin also require a program — previously they were
+  // incorrectly excluded here, which caused the Mongoose required-validator to
+  // fire "Program is required" even when the user had selected one in the UI.
+  const rolesWithProgram = ['student', 'hod', 'principal', 'admin'];
+  user.program = rolesWithProgram.includes(normalizedPayload.role) ? normalizedPayload.program : undefined;
+
   user.department = normalizedPayload.role === 'security' ? undefined : normalizedPayload.department;
   user.semester = normalizedPayload.role === 'student' ? Number(normalizedPayload.semester) : undefined;
   user.enrollmentNo = normalizedPayload.role === 'student' ? normalizedPayload.enrollmentNo : undefined;

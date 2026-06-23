@@ -7,6 +7,7 @@ const {
   DEPARTMENTS,
   ROLES,
   SEMESTERS,
+  STUDENT_PROGRAMS,
   normalizeDepartment,
   normalizeProgram
 } = require('../constants/appConstants');
@@ -38,9 +39,8 @@ function getDefaultCoordinatorSemester() {
 
 function getSystemAccountSeedData() {
   const hodDepartment = getDefaultHodDepartment();
-  const hodProgram = getDefaultHodProgram();
+  const defaultProgram = STUDENT_PROGRAMS[0];
   const coordinatorSemester = getDefaultCoordinatorSemester();
-  const defaultDepartment = DEPARTMENTS[0];
 
   return [
     {
@@ -49,7 +49,8 @@ function getSystemAccountSeedData() {
       email: 'principal@dwarpal.local',
       employeeId: 'PRINCIPAL',
       phone: '9999999991',
-      department: defaultDepartment,
+      program: defaultProgram,
+      designation: 'Principal',
       gatepassApprovalEnabled: true
     },
     {
@@ -58,8 +59,8 @@ function getSystemAccountSeedData() {
       email: 'hod@dwarpal.local',
       employeeId: 'HOD',
       phone: '9999999992',
-      program: hodProgram,
       department: hodDepartment,
+      designation: 'HOD',
       gatepassApprovalEnabled: true
     },
     {
@@ -69,9 +70,10 @@ function getSystemAccountSeedData() {
       employeeId: 'COORDINATOR',
       phone: '9999999995',
       department: hodDepartment,
+      designation: 'Assistant Professor',
       coordinatorAssignment: {
         isCoordinator: true,
-        program: hodProgram,
+        program: defaultProgram,
         department: hodDepartment,
         semester: coordinatorSemester
       }
@@ -82,7 +84,7 @@ function getSystemAccountSeedData() {
       email: 'cao@dwarpal.local',
       employeeId: 'CAO',
       phone: '9999999993',
-      department: defaultDepartment
+      authorityLevel: 'Senior'
     },
     {
       role: 'security',
@@ -90,7 +92,16 @@ function getSystemAccountSeedData() {
       email: 'security@dwarpal.local',
       employeeId: 'SECURITY',
       phone: '9999999994',
-      department: defaultDepartment
+      securityZone: 'Main Gate'
+    },
+    {
+      role: 'admin',
+      fullName: 'Admin DwarPal',
+      email: 'admin@dwarpal.local',
+      employeeId: 'ADMIN',
+      phone: '9999999996',
+      program: defaultProgram,
+      accessLevel: 'Super'
     }
   ];
 }
@@ -104,6 +115,16 @@ function buildAccountLookupConditions(account) {
 
   if (account.enrollmentNo) {
     lookupConditions.push({ enrollmentNo: account.enrollmentNo });
+  }
+
+  if (account.phone) {
+    const { normalizePhoneNumber } = require('../utils/phone');
+    const normalizedPhone = normalizePhoneNumber(account.phone, {
+      defaultCountryCode: env.defaultPhoneCountryCode
+    });
+    if (normalizedPhone) {
+      lookupConditions.push({ phone: normalizedPhone });
+    }
   }
 
   return lookupConditions;
@@ -140,6 +161,10 @@ function applySafeSystemAccountDefaults(user, account) {
   changed = assignIfMissing(user, 'email', account.email) || changed;
   changed = assignIfMissing(user, 'phone', account.phone) || changed;
   changed = assignIfMissing(user, 'department', account.department) || changed;
+  changed = assignIfMissing(user, 'designation', account.designation) || changed;
+  changed = assignIfMissing(user, 'securityZone', account.securityZone) || changed;
+  changed = assignIfMissing(user, 'accessLevel', account.accessLevel) || changed;
+  changed = assignIfMissing(user, 'authorityLevel', account.authorityLevel) || changed;
 
   if (user.emailVerified !== true || user.isEmailVerified !== true) {
     user.emailVerified = true;
@@ -148,7 +173,7 @@ function applySafeSystemAccountDefaults(user, account) {
     changed = true;
   }
 
-  if (['student', 'hod'].includes(account.role)) {
+  if (['student', 'principal', 'admin', 'cao'].includes(account.role)) {
     changed = assignIfMissing(user, 'program', account.program) || changed;
   }
 
@@ -157,6 +182,21 @@ function applySafeSystemAccountDefaults(user, account) {
     changed = assignIfMissing(user, 'enrollmentNo', account.enrollmentNo) || changed;
   } else {
     changed = assignIfMissing(user, 'employeeId', account.employeeId) || changed;
+  }
+
+  const permissionsMap = {
+    student: ['student:dashboard'],
+    faculty: ['faculty:dashboard'],
+    hod: ['hod:dashboard'],
+    principal: ['principal:dashboard'],
+    security: ['security:dashboard'],
+    cao: ['cao:dashboard'],
+    admin: ['admin:dashboard', 'admin:access', 'admin:*', 'export:*']
+  };
+
+  if (!user.permissions || !user.permissions.length) {
+    user.permissions = permissionsMap[account.role] || [];
+    changed = true;
   }
 
   if (['principal', 'hod'].includes(account.role) && typeof account.gatepassApprovalEnabled === 'boolean') {

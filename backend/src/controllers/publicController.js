@@ -1,5 +1,6 @@
 const env = require('../config/env');
 const { sendSuccess } = require('../utils/apiResponse');
+const { STUDENT_PROGRAMS, DEPARTMENTS } = require('../constants/appConstants');
 
 function buildPublicFirebaseConfig() {
   const webPushConfig = typeof env.getWebPushConfig === 'function' ? env.getWebPushConfig() : null;
@@ -21,9 +22,12 @@ function getFrontendConfig(req, res) {
         firebaseMessagingEnabled: publicConfig.messagingEnabled
       },
       firebase: publicConfig.firebase,
+      vapidPublicKey: env.vapidPublicKey,
       defaults: {
         phoneCountryCode: env.defaultPhoneCountryCode
-      }
+      },
+      programs: STUDENT_PROGRAMS,
+      departments: DEPARTMENTS
     }
   });
 }

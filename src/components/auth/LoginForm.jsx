@@ -46,7 +46,7 @@ function FormField({
         {label}
       </label>
       <div className="tw:group tw:relative">
-        <div className="tw:absolute tw:inset-0 tw:rounded-[20px] tw:bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(227,239,251,0.72))]" />
+        <div className="tw:absolute tw:inset-0 tw:rounded-xl tw:bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(227,239,251,0.72))]" />
         {isPasswordField ? (
           <PasswordInput
             id={id}
@@ -58,10 +58,10 @@ function FormField({
             ariaInvalid={Boolean(error)}
             wrapperClassName="tw:relative tw:z-[1]"
             className={[
-              'tw:relative tw:w-full tw:rounded-[20px] tw:border tw:bg-transparent tw:px-4 tw:py-4 tw:pr-12 tw:text-[0.98rem] tw:text-dwarpal-ink tw:shadow-[0_12px_30px_rgba(34,87,128,0.08)] tw:outline-none tw:transition tw:duration-200 tw:placeholder:text-[#7b90a3] tw:focus:border-[#2f6db5] tw:focus:shadow-[0_0_0_4px_rgba(47,109,181,0.14),0_18px_32px_rgba(34,87,128,0.12)] tw:disabled:cursor-not-allowed tw:disabled:opacity-65',
+              'tw:relative tw:w-full tw:h-12 tw:rounded-xl tw:border tw:bg-transparent tw:px-4 tw:py-3.5 tw:pr-12 tw:text-[0.98rem] tw:text-dwarpal-ink tw:shadow-[0_12px_30px_rgba(34,87,128,0.08)] tw:outline-none tw:transition tw:duration-200 tw:placeholder:text-[#7b90a3] tw:focus:border-[#2f6db5] tw:focus:shadow-[0_0_0_4px_rgba(47,109,181,0.14),0_18px_32px_rgba(34,87,128,0.12)] tw:disabled:cursor-not-allowed tw:disabled:opacity-65',
               error ? 'tw:border-[#d65763]' : 'tw:border-[rgba(105,143,176,0.22)]',
             ].join(' ')}
-            toggleClassName="tw:absolute tw:right-3 tw:top-0 tw:bottom-0 tw:my-auto tw:grid tw:h-9 tw:w-9 tw:place-items-center tw:rounded-full tw:border tw:border-[rgba(105,143,176,0.28)] tw:bg-[rgba(255,255,255,0.74)] tw:text-[#48637c] tw:transition tw:duration-200 hover:tw:bg-white hover:tw:text-[#2f6db5] focus-visible:tw:outline-none focus-visible:tw:ring-2 focus-visible:tw:ring-[#2f6db5]/35 disabled:tw:cursor-not-allowed disabled:tw:opacity-60"
+            toggleClassName="tw:absolute tw:right-3 tw:top-0 tw:bottom-0 tw:my-auto tw:grid tw:h-9 tw:w-9 tw:place-items-center tw:rounded-lg tw:border tw:border-[rgba(105,143,176,0.28)] tw:bg-[rgba(255,255,255,0.74)] tw:text-[#48637c] tw:transition tw:duration-200 hover:tw:bg-white hover:tw:text-[#2f6db5] focus-visible:tw:outline-none disabled:tw:cursor-not-allowed"
           />
         ) : (
           <input
@@ -74,7 +74,7 @@ function FormField({
             disabled={disabled}
             aria-invalid={Boolean(error)}
             className={[
-              'tw:relative tw:w-full tw:rounded-[20px] tw:border tw:bg-transparent tw:px-4 tw:py-4 tw:text-[0.98rem] tw:text-dwarpal-ink tw:shadow-[0_12px_30px_rgba(34,87,128,0.08)] tw:outline-none tw:transition tw:duration-200 tw:placeholder:text-[#7b90a3] tw:focus:border-[#2f6db5] tw:focus:shadow-[0_0_0_4px_rgba(47,109,181,0.14),0_18px_32px_rgba(34,87,128,0.12)] tw:disabled:cursor-not-allowed tw:disabled:opacity-65',
+              'tw:relative tw:w-full tw:h-12 tw:rounded-xl tw:border tw:bg-transparent tw:px-4 tw:py-3.5 tw:text-[0.98rem] tw:text-dwarpal-ink tw:shadow-[0_12px_30px_rgba(34,87,128,0.08)] tw:outline-none tw:transition tw:duration-200 tw:placeholder:text-[#7b90a3] tw:focus:border-[#2f6db5] tw:focus:shadow-[0_0_0_4px_rgba(47,109,181,0.14),0_18px_32px_rgba(34,87,128,0.12)] tw:disabled:cursor-not-allowed tw:disabled:opacity-65',
               error ? 'tw:border-[#d65763]' : 'tw:border-[rgba(105,143,176,0.22)]',
             ].join(' ')}
           />
@@ -97,6 +97,7 @@ function GoogleMark() {
 }
 
 export default function LoginForm({
+  id,
   identifier,
   password,
   rememberMe,
@@ -120,35 +121,30 @@ export default function LoginForm({
   const reduceMotion = useReducedMotion()
 
   return (
-    <section className="tw:relative tw:flex tw:h-full tw:flex-col tw:bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,251,255,0.94))] tw:p-4 tw:sm:p-6 tw:lg:p-8">
-      <div
-        aria-hidden="true"
-        className="tw:absolute tw:inset-x-0 tw:top-0 tw:h-44 tw:bg-[radial-gradient(circle_at_top,rgba(202,229,255,0.42),transparent_72%)]"
-      />
-
+    <div className="tw:relative tw:flex tw:w-full tw:max-w-[29rem] tw:flex-col tw:bg-transparent tw:text-dwarpal-ink">
       <motion.div
         variants={formVariants}
         initial={reduceMotion ? false : 'hidden'}
         animate="visible"
-        className="tw:relative tw:z-10 tw:flex tw:h-full tw:flex-col tw:justify-center"
+        className="tw:relative tw:z-10 tw:flex tw:w-full tw:flex-col tw:justify-center"
       >
         <motion.div
           variants={itemVariants}
-          className="tw:mx-auto tw:w-full tw:max-w-[29rem] tw:rounded-[32px] tw:border tw:border-white/80 tw:bg-[rgba(255,255,255,0.82)] tw:p-5 tw:shadow-[0_24px_72px_rgba(34,87,128,0.12)] tw:backdrop-blur-[22px] tw:sm:p-7"
+          className="tw:w-full tw:rounded-[32px] tw:border tw:border-white/80 tw:bg-[rgba(255,255,255,0.82)] tw:p-6 tw:shadow-[0_24px_72px_rgba(34,87,128,0.12)] tw:backdrop-blur-[22px] tw:sm:p-8"
         >
           <div className="tw:space-y-6">
             <motion.div
               variants={itemVariants}
-              className="tw:flex tw:flex-col tw:items-center tw:gap-4 tw:text-center tw:sm:flex-row tw:sm:items-center tw:sm:text-left"
+              className="tw:flex tw:flex-col tw:items-center tw:gap-4 tw:text-center"
             >
-              <div className="tw:flex tw:h-20 tw:w-20 tw:flex-none tw:items-center tw:justify-center tw:rounded-[26px] tw:border tw:border-white/80 tw:bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(224,239,255,0.94))] tw:shadow-[0_18px_34px_rgba(34,87,128,0.12)]">
-                <img src={logo} alt="DwarPal logo" className="tw:h-14 tw:w-14 tw:object-contain" />
+              <div className="tw:flex tw:h-28 tw:w-28 tw:items-center tw:justify-center tw:rounded-3xl tw:border tw:border-white/85 tw:bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(224,239,255,0.94))] tw:shadow-[0_20px_38px_rgba(34,87,128,0.12)]">
+                <img src={logo} alt="DwarPal logo" className="tw:h-20 tw:w-20 tw:object-contain" />
               </div>
-              <div className="tw:min-w-0 tw:space-y-1">
-                <p className="tw:font-display tw:text-[2rem] tw:font-semibold tw:leading-none tw:tracking-[-0.05em] tw:text-dwarpal-ink tw:sm:text-[2.25rem]">
+              <div className="tw:space-y-2">
+                <h1 className="tw:font-display tw:text-3xl tw:font-bold tw:leading-none tw:tracking-[-0.05em] tw:text-dwarpal-ink">
                   {title}
-                </p>
-                <p className="tw:text-[0.96rem] tw:font-medium tw:text-dwarpal-muted">{subtitle}</p>
+                </h1>
+                <p className="tw:text-sm tw:font-medium tw:text-dwarpal-muted">{subtitle}</p>
               </div>
             </motion.div>
 
@@ -182,7 +178,7 @@ export default function LoginForm({
               >
                 <label
                   htmlFor="remember-me"
-                  className="tw:inline-flex tw:cursor-pointer tw:items-center tw:gap-3 tw:text-[0.94rem] tw:font-medium tw:text-[#46647f]"
+                  className="tw:inline-flex tw:min-h-[48px] tw:cursor-pointer tw:items-center tw:gap-3 tw:text-[0.94rem] tw:font-medium tw:text-[#46647f]"
                 >
                   <input
                     id="remember-me"
@@ -202,7 +198,7 @@ export default function LoginForm({
                     type="button"
                     onClick={onForgotPassword}
                     disabled={isSubmitting}
-                    className="tw:border-none tw:bg-transparent tw:p-0 tw:text-[0.92rem] tw:font-semibold tw:text-[#2f6db5] tw:underline tw:underline-offset-4 tw:transition tw:duration-200 tw:hover:text-[#214f84] tw:disabled:cursor-not-allowed tw:disabled:opacity-55"
+                    className="tw:border-none tw:bg-transparent tw:p-0 tw:text-[0.92rem] tw:font-semibold tw:text-[#2f6db5] tw:underline tw:underline-offset-4 tw:transition tw:duration-200 hover:tw:text-[#214f84] disabled:tw:opacity-55"
                   >
                     Forgot password?
                   </button>
@@ -235,40 +231,19 @@ export default function LoginForm({
                 aria-busy={isSubmitting}
                 whileHover={reduceMotion || isSubmitting ? undefined : { y: -2, scale: 1.01 }}
                 whileTap={reduceMotion || isSubmitting ? undefined : { scale: 0.99 }}
-                className="tw:flex tw:w-full tw:items-center tw:justify-center tw:gap-3 tw:rounded-[20px] tw:border-none tw:bg-[linear-gradient(135deg,#387dcc,#25578f)] tw:px-5 tw:py-4 tw:text-[1rem] tw:font-semibold tw:text-white tw:shadow-[0_20px_38px_rgba(37,87,143,0.28)] tw:transition tw:duration-200 tw:hover:shadow-[0_24px_44px_rgba(37,87,143,0.34)] tw:disabled:cursor-not-allowed tw:disabled:opacity-70"
+                className="tw:flex tw:h-12 tw:w-full tw:items-center tw:justify-center tw:gap-3 tw:rounded-xl tw:border-none tw:bg-[linear-gradient(135deg,#387dcc,#25578f)] tw:px-5 tw:py-3.5 tw:text-[1rem] tw:font-semibold tw:text-white tw:shadow-[0_20px_38px_rgba(37,87,143,0.28)] tw:transition tw:duration-200 hover:tw:shadow-[0_24px_44px_rgba(37,87,143,0.34)] tw:disabled:cursor-not-allowed tw:disabled:opacity-70"
               >
-                <ShieldCheck className="tw:h-4.5 tw:w-4.5" />
+                <ShieldCheck className="tw:h-5 tw:w-5" />
                 {isSubmitting ? 'Signing in...' : submitLabel}
               </motion.button>
             </motion.form>
 
-            <motion.div variants={itemVariants} className="tw:flex tw:items-center tw:gap-4">
-              <div className="tw:h-px tw:flex-1 tw:bg-[rgba(98,128,154,0.18)]" />
-              <span className="tw:text-[0.74rem] tw:font-semibold tw:uppercase tw:tracking-[0.24em] tw:text-[#7b90a3]">or</span>
-              <div className="tw:h-px tw:flex-1 tw:bg-[rgba(98,128,154,0.18)]" />
-            </motion.div>
-
-            <motion.button
-              variants={itemVariants}
-              type="button"
-              disabled
-              className="tw:flex tw:w-full tw:items-center tw:justify-between tw:gap-3 tw:rounded-[20px] tw:border tw:border-[rgba(98,128,154,0.18)] tw:bg-[rgba(255,255,255,0.88)] tw:px-4 tw:py-4 tw:text-left tw:shadow-[0_16px_30px_rgba(34,87,128,0.08)] tw:opacity-90 tw:transition tw:duration-200 tw:disabled:cursor-not-allowed"
-            >
-              <span className="tw:flex tw:items-center tw:gap-3 tw:text-[0.98rem] tw:font-medium tw:text-dwarpal-ink">
-                <GoogleMark />
-                Continue with Google
-              </span>
-              <span className="tw:rounded-full tw:bg-[rgba(47,109,181,0.08)] tw:px-2.5 tw:py-1 tw:text-[0.72rem] tw:font-semibold tw:uppercase tw:tracking-[0.16em] tw:text-[#2f6db5]">
-                Soon
-              </span>
-            </motion.button>
-
             {showRegisterLink ? (
-              <motion.div variants={itemVariants} className="tw:space-y-2 tw:text-center">
+              <motion.div variants={itemVariants} className="tw:mt-5 tw:text-center">
                 <p className="tw:text-[0.92rem] tw:text-dwarpal-muted">
-                  Need an account?{' '}
-                  <Link to="/register" replace className="tw:font-semibold tw:text-[#2f6db5] tw:underline tw:underline-offset-4">
-                    Sign up
+                  Don't have an account?{' '}
+                  <Link to="/register" replace className="tw:font-semibold tw:text-[#2f6db5] tw:underline tw:underline-offset-4 hover:tw:text-[#214f84]">
+                    Register here
                   </Link>
                 </p>
               </motion.div>
@@ -276,6 +251,6 @@ export default function LoginForm({
           </div>
         </motion.div>
       </motion.div>
-    </section>
+    </div>
   )
 }

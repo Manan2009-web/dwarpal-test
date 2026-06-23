@@ -703,7 +703,7 @@ export function isValidPhoneNumberInput(value, defaultCountryCode = DEFAULT_PHON
 function buildRegistrationIdentityPayload(payload = {}) {
   const normalizedRole = normalizeRole(payload.role)
   const isStudent = normalizedRole === 'student'
-  const requiresProgram = isStudent || normalizedRole === 'hod'
+  const requiresProgram = ['student', 'hod', 'principal', 'cao', 'admin'].includes(normalizedRole)
   const cleanedId = String(payload.enrollment || payload.enrollmentNo || payload.employeeId || '')
     .trim()
 
@@ -2566,6 +2566,18 @@ export async function saveNotificationDeviceToken({ token, device }) {
     body: {
       token,
       device,
+    },
+  })
+
+  return response?.data || null
+}
+
+export async function subscribeWebPushNotification({ endpoint, keys }) {
+  const response = await apiRequest('/notifications/subscribe', {
+    method: 'POST',
+    body: {
+      endpoint,
+      keys,
     },
   })
 

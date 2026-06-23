@@ -9,8 +9,8 @@ const {
   SEMESTERS
 } = require('../constants/appConstants');
 
-const ADMIN_PORTAL_ROLES = new Set(['principal', 'hod', 'cao', 'security']);
-const FULL_ADMIN_ROLES = new Set(['principal', 'cao']);
+const ADMIN_PORTAL_ROLES = new Set(['principal', 'hod', 'cao', 'security', 'admin']);
+const FULL_ADMIN_ROLES = new Set(['principal', 'cao', 'admin']);
 const DEPARTMENT_ADMIN_ROLES = new Set(['hod']);
 const SECURITY_EXPORT_REPORTS = new Set([
   'all_gatepasses',

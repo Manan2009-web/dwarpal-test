@@ -264,6 +264,9 @@ const env = {
     normalizeEnvString(process.env.FIREBASE_WEB_VAPID_KEY) ||
     normalizeEnvString(process.env.VITE_FIREBASE_VAPID_KEY),
   enableWebPush: parseBooleanEnv(process.env.ENABLE_WEB_PUSH, false),
+  vapidPublicKey: normalizeEnvString(process.env.VAPID_PUBLIC_KEY),
+  vapidPrivateKey: normalizeEnvString(process.env.VAPID_PRIVATE_KEY),
+  vapidEmail: normalizeEnvString(process.env.VAPID_EMAIL) || 'mailto:dwarpalcode@gmail.com',
   qrSignSecret:
     normalizeEnvString(process.env.QR_SIGN_SECRET) ||
     normalizeEnvString(process.env.JWT_SECRET) ||
@@ -317,12 +320,17 @@ function validateOptionalWebPushConfig() {
     return [];
   }
 
+  // If standard VAPID Web Push keys are fully configured, we bypass Firebase configuration requirements
+  if (env.vapidPublicKey && env.vapidPrivateKey) {
+    return [];
+  }
+
   if (webPush.isComplete) {
     return [];
   }
 
   return [
-    'ENABLE_WEB_PUSH is true but Firebase web push config is incomplete. Set FIREBASE_WEB_API_KEY, FIREBASE_WEB_AUTH_DOMAIN, FIREBASE_WEB_PROJECT_ID, FIREBASE_WEB_STORAGE_BUCKET, FIREBASE_WEB_MESSAGING_SENDER_ID, FIREBASE_WEB_APP_ID, and FIREBASE_WEB_VAPID_KEY.'
+    'ENABLE_WEB_PUSH is true but VAPID / Firebase configurations are incomplete. Set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY, or configure the full FIREBASE_WEB_* suite.'
   ];
 }
 

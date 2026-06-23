@@ -20,7 +20,9 @@ import AdminPortal from './components/AdminPortal'
 import SupportModal from './components/SupportModal'
 import AuthPage from './components/auth/AuthPage'
 import LoginForm from './components/auth/LoginForm'
-import MascotPanel from './components/auth/MascotPanel'
+import RegisterForm from './components/auth/RegisterForm'
+import Register from './components/Register'
+import LandingPanel from './components/auth/LandingPanel'
 import FacultyLeaveWizard from './components/FacultyLeaveWizard'
 import FeatureBoundary from './components/FeatureBoundary'
 import GatepassQrModal from './components/GatepassQrModal'
@@ -70,6 +72,7 @@ import {
   confirmPasswordChange,
   createBiometricAuthenticationOptions,
   createBiometricRegistrationOptions,
+  buildApiUrl,
   DEFAULT_WORKSPACE_PAGE_SIZE,
   fetchWorkspace,
   getBiometricDevices,
@@ -140,6 +143,7 @@ const ROLE_DASHBOARD_PATHS = {
   hod: '/hod/dashboard',
   security: '/security/dashboard',
   cao: '/cao/dashboard',
+  admin: '/admin/dashboard',
 }
 
 const DEFAULT_WORKSPACE_REQUEST_OPTIONS = {
@@ -189,7 +193,7 @@ function hasAdminPortalAccess(user) {
   const role = normalizeRole(user.role)
   const permissions = Array.isArray(user.permissions) ? user.permissions : []
 
-  if (['principal', 'hod', 'cao', 'security'].includes(role)) {
+  if (['principal', 'hod', 'cao', 'security', 'admin'].includes(role)) {
     return true
   }
 
@@ -420,18 +424,38 @@ function mapRegisterFieldErrors(fieldErrors = {}, role = '') {
     role: fieldErrors.role || '',
     semester: fieldErrors.semester || '',
     password: fieldErrors.password || '',
+    designation: fieldErrors.designation || '',
+    securityZone: fieldErrors.securityZone || '',
+    accessLevel: fieldErrors.accessLevel || '',
+    authorityLevel: fieldErrors.authorityLevel || '',
   }
 
   if (normalizedRole !== 'student') {
     delete normalizedErrors.semester
   }
 
-  if (!['student', 'hod'].includes(normalizedRole)) {
+  if (!['principal', 'admin', 'cao'].includes(normalizedRole)) {
     delete normalizedErrors.program
   }
 
-  if (normalizedRole === 'security') {
+  if (!['faculty', 'hod'].includes(normalizedRole)) {
     delete normalizedErrors.department
+  }
+
+  if (normalizedRole !== 'faculty') {
+    delete normalizedErrors.designation
+  }
+
+  if (normalizedRole !== 'security') {
+    delete normalizedErrors.securityZone
+  }
+
+  if (normalizedRole !== 'admin') {
+    delete normalizedErrors.accessLevel
+  }
+
+  if (normalizedRole !== 'cao') {
+    delete normalizedErrors.authorityLevel
   }
 
   return Object.entries(normalizedErrors).reduce((errors, [field, message]) => {
@@ -457,7 +481,7 @@ function FieldLabel({ children, required = false }) {
 }
 
 function roleUsesProgramRouting(role) {
-  return role === 'student' || role === 'hod'
+  return ['principal', 'admin', 'hod'].includes(role)
 }
 
 function getRegistrationDepartmentOptions(role, program) {
@@ -1223,7 +1247,7 @@ function App() {
     const normalizedEnrollment = String(payload.enrollment || '').trim()
     const normalizedEmail = String(payload.email || '').trim().toLowerCase()
     const semester = Number(payload.semester)
-    const requiresDepartment = normalizedRole !== 'security'
+    const requiresDepartment = ['student', 'faculty', 'hod'].includes(normalizedRole)
     const requiresProgram = roleUsesProgramRouting(normalizedRole)
 
     if (!normalizedRole) {
@@ -1771,7 +1795,7 @@ function App() {
           path="/register"
           element={
             <PublicAuthRoute currentUser={currentUser} authReady={authReady}>
-              <RegisterScreen onRegister={registerAccount} />
+              <Register setCurrentUser={setCurrentUser} onRegister={registerAccount} />
             </PublicAuthRoute>
           }
         />
@@ -1871,13 +1895,36 @@ function DefaultRoute({ currentUser, authReady }) {
 
 function AuthBootstrapScreen() {
   return (
-    <div className="auth-shell">
-      <div className="auth-panel">
-        <div className="auth-copy">
-          <div className="auth-brand-wrap">
-            <AppBrand size="md" layout="stacked" centered />
-          </div>
-          <h2>Loading your workspace...</h2>
+    <div
+      className="tw:min-h-screen tw:w-full tw:flex tw:flex-col tw:items-center tw:justify-center tw:bg-dwarpal-surface tw:text-dwarpal-ink tw:relative tw:overflow-hidden"
+      style={{
+        backgroundImage: `
+          radial-gradient(circle at top left, rgba(255, 255, 255, 0.95) 0, rgba(255, 255, 255, 0.42) 24%, transparent 46%),
+          radial-gradient(circle at top right, rgba(184, 226, 255, 0.52) 0, transparent 34%),
+          radial-gradient(circle at bottom left, rgba(205, 236, 255, 0.5) 0, transparent 28%),
+          linear-gradient(180deg, #f6fbff 0%, #edf6ff 52%, #e6f1ff 100%)
+        `,
+      }}
+    >
+      {/* Soft Blue Background Accent Glow */}
+      <div aria-hidden="true" className="tw:pointer-events-none tw:absolute tw:h-96 tw:w-96 tw:rounded-full tw:bg-sky-200/40 tw:blur-[120px] tw:top-1/2 tw:left-1/2 tw:-translate-x-1/2 tw:-translate-y-1/2" />
+      
+      <div className="tw:relative tw:z-10 tw:flex tw:flex-col tw:items-center tw:gap-6">
+        <div className="tw:relative tw:h-16 tw:w-16">
+          <svg className="tw:animate-spin tw:h-full tw:w-full tw:text-[#2f6db5]" fill="none" viewBox="0 0 24 24">
+            <circle className="tw:opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+            <path className="tw:opacity-100" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+          <div className="tw:absolute tw:inset-4.5 tw:rounded-full tw:bg-[rgba(47,109,181,0.09)] tw:border tw:border-[rgba(47,109,181,0.18)] tw:animate-pulse" />
+        </div>
+
+        <div className="tw:text-center tw:space-y-1.5">
+          <h2 className="tw:font-display tw:text-sm tw:font-bold tw:tracking-wider tw:text-dwarpal-ink tw:uppercase">
+            Secure Workspace
+          </h2>
+          <p className="tw:text-[0.65rem] tw:text-dwarpal-muted tw:tracking-widest tw:uppercase">
+            Initializing DwarPal shell...
+          </p>
         </div>
       </div>
     </div>
@@ -2015,7 +2062,7 @@ function LoginScreen({ onLogin }) {
 
   return (
     <>
-      <AuthPage left={<MascotPanel />} right={
+      <AuthPage right={
         <LoginForm
           identifier={form.identifier}
           password={form.password}
@@ -2055,17 +2102,58 @@ function RegisterScreen({ onRegister }) {
     role: '',
     semester: '',
     password: '',
+    designation: '',
+    securityZone: '',
+    accessLevel: '',
+    authorityLevel: '',
   })
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
   const [isRegistering, setIsRegistering] = useState(false)
+
+  const [programsList, setProgramsList] = useState(PROGRAM_OPTIONS)
+  const [departmentsList, setDepartmentsList] = useState(DEPARTMENTS)
+
+  useEffect(() => {
+    let ignore = false
+    const controller = new AbortController()
+
+    async function fetchConfig() {
+      try {
+        const response = await fetch(buildApiUrl('/public/frontend-config'), {
+          signal: controller.signal,
+          headers: { Accept: 'application/json' }
+        })
+        if (response.ok) {
+          const result = await response.json()
+          if (!ignore && result?.data) {
+            if (Array.isArray(result.data.programs)) {
+              setProgramsList(result.data.programs)
+            }
+            if (Array.isArray(result.data.departments)) {
+              setDepartmentsList(result.data.departments)
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load dynamic programs/departments from backend, using defaults', err)
+      }
+    }
+
+    fetchConfig()
+    return () => {
+      ignore = true
+      controller.abort()
+    }
+  }, [])
+
   const hasSelectedRole = Boolean(form.role)
   const isStudentRole = form.role === 'student'
   const isSecurityRole = form.role === 'security'
   const requiresProgram = roleUsesProgramRouting(form.role)
-  const departmentOptions = getRegistrationDepartmentOptions(form.role, form.program)
-  const showDepartmentField = hasSelectedRole && !isSecurityRole && (!requiresProgram || Boolean(form.program))
-  const requiresDepartment = hasSelectedRole ? !isSecurityRole : true
+  const departmentOptions = departmentsList
+  const showDepartmentField = hasSelectedRole && ['faculty', 'hod'].includes(form.role)
+  const requiresDepartment = hasSelectedRole ? ['faculty', 'hod'].includes(form.role) : true
   const roleIdLabel = isStudentRole ? 'Enrollment Number' : hasSelectedRole ? 'Employee ID' : 'Enrollment Number / Employee ID'
   const roleIdName = isStudentRole ? 'enrollmentNo' : hasSelectedRole ? 'employeeId' : 'identifier'
   const roleIdPlaceholder = isStudentRole
@@ -2085,6 +2173,10 @@ function RegisterScreen({ onRegister }) {
       role: '',
       semester: '',
       password: '',
+      designation: '',
+      securityZone: '',
+      accessLevel: '',
+      authorityLevel: '',
     })
   }
 
@@ -2107,6 +2199,10 @@ function RegisterScreen({ onRegister }) {
       role: form.role,
       ...(isStudentRole ? { semester: form.semester } : {}),
       password: form.password,
+      ...(form.role === 'faculty' ? { designation: form.designation } : {}),
+      ...(form.role === 'security' ? { securityZone: form.securityZone } : {}),
+      ...(form.role === 'admin' ? { accessLevel: form.accessLevel } : {}),
+      ...(form.role === 'cao' ? { authorityLevel: form.authorityLevel } : {}),
     })
 
     if (!normalizedPhone) {
@@ -2134,6 +2230,12 @@ function RegisterScreen({ onRegister }) {
         role: normalizedRole,
         program: requiresProgram ? normalizedProgram : '',
         department: requiresDepartment ? normalizedDepartment : '',
+        designation: ['faculty', 'hod', 'principal'].includes(form.role)
+          ? (form.role === 'hod' ? 'HOD' : form.role === 'principal' ? 'Principal' : String(form.designation).trim())
+          : '',
+        securityZone: form.role === 'security' ? String(form.securityZone).trim() : '',
+        accessLevel: form.role === 'admin' ? String(form.accessLevel).trim() : '',
+        authorityLevel: form.role === 'cao' ? String(form.authorityLevel).trim() : '',
       },
     }
   }
@@ -2152,9 +2254,13 @@ function RegisterScreen({ onRegister }) {
       ...prev,
       role: nextRole,
       program: nextRoleUsesProgram ? prev.program : '',
-      department: nextRole === 'security' ? '' : nextRoleUsesProgram ? '' : prev.department,
+      department: ['faculty', 'hod'].includes(nextRole) ? prev.department : '',
       enrollment: (prev.role === 'student') !== (nextRole === 'student') ? '' : prev.enrollment,
       semester: nextRole === 'student' ? prev.semester : '',
+      designation: nextRole === 'faculty' ? prev.designation : nextRole === 'hod' ? 'HOD' : nextRole === 'principal' ? 'Principal' : '',
+      securityZone: nextRole === 'security' ? prev.securityZone : '',
+      accessLevel: nextRole === 'admin' ? prev.accessLevel : '',
+      authorityLevel: nextRole === 'cao' ? prev.authorityLevel : '',
     }))
     setFieldErrors((prev) => {
       const nextErrors = { ...prev }
@@ -2163,6 +2269,10 @@ function RegisterScreen({ onRegister }) {
       delete nextErrors.department
       delete nextErrors.enrollment
       delete nextErrors.semester
+      delete nextErrors.designation
+      delete nextErrors.securityZone
+      delete nextErrors.accessLevel
+      delete nextErrors.authorityLevel
       return nextErrors
     })
     setError('')
@@ -2174,12 +2284,10 @@ function RegisterScreen({ onRegister }) {
     setForm((prev) => ({
       ...prev,
       program: nextProgram,
-      department: '',
     }))
     setFieldErrors((prev) => {
       const nextErrors = { ...prev }
       delete nextErrors.program
-      delete nextErrors.department
       return nextErrors
     })
     setError('')
@@ -2242,201 +2350,40 @@ function RegisterScreen({ onRegister }) {
     }
   }
 
+  const roleOptions = [
+    { value: 'student', label: 'Student' },
+    { value: 'faculty', label: 'Faculty' },
+    { value: 'hod', label: 'HOD' },
+    { value: 'cao', label: 'CAO' },
+    { value: 'principal', label: 'Principal' },
+    { value: 'security', label: 'Security Guard' },
+    { value: 'admin', label: 'Admin' }
+  ]
+
   return (
-    <AuthShell title="Register">
-      <form className="auth-form register-grid" onSubmit={handleCreateAccount} noValidate>
-        <label>
-          <FieldLabel required>Full Name</FieldLabel>
-          <input
-            value={form.name}
-            onChange={(event) => updateFormField('name', event.target.value)}
-            placeholder="Enter your full name"
-            autoComplete="name"
-            className={fieldErrors.name ? 'field-invalid' : ''}
-            aria-invalid={Boolean(fieldErrors.name)}
-            disabled={isRegistering}
-            required
-          />
-          {fieldErrors.name ? <p className="field-error">{fieldErrors.name}</p> : null}
-        </label>
-        <label>
-          <FieldLabel required>Email</FieldLabel>
-          <input
-            type="email"
-            value={form.email}
-            onChange={(event) => updateFormField('email', event.target.value)}
-            placeholder="Enter your email address"
-            autoComplete="email"
-            className={fieldErrors.email ? 'field-invalid' : ''}
-            aria-invalid={Boolean(fieldErrors.email)}
-            disabled={isRegistering}
-            required
-          />
-          {fieldErrors.email ? <p className="field-error">{fieldErrors.email}</p> : null}
-        </label>
-        <label>
-          <FieldLabel required>Role</FieldLabel>
-          <SelectField
-            value={form.role}
-            onChange={handleRoleChange}
-            className={fieldErrors.role ? 'field-invalid' : ''}
-            aria-invalid={Boolean(fieldErrors.role)}
-            disabled={isRegistering}
-            required
-          >
-            <option value="" disabled>
-              Select role
-            </option>
-            {PUBLIC_ROLE_OPTIONS.map((role) => (
-              <option key={role} value={role}>
-                {ROLE_META[role].title}
-              </option>
-            ))}
-          </SelectField>
-          {fieldErrors.role ? <p className="field-error">{fieldErrors.role}</p> : null}
-        </label>
-        {requiresProgram ? (
-          <label>
-            <FieldLabel required>Program</FieldLabel>
-            <SelectField
-              value={form.program}
-              onChange={handleProgramChange}
-              className={fieldErrors.program ? 'field-invalid' : ''}
-              aria-invalid={Boolean(fieldErrors.program)}
-              disabled={isRegistering}
-              required
-            >
-              <option value="" disabled>
-                Select program
-              </option>
-              {PROGRAM_OPTIONS.map((program) => (
-                <option key={program} value={program}>
-                  {program}
-                </option>
-              ))}
-            </SelectField>
-            {fieldErrors.program ? <p className="field-error">{fieldErrors.program}</p> : null}
-          </label>
-        ) : null}
-        {showDepartmentField ? (
-          <label>
-            <FieldLabel required={requiresDepartment}>Department</FieldLabel>
-            <SelectField
-              value={form.department}
-              onChange={(event) => updateFormField('department', event.target.value)}
-              className={fieldErrors.department ? 'field-invalid' : ''}
-              aria-invalid={Boolean(fieldErrors.department)}
-              disabled={isRegistering}
-              required={requiresDepartment}
-            >
-              <option value="" disabled>
-                Select department
-              </option>
-              {departmentOptions.map((department) => (
-                <option key={department} value={department}>
-                  {department}
-                </option>
-              ))}
-            </SelectField>
-            {fieldErrors.department ? <p className="field-error">{fieldErrors.department}</p> : null}
-          </label>
-        ) : null}
-        {hasSelectedRole && requiresProgram && !form.program ? (
-          <p className="field-hint full-span">
-            Select a program first to load the available departments.
-          </p>
-        ) : null}
-        <label>
-          <FieldLabel required>Phone Number</FieldLabel>
-          <input
-            type="tel"
-            value={form.phone}
-            onChange={(event) => updateFormField('phone', event.target.value)}
-            placeholder="Enter your phone number"
-            autoComplete="tel"
-            className={fieldErrors.phone ? 'field-invalid' : ''}
-            aria-invalid={Boolean(fieldErrors.phone)}
-            disabled={isRegistering}
-            required
-          />
-          {fieldErrors.phone ? <p className="field-error">{fieldErrors.phone}</p> : null}
-        </label>
-        <label>
-          <FieldLabel required>{roleIdLabel}</FieldLabel>
-          <input
-            id={roleIdName}
-            name={roleIdName}
-            value={form.enrollment}
-            onChange={(event) => updateFormField('enrollment', event.target.value)}
-            placeholder={roleIdPlaceholder}
-            autoComplete="off"
-            className={fieldErrors.enrollment ? 'field-invalid' : ''}
-            aria-invalid={Boolean(fieldErrors.enrollment)}
-            disabled={isRegistering}
-            required
-          />
-          {fieldErrors.enrollment ? <p className="field-error">{fieldErrors.enrollment}</p> : null}
-        </label>
-        {isStudentRole ? (
-          <label>
-            <FieldLabel required>Semester</FieldLabel>
-            <SelectField
-              value={form.semester}
-              onChange={(event) => updateFormField('semester', event.target.value)}
-              className={fieldErrors.semester ? 'field-invalid' : ''}
-              aria-invalid={Boolean(fieldErrors.semester)}
-              disabled={isRegistering}
-              required
-            >
-              <option value="" disabled>
-                Select semester
-              </option>
-              {SEMESTER_OPTIONS.map((semester) => (
-                <option key={semester} value={semester}>
-                  Semester {semester}
-                </option>
-              ))}
-            </SelectField>
-            {fieldErrors.semester ? <p className="field-error">{fieldErrors.semester}</p> : null}
-          </label>
-        ) : null}
-        <label className="full-span">
-          <FieldLabel required>Password</FieldLabel>
-          <PasswordInput
-            value={form.password}
-            onChange={(value) => updateFormField('password', value)}
-            placeholder="Enter your password"
-            autoComplete="new-password"
-            className={fieldErrors.password ? 'field-invalid' : ''}
-            ariaInvalid={Boolean(fieldErrors.password)}
-            disabled={isRegistering}
-            required
-          />
-          {fieldErrors.password ? <p className="field-error">{fieldErrors.password}</p> : null}
-        </label>
-        {error ? <p className="form-error full-span" aria-live="polite">{error}</p> : null}
-        {isRegistering ? (
-          <p className="field-hint full-span" aria-live="polite">Creating your account...</p>
-        ) : null}
-        <div className="full-span">
-          <ActionButton
-            icon={UserPlus2}
-            type="submit"
-            disabled={isRegistering}
-            aria-busy={isRegistering}
-          >
-            {isRegistering ? 'Creating Account...' : 'Create Account'}
-          </ActionButton>
-        </div>
-      </form>
-      <p className="auth-nav">
-        Already have an account?{' '}
-        <Link to="/login" replace className="auth-link">
-          Login
-        </Link>
-      </p>
-      {/* TEMP_DISABLED_OTP */}
-    </AuthShell>
+    <AuthPage right={
+      <RegisterForm
+        form={form}
+        updateFormField={updateFormField}
+        handleRoleChange={handleRoleChange}
+        handleProgramChange={handleProgramChange}
+        onSubmit={handleCreateAccount}
+        isSubmitting={isRegistering}
+        error={error}
+        fieldErrors={fieldErrors}
+        requiresProgram={requiresProgram}
+        showDepartmentField={showDepartmentField}
+        requiresDepartment={requiresDepartment}
+        roleIdLabel={roleIdLabel}
+        roleIdName={roleIdName}
+        roleIdPlaceholder={roleIdPlaceholder}
+        departmentOptions={departmentOptions}
+        isStudentRole={isStudentRole}
+        roleOptions={roleOptions}
+        programOptions={programsList}
+        semesterOptions={SEMESTER_OPTIONS}
+      />
+    } />
   )
 }
 

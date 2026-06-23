@@ -218,6 +218,15 @@ async function connectExternalDatabase(uri) {
         const diagnostics = classifyMongoConnectionError(error);
         console.error(`[db] Possible cause: ${diagnostics.probableCause}`);
         logMongoTroubleshootingChecklist({ usingSrvUri: uri.startsWith('mongodb+srv://') });
+
+        // In development, fall back to in-memory database so the server can still start
+        // even when Atlas is unreachable (e.g. SRV DNS block on current network/ISP).
+        if (env.isDevelopment) {
+          console.warn('[db] ⚠️  Atlas unreachable — falling back to in-memory database for development.');
+          console.warn('[db] Data will NOT persist between restarts. Fix your Atlas connection for production.');
+          return startInMemoryDatabase();
+        }
+
         throw error;
       }
 

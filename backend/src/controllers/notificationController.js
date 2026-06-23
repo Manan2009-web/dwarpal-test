@@ -1,6 +1,7 @@
 const asyncHandler = require('../utils/asyncHandler');
 const { sendSuccess } = require('../utils/apiResponse');
 const { saveDeviceToken } = require('../services/pushNotificationService');
+const PushSubscription = require('../models/PushSubscription');
 const {
   getNotificationsForUser,
   getUnreadNotificationCount,
@@ -60,10 +61,43 @@ const saveToken = asyncHandler(async (req, res) => {
   });
 });
 
+const subscribePush = asyncHandler(async (req, res) => {
+  const { endpoint, keys } = req.body;
+
+  const result = await PushSubscription.findOneAndUpdate(
+    { endpoint },
+    {
+      $set: {
+        userId: req.user._id,
+        endpoint,
+        keys: {
+          p256dh: keys.p256dh,
+          auth: keys.auth
+        }
+      }
+    },
+    {
+      upsert: true,
+      new: true,
+      setDefaultsOnInsert: true
+    }
+  ).lean();
+
+  return sendSuccess(res, {
+    statusCode: 201,
+    message: 'Web push subscription saved successfully',
+    data: {
+      id: result._id.toString(),
+      endpoint: result.endpoint
+    }
+  });
+});
+
 module.exports = {
   getUnreadCount,
   listNotifications,
   markAllRead,
   markRead,
-  saveToken
+  saveToken,
+  subscribePush
 };

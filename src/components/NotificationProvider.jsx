@@ -9,6 +9,7 @@ import {
   markNotificationRead as markNotificationReadRequest,
   saveNotificationDeviceToken,
 } from '../lib/dwarpalApi'
+import { subscribeUserToPush } from '../lib/webPush'
 import {
   getFirebaseMessagingToken,
   isFirebaseMessagingConfigured,
@@ -575,10 +576,17 @@ export function NotificationProvider({ children, currentUser, notificationPermis
         return
       }
 
-      const firebaseMessagingConfigured = await isFirebaseMessagingConfigured()
+      // 1. Subscribe to standard Web Push (VAPID)
+      try {
+        await subscribeUserToPush()
+        setPushReady(true)
+      } catch (vapidError) {
+        console.warn('[notifications] VAPID Web Push subscription failed:', vapidError)
+      }
 
+      // 2. Subscribe to Firebase Messaging (if configured)
+      const firebaseMessagingConfigured = await isFirebaseMessagingConfigured()
       if (!firebaseMessagingConfigured) {
-        setPushReady(false)
         return
       }
 
@@ -586,7 +594,6 @@ export function NotificationProvider({ children, currentUser, notificationPermis
         const token = await getFirebaseMessagingToken()
 
         if (!token || ignore) {
-          setPushReady(false)
           return
         }
 
@@ -599,7 +606,6 @@ export function NotificationProvider({ children, currentUser, notificationPermis
           return
         }
 
-        setPushReady(true)
         unsubscribe = await subscribeToForegroundMessages((payload) => {
           const notification = mapFirebaseMessageToNotification(payload)
 
@@ -608,12 +614,8 @@ export function NotificationProvider({ children, currentUser, notificationPermis
           }
         })
       } catch (error) {
-        if (!ignore) {
-          setPushReady(false)
-
-          if (import.meta.env.DEV) {
-            console.warn('DwarPal push notification setup failed.', error)
-          }
+        if (import.meta.env.DEV) {
+          console.warn('[notifications] Firebase setup failed:', error)
         }
       }
     }

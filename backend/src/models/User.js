@@ -197,11 +197,11 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: null,
-      required: [function() { return ['student', 'hod'].includes(this.role); }, 'Program is required for students and HODs'],
+      required: [function() { return ['student', 'principal', 'admin', 'hod'].includes(this.role); }, 'Program is required'],
       validate: {
         validator(value) {
           if (!value) {
-            return !['student', 'hod'].includes(this.role);
+            return !['student', 'principal', 'admin', 'hod'].includes(this.role);
           }
           return STUDENT_PROGRAMS.includes(value);
         },
@@ -212,14 +212,11 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: null,
-      required: [function() { return this.role !== 'security'; }, 'Department is required for non-security roles'],
+      required: [function() { return ['student', 'faculty', 'hod'].includes(this.role); }, 'Department is required'],
       validate: {
         validator(value) {
           if (!value) {
-            return this.role === 'security';
-          }
-          if (['student', 'hod'].includes(this.role)) {
-            return ROUTING_DEPARTMENTS.includes(value);
+            return !['student', 'faculty', 'hod'].includes(this.role);
           }
           return DEPARTMENTS.includes(value);
         },
@@ -277,6 +274,62 @@ const userSchema = new mongoose.Schema(
           return true;
         },
         message: 'Employee ID is required for faculty and admin users'
+      }
+    },
+    designation: {
+      type: String,
+      trim: true,
+      default: null,
+      validate: {
+        validator(value) {
+          if (this.role === 'faculty') {
+            return Boolean(value);
+          }
+          return true;
+        },
+        message: 'Designation is required for faculty'
+      }
+    },
+    securityZone: {
+      type: String,
+      trim: true,
+      default: null,
+      validate: {
+        validator(value) {
+          if (this.role === 'security') {
+            return Boolean(value);
+          }
+          return true;
+        },
+        message: 'Security zone is required for security guards'
+      }
+    },
+    accessLevel: {
+      type: String,
+      trim: true,
+      default: null,
+      validate: {
+        validator(value) {
+          if (this.role === 'admin') {
+            return Boolean(value);
+          }
+          return true;
+        },
+        message: 'Access level is required for admins'
+      }
+    },
+    authorityLevel: {
+      type: String,
+      trim: true,
+      default: null,
+      validate: {
+        validator(value) {
+          if (this.role === 'cao') {
+            return Boolean(value);
+          }
+          return true;
+        },
+        message: 'Authority level is required for CAO'
       }
     },
     phone: {
@@ -454,6 +507,21 @@ userSchema.pre('validate', function syncLegacyFields(next) {
     this.employeeId = undefined;
     this.program = normalizeProgram(this.program) || undefined;
     this.department = normalizeDepartment(this.department) || undefined;
+    this.designation = undefined;
+    this.securityZone = undefined;
+    this.accessLevel = undefined;
+    this.authorityLevel = undefined;
+  } else if (this.role === 'faculty') {
+    this.enrollmentNo = undefined;
+    this.enrollment = undefined;
+    this.semester = undefined;
+    this.employeeId = this.employeeId ? String(this.employeeId).trim().toUpperCase() : undefined;
+    this.program = undefined;
+    this.department = normalizeDepartment(this.department) || undefined;
+    this.designation = this.designation ? String(this.designation).trim() : undefined;
+    this.securityZone = undefined;
+    this.accessLevel = undefined;
+    this.authorityLevel = undefined;
   } else if (this.role === 'hod') {
     this.enrollmentNo = undefined;
     this.enrollment = undefined;
@@ -461,13 +529,68 @@ userSchema.pre('validate', function syncLegacyFields(next) {
     this.employeeId = this.employeeId ? String(this.employeeId).trim().toUpperCase() : undefined;
     this.program = normalizeProgram(this.program) || undefined;
     this.department = normalizeDepartment(this.department) || undefined;
-  } else {
+    this.designation = 'HOD';
+    this.securityZone = undefined;
+    this.accessLevel = undefined;
+    this.authorityLevel = undefined;
+  } else if (this.role === 'principal') {
+    this.enrollmentNo = undefined;
+    this.enrollment = undefined;
+    this.semester = undefined;
+    this.employeeId = this.employeeId ? String(this.employeeId).trim().toUpperCase() : undefined;
+    this.program = normalizeProgram(this.program) || undefined;
+    this.department = undefined;
+    this.designation = 'Principal';
+    this.securityZone = undefined;
+    this.accessLevel = undefined;
+    this.authorityLevel = undefined;
+  } else if (this.role === 'security') {
     this.enrollmentNo = undefined;
     this.enrollment = undefined;
     this.semester = undefined;
     this.employeeId = this.employeeId ? String(this.employeeId).trim().toUpperCase() : undefined;
     this.program = undefined;
-    this.department = this.department ? normalizeDepartment(this.department) || undefined : this.department;
+    this.department = undefined;
+    this.designation = undefined;
+    this.securityZone = this.securityZone ? String(this.securityZone).trim() : undefined;
+    this.accessLevel = undefined;
+    this.authorityLevel = undefined;
+  } else if (this.role === 'admin') {
+    this.enrollmentNo = undefined;
+    this.enrollment = undefined;
+    this.semester = undefined;
+    this.employeeId = this.employeeId ? String(this.employeeId).trim().toUpperCase() : undefined;
+    this.program = normalizeProgram(this.program) || undefined;
+    this.department = undefined;
+    this.designation = undefined;
+    this.securityZone = undefined;
+    this.accessLevel = this.accessLevel ? String(this.accessLevel).trim() : undefined;
+    this.authorityLevel = undefined;
+  } else if (this.role === 'cao') {
+    this.enrollmentNo = undefined;
+    this.enrollment = undefined;
+    this.semester = undefined;
+    this.employeeId = this.employeeId ? String(this.employeeId).trim().toUpperCase() : undefined;
+    this.program = undefined;
+    this.department = undefined;
+    this.designation = undefined;
+    this.securityZone = undefined;
+    this.accessLevel = undefined;
+    this.authorityLevel = this.authorityLevel ? String(this.authorityLevel).trim() : undefined;
+  }
+
+  const permissionsMap = {
+    student: ['student:dashboard'],
+    faculty: ['faculty:dashboard'],
+    hod: ['hod:dashboard'],
+    principal: ['principal:dashboard'],
+    security: ['security:dashboard'],
+    cao: ['cao:dashboard'],
+    admin: ['admin:dashboard', 'admin:access', 'admin:*', 'export:*']
+  };
+
+  if (!this.permissions || !this.permissions.length) {
+    this.permissions = permissionsMap[this.role] || [];
   }
 
   if (!this.coordinatorAssignment || typeof this.coordinatorAssignment !== 'object') {

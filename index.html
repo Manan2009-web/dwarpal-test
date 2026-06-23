@@ -5,10 +5,16 @@
     <meta http-equiv="Cache-Control" content="no-store, max-age=0, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
-    <link rel="icon" type="image/png" href="/dwarpal-favicon.png" />
-    <link rel="apple-touch-icon" href="/dwarpal-favicon.png" />
     <meta name="color-scheme" content="light" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#2872a1" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="DwarPal" />
+    <meta name="description" content="Digital gatepass and campus access management system for students and faculty." />
+    <link rel="icon" type="image/svg+xml" href="/dwarpal-icon-192.svg" />
+    <link rel="apple-touch-icon" href="/dwarpal-icon-192.svg" />
+    <link rel="manifest" href="/manifest.json" />
     <title>DwarPal - Digital Gatepass System</title>
   </head>
   <body>
@@ -77,9 +83,13 @@
             cleanupTasks.push(
               navigator.serviceWorker
                 .getRegistrations()
-                .then((registrations) =>
-                  Promise.allSettled(registrations.map((registration) => registration.unregister())),
-                ),
+                .then((registrations) => {
+                  const stale = registrations.filter((r) => {
+                    const url = r.active?.scriptURL || r.waiting?.scriptURL || r.installing?.scriptURL || '';
+                    return !url.includes('firebase-messaging-sw.js') && !url.includes('/sw.js');
+                  });
+                  return Promise.allSettled(stale.map((r) => r.unregister()));
+                }),
             )
           }
 
@@ -87,7 +97,10 @@
             cleanupTasks.push(
               window.caches
                 .keys()
-                .then((cacheKeys) => Promise.allSettled(cacheKeys.map((cacheKey) => window.caches.delete(cacheKey)))),
+                .then((cacheKeys) => {
+                  const stale = cacheKeys.filter((key) => key.startsWith('dwarpal-legacy-'))
+                  return Promise.allSettled(stale.map((key) => window.caches.delete(key)))
+                }),
             )
           }
 

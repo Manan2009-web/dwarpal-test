@@ -1,6 +1,32 @@
-const STUDENT_PROGRAMS = Object.freeze(['Diploma', 'Degree']);
-const ROUTING_DEPARTMENTS = Object.freeze(['Computer', 'Civil', 'Mechanical', 'Electrical']);
-const DEPARTMENTS = Object.freeze([...ROUTING_DEPARTMENTS, 'Nursing', 'Physiotherapy']);
+const STUDENT_PROGRAMS = Object.freeze(
+  process.env.STUDENT_PROGRAMS
+    ? process.env.STUDENT_PROGRAMS.split(',').map((p) => p.trim())
+    : [
+        'Diploma Engineering',
+        'Degree Engineering',
+        'Management Studies',
+        'Pharmacy',
+        'Computer Applications',
+        'Science',
+        'Commerce',
+        'Arts'
+      ]
+);
+const DEPARTMENTS = Object.freeze(
+  process.env.DEPARTMENTS
+    ? process.env.DEPARTMENTS.split(',').map((d) => d.trim())
+    : [
+        'Computer Engineering',
+        'Information Technology',
+        'Mechanical Engineering',
+        'Civil Engineering',
+        'Electrical Engineering',
+        'Electronics & Communication',
+        'Artificial Intelligence',
+        'Data Science'
+      ]
+);
+const ROUTING_DEPARTMENTS = DEPARTMENTS;
 
 const ROLES = Object.freeze([
   'student',
@@ -8,11 +34,12 @@ const ROLES = Object.freeze([
   'hod',
   'cao',
   'principal',
-  'security'
+  'security',
+  'admin'
 ]);
 
 const PUBLIC_REGISTRATION_ROLES = Object.freeze(ROLES.filter((role) => role !== 'student'));
-const ADMIN_ROLES = Object.freeze(['principal', 'hod', 'cao', 'security']);
+const ADMIN_ROLES = Object.freeze(['principal', 'hod', 'cao', 'security', 'admin']);
 const SEMESTERS = Object.freeze([1, 2, 3, 4, 5, 6, 7, 8]);
 const FACULTY_LEAVE_TYPES = Object.freeze(['CL', 'EL', 'SL', 'LWP', 'OD', 'Others']);
 const FACULTY_WORKLOAD_STATUSES = Object.freeze([
@@ -39,17 +66,29 @@ function normalizeRole(value) {
 }
 
 function normalizeProgram(value) {
-  const normalizedProgram = String(value || '').trim().toLowerCase();
+  const normalizedValue = String(value || '').trim();
 
-  if (normalizedProgram === 'diploma') {
-    return 'Diploma';
+  if (!normalizedValue) {
+    return '';
   }
 
-  if (normalizedProgram === 'degree') {
-    return 'Degree';
+  const normalizedKey = normalizedValue.toLowerCase();
+  const match = STUDENT_PROGRAMS.find((p) => p.toLowerCase() === normalizedKey);
+  if (match) {
+    return match;
   }
 
-  return '';
+  if (normalizedKey.includes('diploma')) {
+    const defaultDiploma = STUDENT_PROGRAMS.find((p) => p.toLowerCase().includes('diploma')) || STUDENT_PROGRAMS[0];
+    return defaultDiploma;
+  }
+
+  if (normalizedKey.includes('degree')) {
+    const defaultDegree = STUDENT_PROGRAMS.find((p) => p.toLowerCase().includes('degree')) || STUDENT_PROGRAMS[1] || STUDENT_PROGRAMS[0];
+    return defaultDegree;
+  }
+
+  return normalizedValue;
 }
 
 function normalizeDepartment(value) {
@@ -60,26 +99,37 @@ function normalizeDepartment(value) {
   }
 
   const normalizedKey = normalizedValue.toLowerCase();
+  const match = DEPARTMENTS.find((d) => d.toLowerCase() === normalizedKey);
+  if (match) {
+    return match;
+  }
+
   const aliasMap = {
-    computer: 'Computer',
-    'computer engineering': 'Computer',
-    'computer science': 'Computer',
-    'information technology': 'Computer',
-    cse: 'Computer',
-    it: 'Computer',
-    civil: 'Civil',
-    'civil engineering': 'Civil',
-    mechanical: 'Mechanical',
-    'mechanical engineering': 'Mechanical',
-    electrical: 'Electrical',
-    'electrical engineering': 'Electrical',
+    computer: 'Computer Engineering',
+    'computer engineering': 'Computer Engineering',
+    'computer science': 'Computer Engineering',
+    'information technology': 'Information Technology',
+    cse: 'Computer Engineering',
+    it: 'Information Technology',
+    civil: 'Civil Engineering',
+    'civil engineering': 'Civil Engineering',
+    mechanical: 'Mechanical Engineering',
+    'mechanical engineering': 'Mechanical Engineering',
+    electrical: 'Electrical Engineering',
+    'electrical engineering': 'Electrical Engineering',
     nursing: 'Nursing',
     physiotherapy: 'Physiotherapy',
-    administration: 'Computer',
-    security: 'Computer'
+    'electronics & communication': 'Electronics & Communication',
+    'artificial intelligence': 'Artificial Intelligence',
+    'data science': 'Data Science'
   };
 
-  return aliasMap[normalizedKey] || '';
+  const aliasMatch = aliasMap[normalizedKey];
+  if (aliasMatch && DEPARTMENTS.includes(aliasMatch)) {
+    return aliasMatch;
+  }
+
+  return normalizedValue;
 }
 
 const STUDENT_GATEPASS_STATUSES = Object.freeze([

@@ -22,6 +22,30 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('firebase')) {
+                return 'vendor-firebase'
+              }
+              if (id.includes('lucide-react')) {
+                return 'vendor-lucide'
+              }
+              if (id.includes('react') || id.includes('scheduler')) {
+                return 'vendor-react'
+              }
+              if (id.includes('@simplewebauthn')) {
+                return 'vendor-webauthn'
+              }
+              return 'vendor-others'
+            }
+          }
+        }
+      },
+      chunkSizeWarningLimit: 800,
+    },
     server: {
       host: '0.0.0.0',
       port: 5173,
@@ -51,7 +75,6 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port: 4173,
       strictPort: true,
-      headers: noStoreHeaders,
     },
   }
 })

@@ -96,7 +96,8 @@ const registerValidation = [
   body('program')
     .customSanitizer(normalizeProgram)
     .custom((value, { req }) => {
-      if (!['student', 'hod'].includes(req.body.role)) {
+      const role = String(req.body.role || '').trim().toLowerCase();
+      if (!['principal', 'admin', 'hod'].includes(role)) {
         return true;
       }
 
@@ -113,22 +114,17 @@ const registerValidation = [
   body('department')
     .customSanitizer((value) => normalizeDepartment(value) || String(value || '').trim())
     .custom((value, { req }) => {
+      const role = String(req.body.role || '').trim().toLowerCase();
       const normalizedDepartment = String(value || '').trim();
 
-      if (!normalizedDepartment) {
-        if (req.body.role === 'security') {
-          return true;
+      if (['faculty', 'hod'].includes(role)) {
+        if (!normalizedDepartment) {
+          throw new Error('Department is required');
         }
 
-        throw new Error('Department is required');
-      }
-
-      if (['student', 'hod'].includes(req.body.role) && !ROUTING_DEPARTMENTS.includes(normalizedDepartment)) {
-        throw new Error(`Department must be one of: ${ROUTING_DEPARTMENTS.join(', ')}`);
-      }
-
-      if (!DEPARTMENTS.includes(normalizedDepartment)) {
-        throw new Error(`Department must be one of: ${DEPARTMENTS.join(', ')}`);
+        if (!DEPARTMENTS.includes(normalizedDepartment)) {
+          throw new Error(`Department must be one of: ${DEPARTMENTS.join(', ')}`);
+        }
       }
 
       return true;
@@ -154,6 +150,46 @@ const registerValidation = [
     .custom((value, { req }) => {
       if (req.body.role !== 'student' && !value) {
         throw new Error('Employee ID is required for faculty and staff accounts');
+      }
+      return true;
+    }),
+  body('designation')
+    .optional({ values: 'falsy' })
+    .trim()
+    .custom((value, { req }) => {
+      const role = String(req.body.role || '').trim().toLowerCase();
+      if (role === 'faculty' && !value) {
+        throw new Error('Designation is required');
+      }
+      return true;
+    }),
+  body('securityZone')
+    .optional({ values: 'falsy' })
+    .trim()
+    .custom((value, { req }) => {
+      const role = String(req.body.role || '').trim().toLowerCase();
+      if (role === 'security' && !value) {
+        throw new Error('Security zone is required');
+      }
+      return true;
+    }),
+  body('accessLevel')
+    .optional({ values: 'falsy' })
+    .trim()
+    .custom((value, { req }) => {
+      const role = String(req.body.role || '').trim().toLowerCase();
+      if (role === 'admin' && !value) {
+        throw new Error('Access level is required');
+      }
+      return true;
+    }),
+  body('authorityLevel')
+    .optional({ values: 'falsy' })
+    .trim()
+    .custom((value, { req }) => {
+      const role = String(req.body.role || '').trim().toLowerCase();
+      if (role === 'cao' && !value) {
+        throw new Error('Administrative authority level is required');
       }
       return true;
     }),

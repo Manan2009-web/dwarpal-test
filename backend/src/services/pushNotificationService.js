@@ -1,6 +1,16 @@
 const DeviceToken = require('../models/DeviceToken');
+const PushSubscription = require('../models/PushSubscription');
 const env = require('../config/env');
 const { getFirebaseMessagingService } = require('./firebaseAdminService');
+const webpush = require('web-push');
+
+if (env.enableWebPush && env.vapidPublicKey && env.vapidPrivateKey) {
+  webpush.setVapidDetails(
+    env.vapidEmail,
+    env.vapidPublicKey,
+    env.vapidPrivateKey
+  );
+}
 
 const INVALID_TOKEN_ERROR_CODES = new Set([
   'messaging/invalid-registration-token',
@@ -91,76 +101,123 @@ async function sendPushNotification(userId, title, message, data = {}) {
     };
   }
 
-  const messaging = getFirebaseMessagingService();
-
-  if (!messaging) {
-    return {
-      delivered: false,
-      successCount: 0,
-      failureCount: 0,
-      reason: 'firebase_not_configured'
-    };
-  }
-
-  const deviceTokens = await DeviceToken.find({
-    userId
-  })
-    .select('token')
-    .lean();
-  const tokens = deviceTokens.map((item) => item.token).filter(Boolean);
-
-  if (!tokens.length) {
-    return {
-      delivered: false,
-      successCount: 0,
-      failureCount: 0,
-      reason: 'no_device_tokens'
-    };
-  }
-
-  const relatedRoute = String(data.relatedRoute || '/app/notifications').trim() || '/app/notifications';
-  const link = buildClientUrl(relatedRoute);
-  const serializedData = serializeMessageData(title, message, {
-    ...data,
-    relatedRoute,
-    link
-  });
-  const staleTokens = [];
   let successCount = 0;
   let failureCount = 0;
+  let delivered = false;
 
-  for (let index = 0; index < tokens.length; index += MAX_MULTICAST_TOKENS) {
-    const batchTokens = tokens.slice(index, index + MAX_MULTICAST_TOKENS);
-    const response = await messaging.sendEachForMulticast({
-      tokens: batchTokens,
-      data: serializedData,
-      webpush: {
-        fcmOptions: {
+  // 1. Firebase push notification (if configured)
+  const messaging = getFirebaseMessagingService();
+  if (messaging) {
+    try {
+      const deviceTokens = await DeviceToken.find({ userId }).select('token').lean();
+      const tokens = deviceTokens.map((item) => item.token).filter(Boolean);
+
+      if (tokens.length) {
+        const relatedRoute = String(data.relatedRoute || '/app/notifications').trim() || '/app/notifications';
+        const link = buildClientUrl(relatedRoute);
+        const serializedData = serializeMessageData(title, message, {
+          ...data,
+          relatedRoute,
           link
+        });
+        const staleTokens = [];
+
+        for (let index = 0; index < tokens.length; index += MAX_MULTICAST_TOKENS) {
+          const batchTokens = tokens.slice(index, index + MAX_MULTICAST_TOKENS);
+          const response = await messaging.sendEachForMulticast({
+            tokens: batchTokens,
+            data: serializedData,
+            webpush: {
+              fcmOptions: {
+                link
+              }
+            }
+          });
+
+          successCount += response.successCount;
+          failureCount += response.failureCount;
+
+          response.responses.forEach((result, batchIndex) => {
+            if (!result.success && INVALID_TOKEN_ERROR_CODES.has(result.error?.code)) {
+              staleTokens.push(batchTokens[batchIndex]);
+            }
+          });
+        }
+
+        if (staleTokens.length) {
+          await DeviceToken.deleteMany({
+            token: { $in: staleTokens }
+          });
+        }
+
+        if (successCount > 0) {
+          delivered = true;
         }
       }
-    });
-
-    successCount += response.successCount;
-    failureCount += response.failureCount;
-
-    response.responses.forEach((result, batchIndex) => {
-      if (!result.success && INVALID_TOKEN_ERROR_CODES.has(result.error?.code)) {
-        staleTokens.push(batchTokens[batchIndex]);
-      }
-    });
+    } catch (firebaseError) {
+      console.error(`[notifications] Firebase push failed: ${firebaseError.message || firebaseError}`);
+    }
   }
 
-  if (staleTokens.length) {
-    await DeviceToken.deleteMany({
-      token: {
-        $in: staleTokens
+  // 2. Web Push (VAPID) notifications (if configured)
+  if (env.enableWebPush && env.vapidPublicKey && env.vapidPrivateKey) {
+    try {
+      const subscriptions = await PushSubscription.find({ userId }).lean();
+      if (subscriptions.length) {
+        const relatedRoute = String(data.relatedRoute || '/app/notifications').trim() || '/app/notifications';
+        const link = buildClientUrl(relatedRoute);
+        
+        const pushPayload = JSON.stringify({
+          title,
+          body: message,
+          data: {
+            ...data,
+            relatedRoute,
+            link
+          }
+        });
+
+        const staleSubscriptions = [];
+
+        const webPushPromises = subscriptions.map((sub) => {
+          const pushSubscription = {
+            endpoint: sub.endpoint,
+            keys: {
+              p256dh: sub.keys.p256dh,
+              auth: sub.keys.auth
+            }
+          };
+
+          return webpush.sendNotification(pushSubscription, pushPayload)
+            .then(() => {
+              successCount++;
+              delivered = true;
+            })
+            .catch(async (error) => {
+              failureCount++;
+              if (error.statusCode === 410 || error.statusCode === 404) {
+                staleSubscriptions.push(sub._id);
+              } else {
+                console.error(`[notifications] Web push error for endpoint ${sub.endpoint}:`, error.message || error);
+              }
+            });
+        });
+
+        await Promise.all(webPushPromises);
+
+        if (staleSubscriptions.length) {
+          await PushSubscription.deleteMany({
+            _id: { $in: staleSubscriptions }
+          });
+        }
       }
-    });
+    } catch (webPushError) {
+      console.error(`[notifications] Web push sending failed: ${webPushError.message || webPushError}`);
+    }
   }
 
   return {
-    delivered: successCount > 0,
+    delivered,
     successCount,
     failureCount
   };

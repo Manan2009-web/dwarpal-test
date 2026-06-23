@@ -3,6 +3,16 @@
 (function initializeMessagingWorker() {
   const PUBLIC_FRONTEND_CONFIG_URL = '/api/public/frontend-config'
 
+  function deobfuscateString(str) {
+    if (!str) return ''
+    try {
+      const reversed = String(str).split('').reverse().join('')
+      return atob(reversed)
+    } catch {
+      return ''
+    }
+  }
+
   function normalizeFirebaseConfig(payload) {
     const firebaseConfig = payload?.data?.firebase
 
@@ -11,12 +21,12 @@
     }
 
     const normalizedConfig = {
-      apiKey: String(firebaseConfig.apiKey || '').trim(),
-      authDomain: String(firebaseConfig.authDomain || '').trim(),
-      projectId: String(firebaseConfig.projectId || '').trim(),
-      storageBucket: String(firebaseConfig.storageBucket || '').trim(),
-      messagingSenderId: String(firebaseConfig.messagingSenderId || '').trim(),
-      appId: String(firebaseConfig.appId || '').trim(),
+      apiKey: deobfuscateString(firebaseConfig.apiKey).trim(),
+      authDomain: deobfuscateString(firebaseConfig.authDomain).trim(),
+      projectId: deobfuscateString(firebaseConfig.projectId).trim(),
+      storageBucket: deobfuscateString(firebaseConfig.storageBucket).trim(),
+      messagingSenderId: deobfuscateString(firebaseConfig.messagingSenderId).trim(),
+      appId: deobfuscateString(firebaseConfig.appId).trim(),
     }
     const hasRequiredConfig =
       normalizedConfig.apiKey &&
