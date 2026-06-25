@@ -5,6 +5,7 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const env = require('./config/env');
 const connectDatabase = require('./config/db');
+const dbConnectMiddleware = require('./middleware/dbConnectMiddleware');
 const routes = require('./routes');
 const { errorHandler, notFoundHandler } = require('./middleware/errorMiddleware');
 const responseSecurityMiddleware = require('./middleware/responseSecurityMiddleware');
@@ -98,7 +99,7 @@ app.get('/', (req, res) => {
   });
 });
 
-app.get('/api/health', (req, res) => {
+app.get('/api/health', dbConnectMiddleware, (req, res) => {
   const databaseState = connectDatabase.getDatabaseState ? connectDatabase.getDatabaseState() : null;
   const databaseReady = ['external', 'in-memory'].includes(databaseState?.mode);
 

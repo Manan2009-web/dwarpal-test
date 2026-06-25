@@ -239,6 +239,13 @@ async function connectExternalDatabase(uri) {
 }
 
 async function connectDatabase() {
+  if (mongoose.connection.readyState >= 1) {
+    if (!databaseState.connected) {
+      setDatabaseState(env.mongoUri ? 'external' : 'in-memory', env.mongoUri || mongoose.connection.host || 'localhost');
+    }
+    return getDatabaseState();
+  }
+
   if (activeConnectionPromise) {
     return activeConnectionPromise;
   }
@@ -249,9 +256,11 @@ async function connectDatabase() {
   }
 
   activeConnectionPromise = (async () => {
-    if (env.mongoUri) {
-      validateMongoUri(env.mongoUri);
-      return connectExternalDatabase(env.mongoUri);
+    const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI || env.mongoUri;
+
+    if (mongoUri) {
+      validateMongoUri(mongoUri);
+      return connectExternalDatabase(mongoUri);
     }
 
     if (env.enableInMemoryDb && !env.isDevelopment) {

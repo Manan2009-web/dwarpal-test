@@ -3,6 +3,7 @@ const { protect, requireVerifiedEmail } = require('../middleware/authMiddleware'
 const authorize = require('../middleware/authorize');
 const validateRequest = require('../middleware/validateRequest');
 const authController = require('../controllers/authController');
+const dbConnectMiddleware = require('../middleware/dbConnectMiddleware');
 const createRateLimiter = require('../middleware/rateLimit');
 const { requirePortalAccess } = require('../middleware/portalAccess');
 const { getClientFingerprint, getClientIp } = require('../utils/request');
@@ -258,6 +259,7 @@ router.post(
 );
 router.post(
   '/login',
+  dbConnectMiddleware,
   requirePortalAccess('faculty'),
   loginNetworkRateLimit,
   loginAccountRateLimit,
