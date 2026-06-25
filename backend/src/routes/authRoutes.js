@@ -1,4 +1,5 @@
 const express = require('express');
+const { body } = require('express-validator');
 const { protect, requireVerifiedEmail } = require('../middleware/authMiddleware');
 const authorize = require('../middleware/authorize');
 const validateRequest = require('../middleware/validateRequest');
@@ -397,6 +398,37 @@ router.post(
   webAuthnAuthenticationVerifyValidation,
   validateRequest,
   authController.verifyWebAuthnAuthentication
+);
+
+// New Forgot Password with Email OTP Endpoints
+router.post(
+  '/forgot-password',
+  [
+    body('identifier').trim().notEmpty().withMessage('Enrollment number or employee ID is required')
+  ],
+  validateRequest,
+  authController.forgotPassword
+);
+
+router.post(
+  '/verify-otp',
+  [
+    body('identifier').trim().notEmpty().withMessage('Enrollment number or employee ID is required'),
+    body('otp').trim().notEmpty().withMessage('OTP is required').matches(/^\d{6}$/).withMessage('OTP must be a 6-digit number')
+  ],
+  validateRequest,
+  authController.verifyOtp
+);
+
+router.post(
+  '/reset-password',
+  [
+    body('identifier').trim().notEmpty().withMessage('Enrollment number or employee ID is required'),
+    body('otp').trim().notEmpty().withMessage('OTP is required'),
+    body('newPassword').isString().notEmpty().withMessage('New password is required')
+  ],
+  validateRequest,
+  authController.resetPassword
 );
 
 module.exports = router;

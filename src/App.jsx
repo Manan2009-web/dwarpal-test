@@ -10,10 +10,12 @@ import {
   QrCode,
   ScanLine,
   Send,
+  KeyRound,
   ShieldCheck,
   UserPlus2,
   XCircle,
 } from 'lucide-react'
+import { motion, useReducedMotion } from 'framer-motion'
 import './App.css'
 import AppBrand from './components/AppBrand'
 import AdminPortal from './components/AdminPortal'
@@ -35,6 +37,7 @@ import NotificationPermissionPrompt, {
 import PreferencesPanel from './components/PreferencesPanel'
 import PrivacyPreferencesBanner from './components/PrivacyPreferencesBanner'
 import PasswordInput from './components/PasswordInput'
+import OtpCodeInput from './components/OtpCodeInput'
 import SecurityVerificationPanel from './components/SecurityVerificationPanel'
 import { useToast } from './components/ToastProvider'
 import {
@@ -88,6 +91,9 @@ import {
   resolveForgotPasswordAccount,
   resetForgotPassword,
   resendRegistrationOtp,
+  submitForgotPassword,
+  submitVerifyOtp,
+  submitResetPassword,
   readBiometricDeviceId,
   removeBiometricDevice,
   sendEmailVerificationOtp,
@@ -1931,9 +1937,35 @@ function AuthBootstrapScreen() {
   )
 }
 
+const formVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.07,
+      delayChildren: 0.08,
+    },
+  },
+}
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.42,
+      ease: [0.22, 1, 0.36, 1],
+    },
+  },
+}
+
 function LoginScreen({ onLogin }) {
   const navigate = useNavigate()
   const location = useLocation()
+  const toast = useToast()
+  const reduceMotion = useReducedMotion()
+
   const identifierLabel = 'Enrollment Number / Employee ID'
   const identifierPlaceholder = 'Enter your enrollment number or employee ID'
   const identifierUsageLabel = 'enrollment number or employee ID'
@@ -1944,6 +1976,19 @@ function LoginScreen({ onLogin }) {
   const [fieldErrors, setFieldErrors] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const submitLockRef = useRef(false)
+
+  // Forgot password flow state
+  const [forgotPasswordStep, setForgotPasswordStep] = useState(null) // null, 'id', 'otp', 'reset'
+  const [forgotPasswordIdentifier, setForgotPasswordIdentifier] = useState('')
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('')
+  const [forgotPasswordMaskedEmail, setForgotPasswordMaskedEmail] = useState('')
+  const [forgotPasswordOtp, setForgotPasswordOtp] = useState('')
+  const [forgotPasswordSecondsLeft, setForgotPasswordSecondsLeft] = useState(0)
+  const [forgotPasswordNewPassword, setForgotPasswordNewPassword] = useState('')
+  const [forgotPasswordConfirmPassword, setForgotPasswordConfirmPassword] = useState('')
+  const [forgotPasswordIsSubmitting, setForgotPasswordIsSubmitting] = useState(false)
+  const [forgotPasswordError, setForgotPasswordError] = useState('')
+  const [forgotPasswordFieldErrors, setForgotPasswordFieldErrors] = useState({})
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -1984,6 +2029,25 @@ function LoginScreen({ onLogin }) {
       password: '',
     }))
   }, [])
+
+  // Timer for OTP countdown (starts at 600s, counts down)
+  useEffect(() => {
+    if (forgotPasswordStep !== 'otp' || forgotPasswordSecondsLeft <= 0) {
+      return
+    }
+
+    const timer = setInterval(() => {
+      setForgotPasswordSecondsLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [forgotPasswordStep, forgotPasswordSecondsLeft])
 
   function updateFormField(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -2060,31 +2124,528 @@ function LoginScreen({ onLogin }) {
     }
   }
 
+  // OTP Request handler
+  async function handleForgotPasswordRequest(event) {
+    if (event) {
+      event.preventDefault()
+    }
+    const targetIdentifier = forgotPasswordIdentifier.trim()
+    if (!targetIdentifier) {
+      setForgotPasswordFieldErrors({ identifier: 'Please enter your enrollment number or employee ID.' })
+      return
+    }
+
+    setForgotPasswordIsSubmitting(true)
+    setForgotPasswordError('')
+    setForgotPasswordFieldErrors({})
+
+    try {
+      const res = await submitForgotPassword(targetIdentifier)
+      if (!res.success) {
+        setForgotPasswordError(res.message || 'Failed to request OTP.')
+        return
+      }
+
+      setForgotPasswordEmail(res.email || '')
+      setForgotPasswordMaskedEmail(res.maskedEmail || '')
+      setForgotPasswordSecondsLeft(res.expiresInSeconds || 600)
+      setForgotPasswordStep('otp')
+      toast.success({
+        title: 'OTP Sent',
+        message: res.message || 'A verification OTP has been sent to your registered email.'
+      })
+    } catch (err) {
+      const msg = getApiErrorMessage(err, 'Unable to send OTP. Please try again.')
+      setForgotPasswordError(msg)
+      toast.error({
+        title: 'Request Failed',
+        message: msg
+      })
+    } finally {
+      setForgotPasswordIsSubmitting(false)
+    }
+  }
+
+  // OTP Verification handler
+  async function handleForgotPasswordVerify(event) {
+    event.preventDefault()
+    if (forgotPasswordOtp.length !== 6) {
+      setForgotPasswordFieldErrors({ otp: 'Please enter a 6-digit OTP code.' })
+      return
+    }
+
+    setForgotPasswordIsSubmitting(true)
+    setForgotPasswordError('')
+    setForgotPasswordFieldErrors({})
+
+    try {
+      const res = await submitVerifyOtp(forgotPasswordIdentifier.trim(), forgotPasswordOtp)
+      if (!res.success) {
+        setForgotPasswordError(res.message || 'OTP verification failed.')
+        return
+      }
+
+      setForgotPasswordStep('reset')
+      toast.success({
+        title: 'OTP Verified',
+        message: 'Your verification OTP is valid. Please choose a new password.'
+      })
+    } catch (err) {
+      const msg = getApiErrorMessage(err, 'Unable to verify OTP. Please try again.')
+      setForgotPasswordError(msg)
+      toast.error({
+        title: 'Verification Failed',
+        message: msg
+      })
+    } finally {
+      setForgotPasswordIsSubmitting(false)
+    }
+  }
+
+  // Password Reset handler
+  async function handleForgotPasswordReset(event) {
+    event.preventDefault()
+    const nextFieldErrors = {}
+    const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/
+
+    if (!passwordPattern.test(forgotPasswordNewPassword)) {
+      nextFieldErrors.newPassword = 'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.'
+    }
+
+    if (forgotPasswordConfirmPassword !== forgotPasswordNewPassword) {
+      nextFieldErrors.confirmPassword = 'Confirm password must match the new password.'
+    }
+
+    if (Object.keys(nextFieldErrors).length) {
+      setForgotPasswordFieldErrors(nextFieldErrors)
+      return
+    }
+
+    setForgotPasswordIsSubmitting(true)
+    setForgotPasswordError('')
+    setForgotPasswordFieldErrors({})
+
+    try {
+      const res = await submitResetPassword(
+        forgotPasswordIdentifier.trim(),
+        forgotPasswordOtp,
+        forgotPasswordNewPassword
+      )
+      if (!res.success) {
+        setForgotPasswordError(res.message || 'Password reset failed.')
+        return
+      }
+
+      toast.success({
+        title: 'Password Reset Successful',
+        message: 'Your password has been updated successfully. You can now log in.'
+      })
+
+      // Reset states and return to login
+      setForgotPasswordStep(null)
+      setForgotPasswordIdentifier('')
+      setForgotPasswordOtp('')
+      setForgotPasswordNewPassword('')
+      setForgotPasswordConfirmPassword('')
+      setForm({ identifier: forgotPasswordIdentifier, password: '' })
+    } catch (err) {
+      const msg = getApiErrorMessage(err, 'Unable to reset password. Please try again.')
+      setForgotPasswordError(msg)
+      toast.error({
+        title: 'Reset Failed',
+        message: msg
+      })
+    } finally {
+      setForgotPasswordIsSubmitting(false)
+    }
+  }
+
+  // Conditional rendering helper for right panel
+  const renderRightPanel = () => {
+    if (forgotPasswordStep === 'id') {
+      return (
+        <div className="tw:relative tw:flex tw:w-full tw:max-w-[29rem] tw:flex-col tw:bg-transparent tw:text-dwarpal-ink">
+          <motion.div
+            variants={formVariants}
+            initial={reduceMotion ? false : 'hidden'}
+            animate="visible"
+            className="tw:relative tw:z-10 tw:flex tw:w-full tw:flex-col tw:justify-center"
+          >
+            <motion.div
+              variants={itemVariants}
+              className="tw:w-full tw:rounded-[32px] tw:border tw:border-white/80 tw:bg-[rgba(255,255,255,0.82)] tw:p-6 tw:shadow-[0_24px_72px_rgba(34,87,128,0.12)] tw:backdrop-blur-[22px] tw:sm:p-8"
+            >
+              <div className="tw:space-y-6">
+                <motion.div
+                  variants={itemVariants}
+                  className="tw:flex tw:flex-col tw:items-center tw:gap-4 tw:text-center"
+                >
+                  <div className="tw:flex tw:h-20 tw:w-20 tw:items-center tw:justify-center tw:rounded-2xl tw:border tw:border-white/85 tw:bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(224,239,255,0.94))] tw:shadow-[0_20px_38px_rgba(34,87,128,0.12)]">
+                    <KeyRound className="tw:h-10 tw:w-10 tw:text-[#2f6db5]" />
+                  </div>
+                  <div className="tw:space-y-2">
+                    <h1 className="tw:font-display tw:text-3xl tw:font-bold tw:leading-none tw:tracking-[-0.05em] tw:text-dwarpal-ink">
+                      Forgot Password
+                    </h1>
+                    <p className="tw:text-sm tw:font-medium tw:text-dwarpal-muted">
+                      Enter your enrollment number or employee ID to reset your password
+                    </p>
+                  </div>
+                </motion.div>
+
+                <motion.form
+                  variants={formVariants}
+                  onSubmit={handleForgotPasswordRequest}
+                  noValidate
+                  className="tw:space-y-5"
+                >
+                  <motion.div variants={itemVariants} className="tw:space-y-2">
+                    <label htmlFor="forgot-identifier" className="tw:block tw:text-[0.84rem] tw:font-semibold tw:text-[#425f78]">
+                      Enrollment Number / Employee ID
+                    </label>
+                    <div className="tw:group tw:relative">
+                      <div className="tw:absolute tw:inset-0 tw:rounded-xl tw:bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(227,239,251,0.72))]" />
+                      <input
+                        id="forgot-identifier"
+                        type="text"
+                        value={forgotPasswordIdentifier}
+                        onChange={(e) => {
+                          setForgotPasswordIdentifier(e.target.value)
+                          setForgotPasswordFieldErrors({})
+                          setForgotPasswordError('')
+                        }}
+                        placeholder="Enter your enrollment number or employee ID"
+                        disabled={forgotPasswordIsSubmitting}
+                        className={[
+                          'tw:relative tw:w-full tw:h-12 tw:rounded-xl tw:border tw:bg-transparent tw:px-4 tw:py-3.5 tw:text-[0.98rem] tw:text-dwarpal-ink tw:shadow-[0_12px_30px_rgba(34,87,128,0.08)] tw:outline-none tw:transition tw:duration-200 tw:placeholder:text-[#7b90a3] tw:focus:border-[#2f6db5] tw:focus:shadow-[0_0_0_4px_rgba(47,109,181,0.14),0_18px_32px_rgba(34,87,128,0.12)] tw:disabled:cursor-not-allowed tw:disabled:opacity-65',
+                          forgotPasswordFieldErrors.identifier ? 'tw:border-[#d65763]' : 'tw:border-[rgba(105,143,176,0.22)]',
+                        ].join(' ')}
+                      />
+                    </div>
+                    {forgotPasswordFieldErrors.identifier ? (
+                      <p className="tw:text-[0.82rem] tw:font-medium tw:text-[#d65763]">{forgotPasswordFieldErrors.identifier}</p>
+                    ) : null}
+                  </motion.div>
+
+                  {forgotPasswordError ? (
+                    <motion.div
+                      variants={itemVariants}
+                      role="alert"
+                      className="tw:rounded-[18px] tw:border tw:border-[rgba(214,87,99,0.28)] tw:bg-[rgba(255,240,242,0.9)] tw:px-4 tw:py-3 tw:text-[0.92rem] tw:font-medium tw:text-[#c24b58]"
+                    >
+                      {forgotPasswordError}
+                    </motion.div>
+                  ) : null}
+
+                  <motion.div variants={itemVariants} className="tw:flex tw:gap-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForgotPasswordStep(null)
+                        setForgotPasswordIdentifier('')
+                        setForgotPasswordError('')
+                      }}
+                      disabled={forgotPasswordIsSubmitting}
+                      className="tw:flex tw:h-12 tw:w-1/2 tw:items-center tw:justify-center tw:rounded-xl tw:border tw:border-[rgba(105,143,176,0.28)] tw:bg-[rgba(255,255,255,0.74)] tw:px-4 tw:py-3.5 tw:text-[0.98rem] tw:font-semibold tw:text-[#48637c] tw:transition tw:duration-200 hover:tw:bg-white hover:tw:text-[#2f6db5] tw:disabled:cursor-not-allowed tw:disabled:opacity-55"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={forgotPasswordIsSubmitting || !forgotPasswordIdentifier.trim()}
+                      className="tw:flex tw:h-12 tw:w-1/2 tw:items-center tw:justify-center tw:rounded-xl tw:border-none tw:bg-[linear-gradient(135deg,#387dcc,#25578f)] tw:px-4 tw:py-3.5 tw:text-[0.98rem] tw:font-semibold tw:text-white tw:shadow-[0_20px_38px_rgba(37,87,143,0.28)] tw:transition tw:duration-200 hover:tw:shadow-[0_24px_44px_rgba(37,87,143,0.34)] tw:disabled:cursor-not-allowed tw:disabled:opacity-70"
+                    >
+                      {forgotPasswordIsSubmitting ? 'Requesting...' : 'Request OTP'}
+                    </button>
+                  </motion.div>
+                </motion.form>
+              </div>
+            </motion.div>
+          </motion.div>
+        </div>
+      )
+    }
+
+    if (forgotPasswordStep === 'otp') {
+      return (
+        <div className="tw:relative tw:flex tw:w-full tw:max-w-[29rem] tw:flex-col tw:bg-transparent tw:text-dwarpal-ink">
+          <motion.div
+            variants={formVariants}
+            initial={reduceMotion ? false : 'hidden'}
+            animate="visible"
+            className="tw:relative tw:z-10 tw:flex tw:w-full tw:flex-col tw:justify-center"
+          >
+            <motion.div
+              variants={itemVariants}
+              className="tw:w-full tw:rounded-[32px] tw:border tw:border-white/80 tw:bg-[rgba(255,255,255,0.82)] tw:p-6 tw:shadow-[0_24px_72px_rgba(34,87,128,0.12)] tw:backdrop-blur-[22px] tw:sm:p-8"
+            >
+              <div className="tw:space-y-6">
+                <motion.div
+                  variants={itemVariants}
+                  className="tw:flex tw:flex-col tw:items-center tw:gap-4 tw:text-center"
+                >
+                  <div className="tw:flex tw:h-20 tw:w-20 tw:items-center tw:justify-center tw:rounded-2xl tw:border tw:border-white/85 tw:bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(224,239,255,0.94))] tw:shadow-[0_20px_38px_rgba(34,87,128,0.12)]">
+                    <Clock3 className="tw:h-10 tw:w-10 tw:text-[#2f6db5]" />
+                  </div>
+                  <div className="tw:space-y-2">
+                    <h1 className="tw:font-display tw:text-3xl tw:font-bold tw:leading-none tw:tracking-[-0.05em] tw:text-dwarpal-ink">
+                      Verify OTP
+                    </h1>
+                    <p className="tw:text-sm tw:font-medium tw:text-dwarpal-muted">
+                      We've sent a 6-digit verification code to {forgotPasswordMaskedEmail || forgotPasswordEmail}
+                    </p>
+                  </div>
+                </motion.div>
+
+                <motion.form
+                  variants={formVariants}
+                  onSubmit={handleForgotPasswordVerify}
+                  noValidate
+                  className="tw:space-y-5"
+                >
+                  <motion.div variants={itemVariants} className="tw:space-y-2">
+                    <label className="tw:block tw:text-[0.84rem] tw:font-semibold tw:text-[#425f78] tw:text-center">
+                      Enter 6-Digit OTP
+                    </label>
+                    <div className="tw:flex tw:justify-center">
+                      <OtpCodeInput
+                        value={forgotPasswordOtp}
+                        onChange={(val) => {
+                          setForgotPasswordOtp(val)
+                          setForgotPasswordFieldErrors({})
+                          setForgotPasswordError('')
+                        }}
+                        disabled={forgotPasswordIsSubmitting}
+                        autoFocus
+                      />
+                    </div>
+                    {forgotPasswordFieldErrors.otp ? (
+                      <p className="tw:text-[0.82rem] tw:font-medium tw:text-[#d65763] tw:text-center">{forgotPasswordFieldErrors.otp}</p>
+                    ) : null}
+                  </motion.div>
+
+                  <motion.div variants={itemVariants} className="tw:text-center tw:text-sm tw:font-medium tw:text-dwarpal-muted">
+                    {forgotPasswordSecondsLeft > 0 ? (
+                      <span>OTP expires in: <strong className="tw:text-dwarpal-ink">{Math.floor(forgotPasswordSecondsLeft / 60)}:{String(forgotPasswordSecondsLeft % 60).padStart(2, '0')}</strong></span>
+                    ) : (
+                      <span className="tw:text-[#d65763]">OTP has expired. Please request a new code.</span>
+                    )}
+                  </motion.div>
+
+                  <motion.div variants={itemVariants} className="tw:text-center">
+                    <button
+                      type="button"
+                      onClick={handleForgotPasswordRequest}
+                      disabled={forgotPasswordSecondsLeft > 0 || forgotPasswordIsSubmitting}
+                      className="tw:border-none tw:bg-transparent tw:p-0 tw:text-[0.92rem] tw:font-semibold tw:text-[#2f6db5] tw:underline tw:underline-offset-4 tw:transition tw:duration-200 hover:tw:text-[#214f84] disabled:tw:opacity-55"
+                    >
+                      Resend OTP
+                    </button>
+                  </motion.div>
+
+                  {forgotPasswordError ? (
+                    <motion.div
+                      variants={itemVariants}
+                      role="alert"
+                      className="tw:rounded-[18px] tw:border tw:border-[rgba(214,87,99,0.28)] tw:bg-[rgba(255,240,242,0.9)] tw:px-4 tw:py-3 tw:text-[0.92rem] tw:font-medium tw:text-[#c24b58]"
+                    >
+                      {forgotPasswordError}
+                    </motion.div>
+                  ) : null}
+
+                  <motion.div variants={itemVariants} className="tw:flex tw:gap-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForgotPasswordStep('id')
+                        setForgotPasswordOtp('')
+                        setForgotPasswordError('')
+                      }}
+                      disabled={forgotPasswordIsSubmitting}
+                      className="tw:flex tw:h-12 tw:w-1/2 tw:items-center tw:justify-center tw:rounded-xl tw:border tw:border-[rgba(105,143,176,0.28)] tw:bg-[rgba(255,255,255,0.74)] tw:px-4 tw:py-3.5 tw:text-[0.98rem] tw:font-semibold tw:text-[#48637c] tw:transition tw:duration-200 hover:tw:bg-white hover:tw:text-[#2f6db5] tw:disabled:cursor-not-allowed tw:disabled:opacity-55"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={forgotPasswordIsSubmitting || forgotPasswordOtp.length !== 6}
+                      className="tw:flex tw:h-12 tw:w-1/2 tw:items-center tw:justify-center tw:rounded-xl tw:border-none tw:bg-[linear-gradient(135deg,#387dcc,#25578f)] tw:px-4 tw:py-3.5 tw:text-[0.98rem] tw:font-semibold tw:text-white tw:shadow-[0_20px_38px_rgba(37,87,143,0.28)] tw:transition tw:duration-200 hover:tw:shadow-[0_24px_44px_rgba(37,87,143,0.34)] tw:disabled:cursor-not-allowed tw:disabled:opacity-70"
+                    >
+                      {forgotPasswordIsSubmitting ? 'Verifying...' : 'Verify OTP'}
+                    </button>
+                  </motion.div>
+                </motion.form>
+              </div>
+            </motion.div>
+          </motion.div>
+        </div>
+      )
+    }
+
+    if (forgotPasswordStep === 'reset') {
+      return (
+        <div className="tw:relative tw:flex tw:w-full tw:max-w-[29rem] tw:flex-col tw:bg-transparent tw:text-dwarpal-ink">
+          <motion.div
+            variants={formVariants}
+            initial={reduceMotion ? false : 'hidden'}
+            animate="visible"
+            className="tw:relative tw:z-10 tw:flex tw:w-full tw:flex-col tw:justify-center"
+          >
+            <motion.div
+              variants={itemVariants}
+              className="tw:w-full tw:rounded-[32px] tw:border tw:border-white/80 tw:bg-[rgba(255,255,255,0.82)] tw:p-6 tw:shadow-[0_24px_72px_rgba(34,87,128,0.12)] tw:backdrop-blur-[22px] tw:sm:p-8"
+            >
+              <div className="tw:space-y-6">
+                <motion.div
+                  variants={itemVariants}
+                  className="tw:flex tw:flex-col tw:items-center tw:gap-4 tw:text-center"
+                >
+                  <div className="tw:flex tw:h-20 tw:w-20 tw:items-center tw:justify-center tw:rounded-2xl tw:border tw:border-white/85 tw:bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(224,239,255,0.94))] tw:shadow-[0_20px_38px_rgba(34,87,128,0.12)]">
+                    <KeyRound className="tw:h-10 tw:w-10 tw:text-[#2f6db5]" />
+                  </div>
+                  <div className="tw:space-y-2">
+                    <h1 className="tw:font-display tw:text-3xl tw:font-bold tw:leading-none tw:tracking-[-0.05em] tw:text-dwarpal-ink">
+                      Reset Password
+                    </h1>
+                    <p className="tw:text-sm tw:font-medium tw:text-dwarpal-muted">
+                      Please choose a secure new password for your account
+                    </p>
+                  </div>
+                </motion.div>
+
+                <motion.form
+                  variants={formVariants}
+                  onSubmit={handleForgotPasswordReset}
+                  noValidate
+                  className="tw:space-y-5"
+                >
+                  <motion.div variants={itemVariants} className="tw:space-y-2">
+                    <label htmlFor="new-password" className="tw:block tw:text-[0.84rem] tw:font-semibold tw:text-[#425f78]">
+                      New Password
+                    </label>
+                    <PasswordInput
+                      id="new-password"
+                      value={forgotPasswordNewPassword}
+                      onChange={(val) => {
+                        setForgotPasswordNewPassword(val)
+                        setForgotPasswordFieldErrors({})
+                        setForgotPasswordError('')
+                      }}
+                      placeholder="Enter your new password"
+                      autoComplete="new-password"
+                      disabled={forgotPasswordIsSubmitting}
+                      ariaInvalid={Boolean(forgotPasswordFieldErrors.newPassword)}
+                      wrapperClassName="tw:relative tw:z-[1]"
+                      className={[
+                        'tw:relative tw:w-full tw:h-12 tw:rounded-xl tw:border tw:bg-transparent tw:px-4 tw:py-3.5 tw:pr-12 tw:text-[0.98rem] tw:text-dwarpal-ink tw:shadow-[0_12px_30px_rgba(34,87,128,0.08)] tw:outline-none tw:transition tw:duration-200 tw:placeholder:text-[#7b90a3] tw:focus:border-[#2f6db5] tw:focus:shadow-[0_0_0_4px_rgba(47,109,181,0.14),0_18px_32px_rgba(34,87,128,0.12)] tw:disabled:cursor-not-allowed tw:disabled:opacity-65',
+                        forgotPasswordFieldErrors.newPassword ? 'tw:border-[#d65763]' : 'tw:border-[rgba(105,143,176,0.22)]',
+                      ].join(' ')}
+                      toggleClassName="tw:absolute tw:right-3 tw:top-0 tw:bottom-0 tw:my-auto tw:grid tw:h-9 tw:w-9 tw:place-items-center tw:rounded-lg tw:border tw:border-[rgba(105,143,176,0.28)] tw:bg-[rgba(255,255,255,0.74)] tw:text-[#48637c] tw:transition tw:duration-200 hover:tw:bg-white hover:tw:text-[#2f6db5] focus-visible:tw:outline-none disabled:tw:cursor-not-allowed"
+                    />
+                    {forgotPasswordFieldErrors.newPassword ? (
+                      <p className="tw:text-[0.82rem] tw:font-medium tw:text-[#d65763]">{forgotPasswordFieldErrors.newPassword}</p>
+                    ) : null}
+                  </motion.div>
+
+                  <motion.div variants={itemVariants} className="tw:space-y-2">
+                    <label htmlFor="confirm-password" className="tw:block tw:text-[0.84rem] tw:font-semibold tw:text-[#425f78]">
+                      Confirm Password
+                    </label>
+                    <PasswordInput
+                      id="confirm-password"
+                      value={forgotPasswordConfirmPassword}
+                      onChange={(val) => {
+                        setForgotPasswordConfirmPassword(val)
+                        setForgotPasswordFieldErrors({})
+                        setForgotPasswordError('')
+                      }}
+                      placeholder="Confirm your new password"
+                      autoComplete="new-password"
+                      disabled={forgotPasswordIsSubmitting}
+                      ariaInvalid={Boolean(forgotPasswordFieldErrors.confirmPassword)}
+                      wrapperClassName="tw:relative tw:z-[1]"
+                      className={[
+                        'tw:relative tw:w-full tw:h-12 tw:rounded-xl tw:border tw:bg-transparent tw:px-4 tw:py-3.5 tw:pr-12 tw:text-[0.98rem] tw:text-dwarpal-ink tw:shadow-[0_12px_30px_rgba(34,87,128,0.08)] tw:outline-none tw:transition tw:duration-200 tw:placeholder:text-[#7b90a3] tw:focus:border-[#2f6db5] tw:focus:shadow-[0_0_0_4px_rgba(47,109,181,0.14),0_18px_32px_rgba(34,87,128,0.12)] tw:disabled:cursor-not-allowed tw:disabled:opacity-65',
+                        forgotPasswordFieldErrors.confirmPassword ? 'tw:border-[#d65763]' : 'tw:border-[rgba(105,143,176,0.22)]',
+                      ].join(' ')}
+                      toggleClassName="tw:absolute tw:right-3 tw:top-0 tw:bottom-0 tw:my-auto tw:grid tw:h-9 tw:w-9 tw:place-items-center tw:rounded-lg tw:border tw:border-[rgba(105,143,176,0.28)] tw:bg-[rgba(255,255,255,0.74)] tw:text-[#48637c] tw:transition tw:duration-200 hover:tw:bg-white hover:tw:text-[#2f6db5] focus-visible:tw:outline-none disabled:tw:cursor-not-allowed"
+                    />
+                    {forgotPasswordFieldErrors.confirmPassword ? (
+                      <p className="tw:text-[0.82rem] tw:font-medium tw:text-[#d65763]">{forgotPasswordFieldErrors.confirmPassword}</p>
+                    ) : null}
+                  </motion.div>
+
+                  {forgotPasswordError ? (
+                    <motion.div
+                      variants={itemVariants}
+                      role="alert"
+                      className="tw:rounded-[18px] tw:border tw:border-[rgba(214,87,99,0.28)] tw:bg-[rgba(255,240,242,0.9)] tw:px-4 tw:py-3 tw:text-[0.92rem] tw:font-medium tw:text-[#c24b58]"
+                    >
+                      {forgotPasswordError}
+                    </motion.div>
+                  ) : null}
+
+                  <motion.div variants={itemVariants} className="tw:flex tw:gap-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForgotPasswordStep(null)
+                        setForgotPasswordNewPassword('')
+                        setForgotPasswordConfirmPassword('')
+                        setForgotPasswordError('')
+                      }}
+                      disabled={forgotPasswordIsSubmitting}
+                      className="tw:flex tw:h-12 tw:w-1/2 tw:items-center tw:justify-center tw:rounded-xl tw:border tw:border-[rgba(105,143,176,0.28)] tw:bg-[rgba(255,255,255,0.74)] tw:px-4 tw:py-3.5 tw:text-[0.98rem] tw:font-semibold tw:text-[#48637c] tw:transition tw:duration-200 hover:tw:bg-white hover:tw:text-[#2f6db5] tw:disabled:cursor-not-allowed tw:disabled:opacity-55"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={forgotPasswordIsSubmitting || !forgotPasswordNewPassword || !forgotPasswordConfirmPassword}
+                      className="tw:flex tw:h-12 tw:w-1/2 tw:items-center tw:justify-center tw:rounded-xl tw:border-none tw:bg-[linear-gradient(135deg,#387dcc,#25578f)] tw:px-4 tw:py-3.5 tw:text-[0.98rem] tw:font-semibold tw:text-white tw:shadow-[0_20px_38px_rgba(37,87,143,0.28)] tw:transition tw:duration-200 hover:tw:shadow-[0_24px_44px_rgba(37,87,143,0.34)] tw:disabled:cursor-not-allowed tw:disabled:opacity-70"
+                    >
+                      {forgotPasswordIsSubmitting ? 'Resetting...' : 'Reset Password'}
+                    </button>
+                  </motion.div>
+                </motion.form>
+              </div>
+            </motion.div>
+          </motion.div>
+        </div>
+      )
+    }
+
+    return (
+      <LoginForm
+        identifier={form.identifier}
+        password={form.password}
+        rememberMe={rememberMe}
+        onIdentifierChange={(value) => updateFormField('identifier', value)}
+        onPasswordChange={(value) => updateFormField('password', value)}
+        onRememberMeChange={handleRememberMeChange}
+        onForgotPassword={() => {
+          setForgotPasswordStep('id')
+          setForgotPasswordIdentifier(form.identifier || '')
+        }}
+        onSubmit={handleLogin}
+        error={error}
+        success={success}
+        fieldErrors={fieldErrors}
+        isSubmitting={isSubmitting}
+        identifierLabel={identifierLabel}
+        identifierPlaceholder={identifierPlaceholder}
+        title="DwarPal"
+        subtitle="Sign in to continue to your dashboard"
+        submitLabel="Sign in"
+        showForgotPassword={true}
+        showRegisterLink
+      />
+    )
+  }
+
   return (
     <>
-      <AuthPage right={
-        <LoginForm
-          identifier={form.identifier}
-          password={form.password}
-          rememberMe={rememberMe}
-          onIdentifierChange={(value) => updateFormField('identifier', value)}
-          onPasswordChange={(value) => updateFormField('password', value)}
-          onRememberMeChange={handleRememberMeChange}
-          onForgotPassword={() => {}}
-          onSubmit={handleLogin}
-          error={error}
-          success={success}
-          fieldErrors={fieldErrors}
-          isSubmitting={isSubmitting}
-          identifierLabel={identifierLabel}
-          identifierPlaceholder={identifierPlaceholder}
-          title="DwarPal"
-          subtitle="Sign in to continue to your dashboard"
-          submitLabel="Sign in"
-          showForgotPassword={false}
-          showRegisterLink
-        />
-      } />
+      <AuthPage right={renderRightPanel()} />
       {/* TEMP_DISABLED_OTP */}
     </>
   )

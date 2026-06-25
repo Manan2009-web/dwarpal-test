@@ -499,6 +499,33 @@ const getWebAuthnDevices = asyncHandler(async (req, res) => {
   });
 });
 
+const forgotPassword = asyncHandler(async (req, res) => {
+  const { identifier } = req.body;
+  const result = await passwordResetService.startForgotPasswordWithOtp(identifier);
+  return sendSuccess(res, {
+    message: result.message,
+    data: result
+  });
+});
+
+const verifyOtp = asyncHandler(async (req, res) => {
+  const { identifier, otp } = req.body;
+  const result = await passwordResetService.verifyForgotPasswordOtpOnly(identifier, otp);
+  return sendSuccess(res, {
+    message: result.message,
+    data: result
+  });
+});
+
+const resetPassword = asyncHandler(async (req, res) => {
+  const { identifier, otp, newPassword } = req.body;
+  const result = await passwordResetService.resetPasswordWithOtp(identifier, otp, newPassword, getRequestMeta(req));
+  return sendSuccess(res, {
+    message: result.message,
+    data: result
+  });
+});
+
 const removeWebAuthnDevice = asyncHandler(async (req, res) => {
   const result = await authService.removeWebAuthnDevice(req.user._id, req.params.deviceId, getRequestMeta(req));
 
@@ -536,5 +563,8 @@ module.exports = {
   verify,
   verifyRegisterOtp,
   verifyWebAuthnAuthentication,
-  verifyWebAuthnRegistration
+  verifyWebAuthnRegistration,
+  forgotPassword,
+  verifyOtp,
+  resetPassword
 };

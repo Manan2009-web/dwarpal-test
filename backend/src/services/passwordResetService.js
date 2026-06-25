@@ -453,11 +453,158 @@ async function confirmAuthenticatedPasswordChange(userId, payload, req, requestM
   };
 }
 
+async function startForgotPasswordWithOtp(identifier) {
+  const user = await getPasswordResetUserByIdentifier(identifier);
+  const email = normalizeEmail(user.email);
+
+  if (!email) {
+    throw createFieldError('No registered email was found for this account.', 'email', 400);
+  }
+
+  const existingRequest = await PasswordResetOtp.findOne({ email }).select('+otpHash');
+  const previousSnapshot = existingRequest ? existingRequest.toObject() : null;
+
+  if (existingRequest?.lastSentAt) {
+    const retryAt = new Date(
+      new Date(existingRequest.lastSentAt).getTime() + env.passwordResetOtpResendCooldownSeconds * 1000
+    );
+    const retryAfterSeconds = getRemainingSecondsUntil(retryAt);
+
+    if (retryAfterSeconds > 0) {
+      throw createRetryAfterError(
+        `Please wait ${retryAfterSeconds} seconds before requesting a new OTP.`,
+        'otp',
+        retryAfterSeconds
+      );
+    }
+  }
+
+  const otp = generateOtp();
+
+  // Expiration of 10 minutes (600 seconds)
+  await PasswordResetOtp.findOneAndUpdate(
+    { email },
+    {
+      $set: {
+        email,
+        otpHash: hashOtp(email, otp),
+        otpExpiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+        lastSentAt: new Date(),
+        attempts: 0,
+        used: false
+      }
+    },
+    {
+      upsert: true,
+      new: true,
+      setDefaultsOnInsert: true
+    }
+  );
+
+  try {
+    await sendPasswordResetOtpEmail({
+      email,
+      name: user.fullName,
+      otp,
+      expiryMinutes: 10
+    });
+  } catch (error) {
+    await restorePasswordResetSnapshot(email, previousSnapshot);
+    throw error;
+  }
+
+  return {
+    identifier,
+    email,
+    maskedEmail: maskEmail(email),
+    cooldownSeconds: env.passwordResetOtpResendCooldownSeconds,
+    expiresInSeconds: 600, // 10 minutes in seconds
+    message: 'Password reset OTP sent successfully.'
+  };
+}
+
+async function verifyForgotPasswordOtpOnly(identifier, otp) {
+  const user = await getPasswordResetUserByIdentifier(identifier);
+  const email = normalizeEmail(user.email);
+  const cleanOtp = normalizeOtp(otp);
+
+  const resetRequest = await PasswordResetOtp.findOne({ email }).select('+otpHash');
+
+  await validateResetOtpRecord(resetRequest, email, cleanOtp);
+
+  return {
+    identifier,
+    email,
+    maskedEmail: maskEmail(email),
+    otp: cleanOtp,
+    message: 'OTP verified successfully.'
+  };
+}
+
+async function resetPasswordWithOtp(identifier, otp, newPassword, requestMeta = {}) {
+  const user = await getPasswordResetUserByIdentifier(identifier, '+password +temporaryCredentialEncrypted');
+  const email = normalizeEmail(user.email);
+  const cleanOtp = normalizeOtp(otp);
+
+  if (!PASSWORD_REGEX.test(newPassword)) {
+    throw createFieldError(
+      'New password must be at least 8 characters and include uppercase, lowercase, number, and special character',
+      'newPassword',
+      400
+    );
+  }
+
+  const resetRequest = await PasswordResetOtp.findOne({ email }).select('+otpHash');
+
+  await validateResetOtpRecord(resetRequest, email, cleanOtp);
+
+  if (await compareWithStoredPassword(newPassword, user.password)) {
+    throw createFieldError('New password cannot be the same as your old password.', 'newPassword', 400);
+  }
+
+  // Hash the newPassword using bcrypt
+  const hashedPassword = await bcrypt.hash(newPassword, env.bcryptSaltRounds);
+
+  // Update ONLY the password field in the database
+  await User.updateOne(
+    { _id: user._id },
+    {
+      $set: {
+        password: hashedPassword,
+        mustChangePassword: false,
+        temporaryCredentialEncrypted: null,
+        temporaryCredentialCreatedAt: null
+      }
+    }
+  );
+
+  // Delete the consumed OTP from the collection
+  await PasswordResetOtp.deleteOne({ email });
+
+  await logAction({
+    actorId: user._id,
+    resourceType: 'auth',
+    resourceId: user._id,
+    action: 'forgot_password_reset',
+    message: 'Password reset completed successfully',
+    metadata: { email: user.email },
+    requestMeta
+  });
+
+  return {
+    email,
+    message: 'Password reset successful. You can now sign in with your new password.'
+  };
+}
+
 module.exports = {
   confirmAuthenticatedPasswordChange,
   requestAuthenticatedPasswordChange,
   resolvePasswordResetAccount,
   resetPassword,
   startPasswordReset,
-  verifyPasswordResetOtp
+  verifyPasswordResetOtp,
+  startForgotPasswordWithOtp,
+  verifyForgotPasswordOtpOnly,
+  resetPasswordWithOtp
 };

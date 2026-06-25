@@ -1997,6 +1997,60 @@ export async function resetForgotPassword(email, otp, newPassword, confirmPasswo
   }
 }
 
+export async function submitForgotPassword(identifier) {
+  const response = await authApiRequest('/auth/forgot-password', {
+    method: 'POST',
+    timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
+    body: {
+      identifier,
+    },
+  })
+
+  return {
+    success: response?.success || true,
+    message: response?.message || 'Password reset OTP sent successfully.',
+    email: response?.data?.email || '',
+    maskedEmail: response?.data?.maskedEmail || '',
+    cooldownSeconds: Number(response?.data?.cooldownSeconds || 45),
+    expiresInSeconds: Number(response?.data?.expiresInSeconds || 600),
+  }
+}
+
+export async function submitVerifyOtp(identifier, otp) {
+  const response = await authApiRequest('/auth/verify-otp', {
+    method: 'POST',
+    timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
+    body: {
+      identifier,
+      otp,
+    },
+  })
+
+  return {
+    success: response?.success || true,
+    message: response?.message || 'OTP verified successfully.',
+    email: response?.data?.email || '',
+    otp: response?.data?.otp || otp,
+  }
+}
+
+export async function submitResetPassword(identifier, otp, newPassword) {
+  const response = await authApiRequest('/auth/reset-password', {
+    method: 'POST',
+    timeoutMs: DEFAULT_AUTH_TIMEOUT_MS,
+    body: {
+      identifier,
+      otp,
+      newPassword,
+    },
+  })
+
+  return {
+    success: response?.success || true,
+    message: response?.message || 'Password reset completed successfully.',
+  }
+}
+
 export async function requestPasswordChange() {
   const response = await authApiRequest('/auth/request-password-change', {
     method: 'POST',
