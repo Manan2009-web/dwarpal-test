@@ -286,19 +286,19 @@ async function registerUser(payload, req, requestMeta) {
 }
 
 async function findUserByIdentifier(identifier, selection = '+password') {
-  const normalizedIdentifier = normalizeIdentifier(identifier);
+  const normalizedIdentifier = String(identifier || '').trim();
 
   if (!normalizedIdentifier) {
     return null;
   }
 
-  const employeeIdMatcher = new RegExp(`^${escapeRegex(normalizedIdentifier)}$`, 'i');
+  const cleanEmployeeId = normalizedIdentifier.toUpperCase();
 
   return User.findOne({
     $or: [
       { enrollmentNo: normalizedIdentifier },
       { enrollment: normalizedIdentifier },
-      { employeeId: employeeIdMatcher }
+      { employeeId: cleanEmployeeId }
     ]
   }).select(selection);
 }
