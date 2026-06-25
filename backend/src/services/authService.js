@@ -122,8 +122,65 @@ function normalizeRegistrationPayload(payload = {}) {
   };
 }
 
+async function cleanOrphanedPendingRegistrations(email, phone) {
+  const mongoose = require('mongoose');
+
+  const queryConditions = [];
+  if (email) {
+    queryConditions.push({ email });
+  }
+  if (phone) {
+    queryConditions.push({ phone });
+  }
+
+  if (queryConditions.length === 0) {
+    return;
+  }
+
+  // Check if an active user exists in the User collection
+  const activeUser = await User.findOne({
+    $or: queryConditions,
+    isActive: true
+  }).lean();
+
+  // If an active user exists, do not clear anything (allow standard conflict/duplicate errors to throw)
+  if (activeUser) {
+    return;
+  }
+
+  // If no active user exists, clear matching pending registrations and phone verification sessions
+  const db = mongoose.connection.db;
+  if (!db) {
+    return;
+  }
+
+  const collectionsToClean = ['pending_registrations', 'pendingregistrations', 'phoneverificationsessions'];
+
+  for (const collName of collectionsToClean) {
+    try {
+      const collection = db.collection(collName);
+      const deleteQuery = [];
+      if (email) {
+        deleteQuery.push({ email });
+      }
+      if (phone) {
+        deleteQuery.push({ phone });
+      }
+      if (deleteQuery.length > 0) {
+        await collection.deleteMany({ $or: deleteQuery });
+      }
+    } catch (err) {
+      console.warn(`[pending-cleanup] Failed to clean collection "${collName}":`, err.message);
+    }
+  }
+}
+
 async function collectRegistrationConflictErrors(payload = {}) {
   const normalizedPayload = normalizeRegistrationPayload(payload);
+
+  // Clean up any orphaned records first!
+  await cleanOrphanedPendingRegistrations(normalizedPayload.email, normalizedPayload.phone);
+
   const ignoredUserId = payload?.ignoreUserId ? String(payload.ignoreUserId) : '';
   const duplicateLookup = [];
 
