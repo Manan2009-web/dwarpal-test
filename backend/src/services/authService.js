@@ -296,6 +296,7 @@ async function findUserByIdentifier(identifier, selection = '+password') {
 
   return User.findOne({
     $or: [
+      { enrollmentNumber: normalizedIdentifier },
       { enrollmentNo: normalizedIdentifier },
       { enrollment: normalizedIdentifier },
       { employeeId: cleanEmployeeId }

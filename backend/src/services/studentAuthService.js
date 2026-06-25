@@ -114,7 +114,11 @@ async function getStudentByEnrollment(enrollmentNo, selection = '+password') {
 
   const student = await User.findOne({
     role: 'student',
-    $or: [{ enrollmentNo: normalizedEnrollmentNo }, { enrollment: normalizedEnrollmentNo }]
+    $or: [
+      { enrollmentNumber: normalizedEnrollmentNo },
+      { enrollmentNo: normalizedEnrollmentNo },
+      { enrollment: normalizedEnrollmentNo }
+    ]
   }).select(selection);
 
   if (!student) {
