@@ -91,12 +91,6 @@ function renderStatusScreen({
   }
 }
 
-function renderBootStatus() {
-  renderStatusScreen({
-    title: 'Loading DwarPal',
-    message: 'Starting React and loading your workspace shell.',
-  })
-}
 
 function getBootStatusController() {
   if (typeof window === 'undefined') {
@@ -309,7 +303,6 @@ if (!rootElement) {
 
 async function bootstrap() {
   logBootstrapStatus('Bootstrapping React root')
-  renderBootStatus()
 
   try {
     await checkBackendHealth()

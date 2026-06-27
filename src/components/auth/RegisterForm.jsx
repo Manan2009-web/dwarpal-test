@@ -43,11 +43,10 @@ function FormField({
 
   return (
     <motion.div variants={itemVariants} className={`tw:space-y-1.5 ${className}`}>
-      <label htmlFor={id} className="tw:block tw:text-[0.84rem] tw:font-semibold tw:text-[#425f78]">
+      <label htmlFor={id} className="tw:block tw:text-[0.84rem] tw:font-semibold tw:text-white/60 tw:tracking-wide">
         {label}
       </label>
       <div className="tw:group tw:relative">
-        <div className="tw:absolute tw:inset-0 tw:rounded-xl tw:bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(227,239,251,0.72))]" />
         {isPasswordField ? (
           <PasswordInput
             id={id}
@@ -59,10 +58,10 @@ function FormField({
             ariaInvalid={Boolean(error)}
             wrapperClassName="tw:relative tw:z-[1]"
             className={[
-              'tw:relative tw:w-full tw:h-11 tw:rounded-xl tw:border tw:bg-transparent tw:px-4 tw:py-2.5 tw:pr-12 tw:text-[0.94rem] tw:text-dwarpal-ink tw:shadow-[0_10px_24px_rgba(34,87,128,0.06)] tw:outline-none tw:transition tw:duration-200 tw:placeholder:text-[#7b90a3] tw:focus:border-[#2f6db5] tw:focus:shadow-[0_0_0_4px_rgba(47,109,181,0.14),0_14px_28px_rgba(34,87,128,0.1)] tw:disabled:cursor-not-allowed tw:disabled:opacity-65',
-              error ? 'tw:border-[#d65763]' : 'tw:border-[rgba(105,143,176,0.22)]',
+              'tw:relative tw:w-full tw:h-11 tw:rounded-xl tw:border tw:bg-black/[0.25] tw:px-4 tw:py-2.5 tw:pr-12 tw:text-[0.94rem] tw:text-white tw:tracking-wide tw:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] tw:outline-none tw:transition tw:duration-200 tw:placeholder:text-white/30 tw:focus:border-white/[0.2] tw:focus:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4),0_0_20px_rgba(255,255,255,0.04)] tw:disabled:cursor-not-allowed tw:disabled:opacity-65',
+              error ? 'tw:border-red-500/40' : 'tw:border-white/[0.04]',
             ].join(' ')}
-            toggleClassName="tw:absolute tw:right-3 tw:top-0 tw:bottom-0 tw:my-auto tw:grid tw:h-8 tw:w-8 tw:place-items-center tw:rounded-lg tw:border tw:border-[rgba(105,143,176,0.28)] tw:bg-[rgba(255,255,255,0.74)] tw:text-[#48637c] tw:transition tw:duration-200 hover:tw:bg-white hover:tw:text-[#2f6db5] focus-visible:tw:outline-none disabled:tw:cursor-not-allowed"
+            toggleClassName="tw:absolute tw:right-3 tw:top-0 tw:bottom-0 tw:my-auto tw:grid tw:h-8 tw:w-8 tw:place-items-center tw:rounded-lg tw:text-white/40 tw:transition tw:duration-200 hover:tw:text-white/70 focus-visible:tw:outline-none disabled:tw:cursor-not-allowed"
           />
         ) : (
           <input
@@ -75,13 +74,13 @@ function FormField({
             disabled={disabled}
             aria-invalid={Boolean(error)}
             className={[
-              'tw:relative tw:w-full tw:h-11 tw:rounded-xl tw:border tw:bg-transparent tw:px-4 tw:py-2.5 tw:text-[0.94rem] tw:text-dwarpal-ink tw:shadow-[0_10px_24px_rgba(34,87,128,0.06)] tw:outline-none tw:transition tw:duration-200 tw:placeholder:text-[#7b90a3] tw:focus:border-[#2f6db5] tw:focus:shadow-[0_0_0_4px_rgba(47,109,181,0.14),0_14px_28px_rgba(34,87,128,0.1)] tw:disabled:cursor-not-allowed tw:disabled:opacity-65',
-              error ? 'tw:border-[#d65763]' : 'tw:border-[rgba(105,143,176,0.22)]',
+              'tw:relative tw:w-full tw:h-11 tw:rounded-xl tw:border tw:bg-black/[0.25] tw:px-4 tw:py-2.5 tw:text-[0.94rem] tw:text-white tw:tracking-wide tw:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] tw:outline-none tw:transition tw:duration-200 tw:placeholder:text-white/30 tw:focus:border-white/[0.2] tw:focus:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4),0_0_20px_rgba(255,255,255,0.04)] tw:disabled:cursor-not-allowed tw:disabled:opacity-65',
+              error ? 'tw:border-red-500/40' : 'tw:border-white/[0.04]',
             ].join(' ')}
           />
         )}
       </div>
-      {error ? <p className="tw:text-[0.8rem] tw:font-medium tw:text-[#d65763]">{error}</p> : null}
+      {error ? <p className="tw:text-[0.8rem] tw:font-medium tw:text-red-400">{error}</p> : null}
     </motion.div>
   )
 }
@@ -99,11 +98,10 @@ function FormSelect({
 }) {
   return (
     <motion.div variants={itemVariants} className={`tw:space-y-1.5 ${className}`}>
-      <label htmlFor={id} className="tw:block tw:text-[0.84rem] tw:font-semibold tw:text-[#425f78]">
+      <label htmlFor={id} className="tw:block tw:text-[0.84rem] tw:font-semibold tw:text-white/60 tw:tracking-wide">
         {label}
       </label>
       <div className="tw:group tw:relative">
-        <div className="tw:absolute tw:inset-0 tw:rounded-xl tw:bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(227,239,251,0.72))]" />
         <select
           id={id}
           value={value}
@@ -111,21 +109,21 @@ function FormSelect({
           disabled={disabled}
           aria-invalid={Boolean(error)}
           className={[
-            'tw:relative tw:w-full tw:h-11 tw:rounded-xl tw:border tw:bg-transparent tw:px-4 tw:py-2.5 tw:text-[0.94rem] tw:text-dwarpal-ink tw:shadow-[0_10px_24px_rgba(34,87,128,0.06)] tw:outline-none tw:transition tw:duration-200 tw:focus:border-[#2f6db5] tw:focus:shadow-[0_0_0_4px_rgba(47,109,181,0.14),0_14px_28px_rgba(34,87,128,0.1)] tw:disabled:cursor-not-allowed tw:disabled:opacity-65',
-            error ? 'tw:border-[#d65763]' : 'tw:border-[rgba(105,143,176,0.22)]',
+            'tw:relative tw:w-full tw:h-11 tw:rounded-xl tw:border tw:bg-black/[0.25] tw:px-4 tw:py-2.5 tw:text-[0.94rem] tw:text-white tw:tracking-wide tw:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] tw:outline-none tw:transition tw:duration-200 tw:focus:border-white/[0.2] tw:focus:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4),0_0_20px_rgba(255,255,255,0.04)] tw:disabled:cursor-not-allowed tw:disabled:opacity-65',
+            error ? 'tw:border-red-500/40' : 'tw:border-white/[0.04]',
           ].join(' ')}
         >
-          <option value="" disabled>
+          <option value="" disabled className="tw:bg-[#120f17] tw:text-white">
             {placeholder}
           </option>
           {options.map((opt) => (
-            <option key={opt.value} value={opt.value}>
+            <option key={opt.value} value={opt.value} className="tw:bg-[#120f17] tw:text-white">
               {opt.label}
             </option>
           ))}
         </select>
       </div>
-      {error ? <p className="tw:text-[0.8rem] tw:font-medium tw:text-[#d65763]">{error}</p> : null}
+      {error ? <p className="tw:text-[0.8rem] tw:font-medium tw:text-red-400">{error}</p> : null}
     </motion.div>
   )
 }
@@ -154,7 +152,7 @@ export default function RegisterForm({
   const reduceMotion = useReducedMotion()
 
   return (
-    <div className="tw:relative tw:flex tw:w-full tw:max-w-[34rem] tw:flex-col tw:bg-transparent tw:text-dwarpal-ink">
+    <div className="tw:relative tw:flex tw:w-full tw:flex-col tw:bg-transparent tw:text-white">
       <motion.div
         variants={formVariants}
         initial={reduceMotion ? false : 'hidden'}
@@ -164,16 +162,24 @@ export default function RegisterForm({
         {/* Main Logo Header */}
         <motion.div
           variants={itemVariants}
-          className="tw:flex tw:flex-col tw:items-center tw:gap-3 tw:text-center tw:mb-6"
+          className="tw:flex tw:flex-col tw:items-center tw:text-center tw:mb-6"
         >
-          <div className="tw:flex tw:h-24 tw:w-24 tw:items-center tw:justify-center tw:rounded-3xl tw:border tw:border-white/85 tw:bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(224,239,255,0.94))] tw:shadow-[0_16px_32px_rgba(34,87,128,0.12)]">
-            <img src={logo} alt="DwarPal logo" className="tw:h-16 tw:w-16 tw:object-contain" />
+          {/* MASTER FIX: FIXED 96x64 LOGO CONTAINER */}
+          <div 
+            className="tw:mb-1 tw:flex tw:items-center tw:justify-center tw:rounded-xl tw:border tw:border-white/[0.15] tw:bg-white/[0.05] tw:backdrop-blur-md tw:overflow-hidden tw:mx-auto"
+            style={{ width: '96px', height: '64px', minWidth: '96px', minHeight: '64px' }}
+          >
+            <img 
+              src={logo} 
+              alt="DwarPal Logo" 
+              className="tw:w-full tw:h-full tw:object-contain tw:block tw:p-1" 
+            />
           </div>
-          <div className="tw:space-y-1">
-            <h1 className="tw:font-display tw:text-3xl tw:font-bold tw:leading-none tw:tracking-[-0.05em] tw:text-dwarpal-ink">
+          <div className="tw:space-y-1 tw:-mt-1">
+            <h1 className="tw:font-display tw:text-3xl tw:font-bold tw:leading-none tw:tracking-[-0.05em] tw:text-white">
               Create Account
             </h1>
-            <p className="tw:text-sm tw:font-medium tw:text-dwarpal-muted">
+            <p className="tw:text-sm tw:font-medium tw:text-white/50">
               Register to access the gatepass system
             </p>
           </div>
@@ -182,7 +188,7 @@ export default function RegisterForm({
         {/* Form Card */}
         <motion.div
           variants={itemVariants}
-          className="tw:w-full tw:rounded-[32px] tw:border tw:border-white/80 tw:bg-[rgba(255,255,255,0.82)] tw:p-6 tw:shadow-[0_24px_72px_rgba(34,87,128,0.12)] tw:backdrop-blur-[22px] tw:sm:p-8"
+          className="tw:w-full tw:text-white"
         >
           <motion.form variants={formVariants} onSubmit={onSubmit} noValidate className="tw:space-y-4">
             <div className="tw:grid tw:grid-cols-1 tw:gap-4 sm:tw:grid-cols-2">
@@ -221,7 +227,7 @@ export default function RegisterForm({
               />
 
               {isStudentRole ? (
-                <div className="tw:col-span-1 sm:tw:col-span-2 tw:rounded-[18px] tw:border tw:border-[rgba(214,87,99,0.28)] tw:bg-[rgba(255,240,242,0.9)] tw:px-4 tw:py-3 tw:text-[0.92rem] tw:font-medium tw:text-[#c24b58]">
+                <div className="tw:col-span-1 sm:tw:col-span-2 tw:rounded-xl tw:border tw:border-red-500/[0.15] tw:bg-red-500/[0.05] tw:px-4 tw:py-3 tw:text-[0.92rem] tw:font-medium tw:text-red-400 tw:backdrop-blur-md">
                   Students cannot register directly. Student accounts are created by Admin or CAO.
                 </div>
               ) : null}
@@ -346,7 +352,7 @@ export default function RegisterForm({
               <motion.div
                 variants={itemVariants}
                 role="alert"
-                className="tw:rounded-[18px] tw:border tw:border-[rgba(214,87,99,0.28)] tw:bg-[rgba(255,240,242,0.9)] tw:px-4 tw:py-3 tw:text-[0.92rem] tw:font-medium tw:text-[#c24b58]"
+                className="tw:rounded-xl tw:border tw:border-red-500/[0.15] tw:bg-red-500/[0.05] tw:px-4 tw:py-3 tw:text-[0.92rem] tw:font-medium tw:text-red-400 tw:backdrop-blur-md"
               >
                 {error}
               </motion.div>
@@ -359,7 +365,7 @@ export default function RegisterForm({
               aria-busy={isSubmitting}
               whileHover={reduceMotion || isSubmitting || isStudentRole || !form.role ? undefined : { y: -2, scale: 1.01 }}
               whileTap={reduceMotion || isSubmitting || isStudentRole || !form.role ? undefined : { scale: 0.99 }}
-              className="tw:flex tw:h-12 tw:w-full tw:items-center tw:justify-center tw:gap-3 tw:rounded-xl tw:border-none tw:bg-[linear-gradient(135deg,#387dcc,#25578f)] tw:px-5 tw:py-3.5 tw:text-[1rem] tw:font-semibold tw:text-white tw:shadow-[0_20px_38_rgba(37,87,143,0.28)] tw:transition tw:duration-200 hover:tw:shadow-[0_24px_44px_rgba(37,87,143,0.34)] tw:disabled:cursor-not-allowed tw:disabled:opacity-70"
+              className="tw:flex tw:h-12 tw:w-full tw:items-center tw:justify-center tw:gap-3 tw:rounded-xl tw:border tw:border-white/[0.18] tw:bg-white/[0.06] tw:backdrop-blur-xl tw:px-5 tw:py-3.5 tw:text-[1rem] tw:font-semibold tw:text-white tw:transition tw:duration-200 hover:tw:bg-white/[0.12] hover:tw:scale-[1.01] active:tw:scale-[0.99] tw:disabled:cursor-not-allowed tw:disabled:opacity-70"
             >
               <UserPlus className="tw:h-5 tw:w-5" />
               {isSubmitting ? 'Creating Account...' : 'Create Account'}
@@ -368,9 +374,9 @@ export default function RegisterForm({
 
           {/* Login Navigation Link */}
           <motion.div variants={itemVariants} className="tw:mt-5 tw:text-center">
-            <p className="tw:text-[0.92rem] tw:text-dwarpal-muted">
+            <p className="tw:text-[0.92rem] tw:text-white/40">
               Already have an account?{' '}
-              <Link to="/login" replace className="tw:font-semibold tw:text-[#2f6db5] tw:underline tw:underline-offset-4 hover:tw:text-[#214f84]">
+              <Link to="/login" replace className="tw:font-semibold tw:text-white/70 tw:underline tw:underline-offset-4 hover:tw:text-white">
                 Log In
               </Link>
             </p>

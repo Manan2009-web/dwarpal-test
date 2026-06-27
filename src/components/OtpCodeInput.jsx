@@ -102,7 +102,7 @@ export default function OtpCodeInput({
           pattern="[0-9]*"
           autoComplete={index === 0 ? 'one-time-code' : 'off'}
           aria-label={`OTP digit ${index + 1}`}
-          className="otp-code-input-box"
+          className="otp-code-input-box tw:border-white/[0.04] tw:bg-black/[0.25] tw:text-white tw:focus:border-white/[0.2] tw:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] tw:focus:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4),0_0_20px_rgba(255,255,255,0.04)] tw:transition-all tw:duration-200"
           value={digit}
           maxLength={1}
           name={index === 0 ? name : undefined}
