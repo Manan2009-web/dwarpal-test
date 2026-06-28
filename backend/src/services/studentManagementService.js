@@ -14,6 +14,7 @@ const {
 const { normalizePhoneNumber } = require('../utils/phone');
 const { encryptTemporaryCredential, decryptTemporaryCredential } = require('../utils/temporaryCredential');
 const { logAction } = require('./auditService');
+const { sendStudentOnboardingEmail } = require('./emailService');
 
 const STUDENT_DUPLICATE_MESSAGE = 'Student already exists with this enrollment/email/phone.';
 
@@ -283,6 +284,20 @@ async function createStudent(payload, actor, requestMeta = {}) {
       email: student.email
     },
     requestMeta
+  });
+
+  // Send onboarding email — fire-and-forget (email failure must never block student creation)
+  sendStudentOnboardingEmail({
+    email: normalizedPayload.email,
+    fullName: normalizedPayload.fullName,
+    enrollmentNo: normalizedPayload.enrollmentNo,
+    temporaryPassword: normalizedPayload.temporaryPassword,
+    collegeName: require('../config/env').collegeName
+  }).catch((err) => {
+    console.warn('[student-onboarding] Failed to send onboarding email:', err.message || err, {
+      enrollmentNo: normalizedPayload.enrollmentNo,
+      to: normalizedPayload.email
+    });
   });
 
   return sanitizeStudentRecord(student);

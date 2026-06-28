@@ -241,6 +241,18 @@ export default function LoginForm({
                 </p>
               </motion.div>
             ) : null}
+
+            <motion.div variants={itemVariants} className="tw:mt-6 tw:text-center tw:text-[0.78rem] tw:text-white/35 tw:border-t tw:border-white/[0.05] tw:pt-4">
+              By signing in, you agree to our{' '}
+              <Link to="/privacy-policy" className="tw:font-medium tw:text-purple-400 hover:tw:text-purple-300 tw:underline">
+                Privacy Policy
+              </Link>
+              . Need help? Visit{' '}
+              <Link to="/support" className="tw:font-medium tw:text-purple-400 hover:tw:text-purple-300 tw:underline">
+                Support
+              </Link>
+              .
+            </motion.div>
           </div>
         </motion.div>
       </motion.div>

@@ -140,6 +140,10 @@ export default function LandingPage() {
           className="tw:w-full tw:max-w-7xl tw:mx-auto tw:px-8 tw:py-8 tw:flex tw:flex-col tw:sm:flex-row tw:items-center tw:justify-between tw:gap-4 tw:text-[8px] tw:font-mono tw:tracking-[0.25em] tw:text-neutral-500 tw:transform-gpu"
         >
           <div>VERSION: 1.0.1</div>
+          <div className="tw:flex tw:gap-6">
+            <Link to="/privacy-policy" className="hover:tw:text-purple-400 tw:transition-colors">PRIVACY POLICY</Link>
+            <Link to="/support" className="hover:tw:text-purple-400 tw:transition-colors">SUPPORT</Link>
+          </div>
         </motion.footer>
       </div>
     </div>

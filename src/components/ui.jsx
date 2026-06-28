@@ -192,14 +192,18 @@ export function Sidebar({
             </button>
           ))}
         </nav>
-        <div className="sidebar-footer">
-          {onOpenSupport ? (
-            <button type="button" className="action-button secondary sidebar-support-button" onClick={onOpenSupport}>
+        <div className="sidebar-footer" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
+            <button type="button" className="action-button secondary sidebar-support-button" style={{ flex: 1 }} onClick={() => handleNavigate('support')}>
               <CircleHelp size={17} />
               <span>Help</span>
             </button>
-          ) : null}
-          <button type="button" className="action-button danger sidebar-logout-button" onClick={handleLogout}>
+            <button type="button" className="action-button secondary sidebar-support-button" style={{ flex: 1 }} onClick={() => handleNavigate('privacy')}>
+              <ShieldCheck size={17} />
+              <span>Privacy</span>
+            </button>
+          </div>
+          <button type="button" className="action-button danger sidebar-logout-button" style={{ width: '100%' }} onClick={handleLogout}>
             <LogOut size={17} />
             <span>Logout</span>
           </button>

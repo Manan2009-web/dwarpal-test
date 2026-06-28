@@ -445,6 +445,109 @@ async function sendStudentLoginOtpEmail({ email, name, otp, expiryMinutes = env.
   });
 }
 
+async function sendStudentOnboardingEmail({ email, fullName, enrollmentNo, temporaryPassword, collegeName }) {
+  if (!isSmtpConfigured()) {
+    console.info('[email] SMTP not configured — skipping student onboarding email.', { to: maskEmail(email) });
+    return { skipped: true, reason: 'smtp_not_configured' };
+  }
+
+  const safeFullName = escapeHtml(fullName || 'Student');
+  const safeEnrollmentNo = escapeHtml(enrollmentNo || '');
+  const safeCollegeName = escapeHtml(collegeName || 'Your College');
+  const loginUrl = env.clientUrl || env.serverUrl || 'http://localhost:5173';
+  const safeLoginUrl = escapeHtml(loginUrl);
+
+  const html = `
+    <!doctype html>
+    <html lang="en">
+      <body style="margin:0;padding:24px;background:#0d1117;font-family:'Segoe UI',Arial,sans-serif;color:#e6edf3;">
+        <div style="max-width:600px;margin:0 auto;">
+
+          <!-- Header -->
+          <div style="background:linear-gradient(135deg,#1f2937 0%,#111827 100%);border-radius:20px 20px 0 0;padding:36px 40px;text-align:center;border:1px solid rgba(255,255,255,0.06);border-bottom:none;">
+            <div style="display:inline-block;background:linear-gradient(135deg,#6d28d9,#4f46e5);border-radius:16px;padding:12px 20px;margin-bottom:20px;">
+              <span style="font-size:20px;font-weight:800;color:#ffffff;letter-spacing:0.05em;">DwarPal</span>
+            </div>
+            <h1 style="margin:0;font-size:26px;font-weight:700;color:#f0f6fc;line-height:1.3;">Welcome to ${safeCollegeName}</h1>
+            <p style="margin:10px 0 0;font-size:15px;color:#8b949e;">Your DwarPal student account is ready.</p>
+          </div>
+
+          <!-- Body -->
+          <div style="background:#161b22;border:1px solid rgba(255,255,255,0.06);border-top:none;border-radius:0 0 20px 20px;padding:36px 40px;">
+            <p style="margin:0 0 20px;font-size:16px;color:#c9d1d9;">Hi <strong style="color:#f0f6fc;">${safeFullName}</strong>,</p>
+            <p style="margin:0 0 28px;font-size:15px;line-height:1.7;color:#8b949e;">
+              Your student account has been created by the Cumulative Administration Office.
+              Use the credentials below to sign in to the DwarPal Gatepass Portal.
+            </p>
+
+            <!-- Credentials Card -->
+            <div style="background:#0d1117;border:1px solid #30363d;border-radius:14px;padding:24px;margin:0 0 28px;">
+              <p style="margin:0 0 16px;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#6e7681;font-weight:700;">Your Login Credentials</p>
+
+              <div style="display:flex;align-items:center;margin-bottom:16px;">
+                <div style="min-width:140px;font-size:12px;color:#6e7681;font-weight:600;">Enrollment No.</div>
+                <div style="font-size:18px;font-weight:800;color:#58a6ff;letter-spacing:0.06em;font-family:monospace;">${safeEnrollmentNo}</div>
+              </div>
+
+              <div style="height:1px;background:#21262d;margin:0 0 16px;"></div>
+
+              <div style="display:flex;align-items:center;">
+                <div style="min-width:140px;font-size:12px;color:#6e7681;font-weight:600;">Temporary Password</div>
+                <div style="font-size:16px;font-weight:700;color:#3fb950;letter-spacing:0.1em;font-family:monospace;background:#0d1117;border:1px dashed #3fb950;border-radius:8px;padding:6px 14px;">${escapeHtml(temporaryPassword)}</div>
+              </div>
+            </div>
+
+            <!-- Warning -->
+            <div style="background:rgba(210,153,34,0.1);border:1px solid rgba(210,153,34,0.3);border-radius:10px;padding:16px 20px;margin:0 0 28px;">
+              <p style="margin:0;font-size:13px;color:#d29922;">&#9888; You will be required to change your password upon your first login. Keep your credentials safe and do not share them with anyone.</p>
+            </div>
+
+            <!-- CTA -->
+            <div style="text-align:center;margin:0 0 32px;">
+              <a href="${safeLoginUrl}" style="display:inline-block;background:linear-gradient(135deg,#6d28d9,#4f46e5);color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:14px 36px;border-radius:50px;letter-spacing:0.04em;">
+                Sign In to DwarPal &rarr;
+              </a>
+            </div>
+
+            <!-- Footer -->
+            <p style="margin:0;font-size:12px;color:#484f58;text-align:center;line-height:1.6;">
+              If you did not expect this email, contact your institution's administration office.<br/>
+              &copy; ${new Date().getFullYear()} DwarPal &bull; ${safeCollegeName}
+            </p>
+          </div>
+
+        </div>
+      </body>
+    </html>
+  `;
+
+  const text = [
+    `Welcome to ${collegeName || 'Your College'} — DwarPal Student Account`,
+    '',
+    `Hi ${fullName},`,
+    '',
+    'Your student account has been created by the Cumulative Administration Office.',
+    '',
+    `Enrollment Number : ${enrollmentNo}`,
+    `Temporary Password: ${temporaryPassword}`,
+    '',
+    'IMPORTANT: You must change your password on your first login.',
+    '',
+    `Login at: ${loginUrl}`,
+    '',
+    'If you did not expect this email, contact your institution admin.'
+  ].join('\n');
+
+  return sendMail({
+    to: email,
+    subject: `Welcome to DwarPal — Your Student Login Credentials`,
+    html,
+    text,
+    context: 'student-onboarding'
+  });
+}
+
+
 module.exports = {
   getSmtpConfigurationWarnings,
   getSmtpDiagnostics,
@@ -452,5 +555,6 @@ module.exports = {
   sendDebugEmail,
   sendPasswordResetOtpEmail,
   sendStudentLoginOtpEmail,
+  sendStudentOnboardingEmail,
   sendVerificationOtpEmail
 };

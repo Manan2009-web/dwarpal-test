@@ -21,10 +21,15 @@ function createAccessToken(user) {
 }
 
 function setAuthCookie(res, token) {
+  // Compliance Rationale:
+  // - httpOnly: true prevents client-side scripting (XSS attacks) from reading the authentication token.
+  // - secure: env.isProduction ensures the cookie is only transmitted over secure HTTPS connections.
+  // - sameSite: 'lax' provides a strong defense against CSRF attacks while allowing top-level external links to keep users logged in.
   res.cookie(env.cookieName, token, {
     httpOnly: true,
     secure: env.isProduction,
-    sameSite: 'lax'
+    sameSite: 'lax',
+    path: '/'
   });
 }
 
@@ -32,7 +37,8 @@ function clearAuthCookie(res) {
   res.clearCookie(env.cookieName, {
     httpOnly: true,
     secure: env.isProduction,
-    sameSite: 'lax'
+    sameSite: 'lax',
+    path: '/'
   });
 }
 

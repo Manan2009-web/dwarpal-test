@@ -14,10 +14,15 @@ function signWebAuthnState(payload) {
 
 function setWebAuthnStateCookie(res, payload) {
   const token = signWebAuthnState(payload);
+  // Compliance Rationale:
+  // - httpOnly: true prevents client-side scripting (XSS attacks) from reading the short-lived WebAuthn flow token.
+  // - secure: env.isProduction ensures the session-linked verification token is only transmitted over HTTPS.
+  // - sameSite: 'lax' safeguards biometric verification requests from CSRF.
   res.cookie(WEBAUTHN_STATE_COOKIE, token, {
     httpOnly: true,
     secure: env.isProduction,
-    sameSite: 'lax'
+    sameSite: 'lax',
+    path: '/'
   });
 }
 
@@ -25,7 +30,8 @@ function clearWebAuthnStateCookie(res) {
   res.clearCookie(WEBAUTHN_STATE_COOKIE, {
     httpOnly: true,
     secure: env.isProduction,
-    sameSite: 'lax'
+    sameSite: 'lax',
+    path: '/'
   });
 }
 

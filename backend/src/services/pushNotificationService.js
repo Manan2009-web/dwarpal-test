@@ -225,5 +225,131 @@ async function sendPushNotification(userId, title, message, data = {}) {
 
 module.exports = {
   saveDeviceToken,
-  sendPushNotification
+  sendPushNotification,
+  sendGatepassPushNotification
 };
+
+// ---------------------------------------------------------------------------
+// Gatepass-specific push notification helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the VAPID push payload for a gatepass action notification.
+ *
+ * @param {object} opts
+ * @param {string}   opts.title          - Notification title
+ * @param {string}   opts.body           - Notification body text
+ * @param {string}   opts.gatepassId     - Gatepass MongoDB _id (string)
+ * @param {string}   opts.passNumber     - Human-readable pass number (e.g. DP-STU-202501001)
+ * @param {string}   opts.relatedRoute   - App route to open on click (e.g. /app/my-gatepasses)
+ * @param {Array}    opts.actions        - Array of { action, title } objects for notification buttons
+ * @param {string}   [opts.tag]          - Notification tag for deduplication / replacement
+ * @returns {string} Serialised JSON string ready to pass to webpush.sendNotification()
+ */
+function buildGatepassPushPayload({ title, body, gatepassId, passNumber, relatedRoute, actions = [], tag }) {
+  return JSON.stringify({
+    title,
+    body,
+    icon: '/dwarpal-icon-192.svg',
+    badge: '/dwarpal-icon-192.svg',
+    tag: tag || `gatepass-${gatepassId}`,
+    renotify: true,
+    requireInteraction: true,
+    actions,
+    data: {
+      gatepassId,
+      passNumber,
+      relatedRoute: relatedRoute || '/app/notifications',
+      link: buildClientUrl(relatedRoute || '/app/notifications')
+    }
+  });
+}
+
+/**
+ * Send a gatepass push notification to a single user (by userId).
+ * All push errors are swallowed — push must never break the gatepass workflow.
+ *
+ * @param {string|ObjectId} userId   - MongoDB User _id
+ * @param {object}          opts     - Same shape as buildGatepassPushPayload options
+ * @returns {Promise<void>}
+ */
+async function sendGatepassPushNotification(userId, opts) {
+  if (!userId || !opts?.title) return;
+
+  // --- Firebase FCM path (mobile devices) -----------------------------------
+  const messaging = getFirebaseMessagingService();
+  if (messaging) {
+    try {
+      const deviceTokens = await DeviceToken.find({ userId }).select('token').lean();
+      const tokens = deviceTokens.map((d) => d.token).filter(Boolean);
+
+      if (tokens.length) {
+        const relatedRoute = opts.relatedRoute || '/app/notifications';
+        const link = buildClientUrl(relatedRoute);
+        const staleTokens = [];
+
+        for (let i = 0; i < tokens.length; i += MAX_MULTICAST_TOKENS) {
+          const batch = tokens.slice(i, i + MAX_MULTICAST_TOKENS);
+          const response = await messaging.sendEachForMulticast({
+            tokens: batch,
+            data: serializeMessageData(opts.title, opts.body, {
+              gatepassId: opts.gatepassId,
+              passNumber: opts.passNumber,
+              relatedRoute,
+              link,
+              actions: opts.actions ? JSON.stringify(opts.actions) : '[]'
+            }),
+            webpush: { fcmOptions: { link } }
+          });
+
+          response.responses.forEach((result, idx) => {
+            if (!result.success && INVALID_TOKEN_ERROR_CODES.has(result.error?.code)) {
+              staleTokens.push(batch[idx]);
+            }
+          });
+        }
+
+        if (staleTokens.length) {
+          await DeviceToken.deleteMany({ token: { $in: staleTokens } });
+        }
+      }
+    } catch (err) {
+      console.error('[gatepass-push] Firebase FCM delivery failed:', err.message || err);
+    }
+  }
+
+  // --- VAPID Web Push path (browser subscriptions) --------------------------
+  if (env.enableWebPush && env.vapidPublicKey && env.vapidPrivateKey) {
+    try {
+      const subscriptions = await PushSubscription.find({ userId }).lean();
+
+      if (subscriptions.length) {
+        const pushPayload = buildGatepassPushPayload(opts);
+        const staleIds = [];
+
+        await Promise.all(
+          subscriptions.map((sub) =>
+            webpush
+              .sendNotification(
+                { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } },
+                pushPayload
+              )
+              .catch((err) => {
+                if (err.statusCode === 410 || err.statusCode === 404) {
+                  staleIds.push(sub._id);
+                } else {
+                  console.error('[gatepass-push] VAPID error:', err.message || err);
+                }
+              })
+          )
+        );
+
+        if (staleIds.length) {
+          await PushSubscription.deleteMany({ _id: { $in: staleIds } });
+        }
+      }
+    } catch (err) {
+      console.error('[gatepass-push] VAPID batch failed:', err.message || err);
+    }
+  }
+}

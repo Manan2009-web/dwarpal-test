@@ -1,0 +1,155 @@
+{
+  "logoDimensions": {
+    "accessPortal": {
+      "x": 568,
+      "y": 118.453125,
+      "width": 144,
+      "height": 96
+    },
+    "loginPage": {
+      "x": 592,
+      "y": 125.02568817138672,
+      "width": 96,
+      "height": 64.00000762939453
+    },
+    "registerPage": null
+  },
+  "apiRequests": [
+    {
+      "url": "http://localhost:5000/api/health",
+      "method": "GET",
+      "startTime": 1782589635960,
+      "endTime": 1782589636359,
+      "latency": 399,
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5000/api/health",
+      "method": "GET",
+      "startTime": 1782589689337,
+      "endTime": 1782589689379,
+      "latency": 42,
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5000/api/health",
+      "method": "GET",
+      "startTime": 1782589701442,
+      "endTime": 1782589701753,
+      "latency": 311,
+      "status": 200
+    }
+  ],
+  "consoleErrors": [
+    {
+      "type": "warning",
+      "text": "⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
+      "location": {
+        "url": "http://127.0.0.1:5173/node_modules/.vite/deps/react-router-dom.js?v=08997d21",
+        "line": 4451,
+        "column": 12,
+        "lineNumber": 4451,
+        "columnNumber": 12
+      }
+    },
+    {
+      "type": "warning",
+      "text": "⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
+      "location": {
+        "url": "http://127.0.0.1:5173/node_modules/.vite/deps/react-router-dom.js?v=08997d21",
+        "line": 4451,
+        "column": 12,
+        "lineNumber": 4451,
+        "columnNumber": 12
+      }
+    },
+    {
+      "type": "warning",
+      "text": "[.WebGL-0x182c036aa400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+      "location": {
+        "url": "http://127.0.0.1:5173/access-portal",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "type": "warning",
+      "text": "[.WebGL-0x182c036aa400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+      "location": {
+        "url": "http://127.0.0.1:5173/access-portal",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "type": "warning",
+      "text": "[.WebGL-0x182c036aa400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+      "location": {
+        "url": "http://127.0.0.1:5173/access-portal",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "type": "warning",
+      "text": "[.WebGL-0x182c036aa400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)",
+      "location": {
+        "url": "http://127.0.0.1:5173/access-portal",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "type": "warning",
+      "text": "⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
+      "location": {
+        "url": "http://127.0.0.1:5173/node_modules/.vite/deps/react-router-dom.js?v=08997d21",
+        "line": 4451,
+        "column": 12,
+        "lineNumber": 4451,
+        "columnNumber": 12
+      }
+    },
+    {
+      "type": "warning",
+      "text": "⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
+      "location": {
+        "url": "http://127.0.0.1:5173/node_modules/.vite/deps/react-router-dom.js?v=08997d21",
+        "line": 4451,
+        "column": 12,
+        "lineNumber": 4451,
+        "columnNumber": 12
+      }
+    },
+    {
+      "type": "warning",
+      "text": "⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
+      "location": {
+        "url": "http://127.0.0.1:5173/node_modules/.vite/deps/react-router-dom.js?v=08997d21",
+        "line": 4451,
+        "column": 12,
+        "lineNumber": 4451,
+        "columnNumber": 12
+      }
+    },
+    {
+      "type": "warning",
+      "text": "⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
+      "location": {
+        "url": "http://127.0.0.1:5173/node_modules/.vite/deps/react-router-dom.js?v=08997d21",
+        "line": 4451,
+        "column": 12,
+        "lineNumber": 4451,
+        "columnNumber": 12
+      }
+    }
+  ]
+}

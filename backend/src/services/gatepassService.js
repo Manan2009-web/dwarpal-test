@@ -24,6 +24,7 @@ const {
 } = require('../utils/gatepassQr');
 const { logAction } = require('./auditService');
 const { createBulkNotifications } = require('./notificationService');
+const { sendGatepassPushNotification } = require('./pushNotificationService');
 
 const detailPopulate = [
   {
@@ -1465,6 +1466,34 @@ async function createGatepass(actor, payload, requestMeta) {
     requestMeta
   });
 
+  // Push notification — fire-and-forget (never blocks gatepass creation)
+  if (reviewer) {
+    const reviewerLabel = reviewerRole === 'hod' ? 'HOD' : reviewerRole === 'coordinator' ? 'Coordinator' : 'Principal';
+    sendGatepassPushNotification(reviewer._id, {
+      title: '📋 New Gatepass Request',
+      body: `${actor.fullName} submitted ${gatepass.passNumber} for ${reviewerLabel} review.`,
+      gatepassId: String(gatepass._id),
+      passNumber: gatepass.passNumber,
+      relatedRoute: '/app/pending-gatepasses',
+      actions: reviewerRole === 'hod'
+        ? [
+            { action: 'approve', title: '✓ Approve' },
+            { action: 'reject', title: '✗ Reject' },
+            { action: 'forward_to_coordinator', title: '→ Send to Coordinator' }
+          ]
+        : reviewerRole === 'coordinator'
+          ? [
+              { action: 'approve', title: '✓ Approve' },
+              { action: 'reject', title: '✗ Reject' }
+            ]
+          : [
+              { action: 'approve', title: '✓ Approve' },
+              { action: 'reject', title: '✗ Reject' },
+              { action: 'forward_to_hod', title: '→ Send to HOD' }
+            ]
+    }).catch((err) => console.error('[gatepass-push] createGatepass push failed:', err.message || err));
+  }
+
   return getGatepassByIdOrThrow(gatepass._id);
 }
 
@@ -1643,6 +1672,28 @@ async function forwardGatepass(gatepassId, actor, payload, requestMeta) {
     requestMeta
   });
 
+  // Push notification — fire-and-forget
+  if (routeResult.recipient) {
+    const isToCoordinator = routeResult.routedTo === 'coordinator';
+    sendGatepassPushNotification(routeResult.recipient._id, {
+      title: '📋 Gatepass Forwarded to You',
+      body: `Principal forwarded ${gatepass.passNumber} to your queue for review.`,
+      gatepassId: String(gatepass._id),
+      passNumber: gatepass.passNumber,
+      relatedRoute: '/app/pending-gatepasses',
+      actions: isToCoordinator
+        ? [
+            { action: 'approve', title: '✓ Approve' },
+            { action: 'reject', title: '✗ Reject' }
+          ]
+        : [
+            { action: 'approve', title: '✓ Approve' },
+            { action: 'reject', title: '✗ Reject' },
+            { action: 'forward_to_coordinator', title: '→ Send to Coordinator' }
+          ]
+    }).catch((err) => console.error('[gatepass-push] forwardGatepass push failed:', err.message || err));
+  }
+
   return getGatepassByIdOrThrow(gatepass._id);
 }
 
@@ -1681,6 +1732,21 @@ async function forwardGatepassToCoordinator(gatepassId, actor, payload, requestM
     },
     requestMeta
   });
+
+  // Push notification — fire-and-forget
+  if (routeResult.recipient) {
+    sendGatepassPushNotification(routeResult.recipient._id, {
+      title: '📋 Gatepass Forwarded to You',
+      body: `HOD forwarded ${gatepass.passNumber} to your queue for review.`,
+      gatepassId: String(gatepass._id),
+      passNumber: gatepass.passNumber,
+      relatedRoute: '/app/pending-gatepasses',
+      actions: [
+        { action: 'approve', title: '✓ Approve' },
+        { action: 'reject', title: '✗ Reject' }
+      ]
+    }).catch((err) => console.error('[gatepass-push] forwardToCoordinator push failed:', err.message || err));
+  }
 
   return getGatepassByIdOrThrow(gatepass._id);
 }
@@ -1918,6 +1984,25 @@ async function approveGatepass(gatepassId, actor, payload, requestMeta) {
     requestMeta
   });
 
+  // Push notification to student — fire-and-forget (See QR action opens their gatepass page)
+  {
+    const studentId = gatepass.createdBy?._id || gatepass.createdBy;
+    const approverLabel = actor.role === 'faculty' && isCoordinatorActor(actor)
+      ? 'Coordinator'
+      : actor.role.charAt(0).toUpperCase() + actor.role.slice(1);
+    sendGatepassPushNotification(studentId, {
+      title: '✅ Gatepass Approved!',
+      body: `Your gatepass ${gatepass.passNumber} was approved by ${approverLabel} and is ready.`,
+      gatepassId: String(gatepass._id),
+      passNumber: gatepass.passNumber,
+      relatedRoute: '/app/my-gatepasses',
+      tag: `gatepass-approved-${gatepass._id}`,
+      actions: [
+        { action: 'see_qr', title: '🔍 See QR' }
+      ]
+    }).catch((err) => console.error('[gatepass-push] approveGatepass push failed:', err.message || err));
+  }
+
   return getGatepassByIdOrThrow(gatepass._id);
 }
 
@@ -2100,6 +2185,25 @@ async function rejectGatepass(gatepassId, actor, payload, requestMeta) {
     },
     requestMeta
   });
+
+  // Push notification to student — fire-and-forget
+  {
+    const studentId = gatepass.createdBy?._id || gatepass.createdBy;
+    const rejecterLabel = actor.role === 'faculty' && isCoordinatorActor(actor)
+      ? 'Coordinator'
+      : actor.role.charAt(0).toUpperCase() + actor.role.slice(1);
+    sendGatepassPushNotification(studentId, {
+      title: '❌ Gatepass Rejected',
+      body: `Your gatepass ${gatepass.passNumber} was rejected by ${rejecterLabel}.${
+        payload.rejectionReason ? ` Reason: ${payload.rejectionReason}` : ''
+      }`,
+      gatepassId: String(gatepass._id),
+      passNumber: gatepass.passNumber,
+      relatedRoute: '/app/my-gatepasses',
+      tag: `gatepass-rejected-${gatepass._id}`,
+      actions: []
+    }).catch((err) => console.error('[gatepass-push] rejectGatepass push failed:', err.message || err));
+  }
 
   return getGatepassByIdOrThrow(gatepass._id);
 }

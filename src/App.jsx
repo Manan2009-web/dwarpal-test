@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { Component, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 // import logo from "../assets/DwarPal_logo.png";
 import {
@@ -40,10 +40,14 @@ import NotificationPermissionPrompt, {
 import PreferencesPanel from './components/PreferencesPanel'
 import PrivacyPreferencesBanner from './components/PrivacyPreferencesBanner'
 import PasswordInput from './components/PasswordInput'
+
+const LegalDocs = lazy(() => import('./components/LegalDocs'))
+const SupportPage = lazy(() => import('./components/SupportPage'))
 import Aurora from './components/ui/Aurora'
 import OtpCodeInput from './components/OtpCodeInput'
 import SecurityVerificationPanel from './components/SecurityVerificationPanel'
 import { useToast } from './components/ToastProvider'
+import { usePushSubscription } from './hooks/usePushSubscription'
 import {
   DEPARTMENTS,
   PROGRAM_OPTIONS,
@@ -256,7 +260,7 @@ function useRouteGuardDebug(label, authReady, currentUser) {
     })
   }, [authReady, currentUser?.id, currentUser?.role, label, location.pathname])
 }
-const APP_PAGES = new Set(['dashboard', 'notifications', 'profile'])
+const APP_PAGES = new Set(['dashboard', 'notifications', 'profile', 'support', 'privacy'])
 const USER_PAGE_ALIASES = {
   gatepasses: 'dashboard',
   'new-gatepass': 'dashboard',
@@ -503,6 +507,100 @@ function getRegistrationDepartmentOptions(role, program) {
   return DEPARTMENTS
 }
 
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error }
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("ErrorBoundary caught an error:", error, errorInfo)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{
+          minHeight: '100vh',
+          width: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: '#09090b',
+          color: '#e4e4e7',
+          padding: '24px',
+          textAlign: 'center',
+          fontFamily: 'sans-serif'
+        }}>
+          <div style={{
+            maxWidth: '440px',
+            backgroundColor: '#18181b',
+            border: '1px solid #27272a',
+            padding: '32px',
+            borderRadius: '16px',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+          }}>
+            <h2 style={{ fontSize: '1.125rem', fontWeight: 'bold', color: '#ffffff', marginBottom: '8px', textTransform: 'uppercase' }}>Document Load Failed</h2>
+            <p style={{ fontSize: '0.75rem', color: '#a1a1aa', marginBottom: '24px', lineHeight: '1.5' }}>
+              This content could not be loaded. This is often caused by ad-blockers, content filters, or Brave Shields blocking network requests for legal and privacy policies.
+            </p>
+            <button 
+              onClick={() => {
+                this.setState({ hasError: false, error: null })
+                window.location.reload()
+              }}
+              style={{
+                padding: '10px 24px',
+                backgroundColor: '#9333ea',
+                border: 'none',
+                color: '#ffffff',
+                fontSize: '0.75rem',
+                fontWeight: 'bold',
+                borderRadius: '9999px',
+                cursor: 'pointer',
+                transition: 'background-color 0.2s'
+              }}
+              onMouseOver={(e) => e.target.style.backgroundColor = '#a855f7'}
+              onMouseOut={(e) => e.target.style.backgroundColor = '#9333ea'}
+            >
+              TRY RELOADING
+            </button>
+          </div>
+        </div>
+      )
+    }
+
+    return this.props.children
+  }
+}
+
+function LoadingSpinner() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '240px', width: '100%', color: '#a855f7' }}>
+      <div style={{
+        animation: 'spin 1s linear infinite',
+        borderRadius: '9999px',
+        height: '32px',
+        width: '32px',
+        borderBottom: '2px solid currentColor',
+        borderLeft: '2px solid transparent',
+        borderRight: '2px solid transparent',
+        borderTop: '2px solid transparent'
+      }} />
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+    </div>
+  )
+}
+
 function App() {
   const toast = useToast()
   const [introLoading, setIntroLoading] = useState(true)
@@ -511,6 +609,10 @@ function App() {
   const [summary, setSummary] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
   const [authReady, setAuthReady] = useState(false)
+
+  // Web Push Notifications — subscribe automatically when user logs in.
+  // Non-critical: all errors are swallowed inside the hook.
+  usePushSubscription(currentUser)
   const [portalAccess, setPortalAccess] = useState(() => getPortalAccessSession())
   const [supportModalOpen, setSupportModalOpen] = useState(false)
   const [studentPasswordPromptOpen, setStudentPasswordPromptOpen] = useState(false)
@@ -1825,6 +1927,20 @@ function App() {
             </PublicAuthRoute>
           }
         />
+        <Route path="/privacy-policy" element={
+          <ErrorBoundary>
+            <Suspense fallback={<LoadingSpinner />}>
+              <LegalDocs />
+            </Suspense>
+          </ErrorBoundary>
+        } />
+        <Route path="/support" element={
+          <ErrorBoundary>
+            <Suspense fallback={<LoadingSpinner />}>
+              <SupportPage />
+            </Suspense>
+          </ErrorBoundary>
+        } />
         <Route
           path="/app/:page"
           element={renderAppShellRoute()}
@@ -3952,6 +4068,21 @@ function AppShell({
               onMarkNotificationRead={handleMarkNotificationRead}
               onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
             />
+          ) : null}
+
+          {currentPage === 'support' ? (
+            <ErrorBoundary>
+              <Suspense fallback={<LoadingSpinner />}>
+                <SupportPage />
+              </Suspense>
+            </ErrorBoundary>
+          ) : null}
+          {currentPage === 'privacy' ? (
+            <ErrorBoundary>
+              <Suspense fallback={<LoadingSpinner />}>
+                <LegalDocs />
+              </Suspense>
+            </ErrorBoundary>
           ) : null}
         </div>
       </div>

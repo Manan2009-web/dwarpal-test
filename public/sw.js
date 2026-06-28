@@ -90,27 +90,46 @@ self.addEventListener('fetch', (event) => {
   )
 })
 
-// Push event listener: handle background push notifications
+// Push event listener: handle background push notifications with action buttons
 self.addEventListener('push', (event) => {
-  let payload = { title: 'DwarPal', body: 'New notification received' }
-  
+  let payload = { title: 'DwarPal', body: 'New notification received', actions: [], data: {} }
+
   if (event.data) {
     try {
-      payload = event.data.json()
+      const parsed = event.data.json()
+      payload = {
+        title: parsed.title || 'DwarPal',
+        body: parsed.body || parsed.message || 'You have a new update.',
+        icon: parsed.icon || '/dwarpal-icon-192.svg',
+        badge: parsed.badge || '/dwarpal-icon-192.svg',
+        tag: parsed.tag || 'dwarpal-notification',
+        renotify: parsed.renotify !== false,
+        requireInteraction: parsed.requireInteraction === true,
+        // actions: cap at 2 (Chrome limit on most platforms)
+        actions: Array.isArray(parsed.actions) ? parsed.actions.slice(0, 3) : [],
+        data: parsed.data || {}
+      }
     } catch {
-      payload = { title: 'DwarPal', body: event.data.text() }
+      payload = { title: 'DwarPal', body: event.data.text(), actions: [], data: {} }
     }
   }
 
   const options = {
-    body: payload.body || payload.message,
-    icon: '/dwarpal-icon-192.svg',
-    badge: '/dwarpal-icon-192.svg',
-    data: payload.data || {},
-    vibrate: [100, 50, 100],
-    actions: [
-      { action: 'open', title: 'Open DwarPal' }
-    ]
+    body: payload.body,
+    icon: payload.icon || '/dwarpal-icon-192.svg',
+    badge: payload.badge || '/dwarpal-icon-192.svg',
+    tag: payload.tag || 'dwarpal-notification',
+    renotify: payload.renotify,
+    requireInteraction: payload.requireInteraction,
+    vibrate: [100, 50, 100, 50, 100],
+    actions: payload.actions,
+    data: {
+      ...payload.data,
+      // Ensure these keys are always present for notificationclick handler
+      gatepassId: payload.data.gatepassId || null,
+      passNumber: payload.data.passNumber || null,
+      relatedRoute: payload.data.relatedRoute || '/app/notifications'
+    }
   }
 
   event.waitUntil(
@@ -118,33 +137,80 @@ self.addEventListener('push', (event) => {
   )
 })
 
-// Notification click event: route to target page
+// ---------------------------------------------------------------------------
+// Notification click handler
+//
+// Action routing:
+//   approve              → background POST /api/gatepasses/:id/approve
+//   reject               → background POST /api/gatepasses/:id/reject
+//   forward_to_hod       → background POST /api/gatepasses/:id/forward-to-hod
+//   forward_to_coordinator → background POST /api/gatepasses/:id/forward-to-coordinator
+//   see_qr               → open browser window → relatedRoute
+//   (default / body tap) → open/navigate browser window → relatedRoute
+// ---------------------------------------------------------------------------
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
 
-  const relatedRoute = event.notification.data?.relatedRoute || '/'
+  const action = event.action || ''
+  const data = event.notification.data || {}
+  const gatepassId = data.gatepassId || null
+  const relatedRoute = data.relatedRoute || '/app/notifications'
   const targetUrl = new URL(relatedRoute, self.location.origin).toString()
 
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true })
-      .then((clientList) => {
-        // Try to find an existing window and focus/navigate it
-        for (const client of clientList) {
-          if ('focus' in client) {
-            // Check if this client is already on the target URL or if we can navigate it
-            if (client.url === targetUrl) {
-              return client.focus()
-            }
-            if ('navigate' in client) {
-              client.navigate(targetUrl)
-              return client.focus()
-            }
-          }
-        }
-        // Otherwise open a new window
-        if (self.clients.openWindow) {
-          return self.clients.openWindow(targetUrl)
-        }
+  // --- Background API actions (approve / reject / forward) ------------------
+  const BACKGROUND_ACTIONS = {
+    approve:               gatepassId ? `/api/gatepasses/${gatepassId}/approve`               : null,
+    reject:                gatepassId ? `/api/gatepasses/${gatepassId}/reject`                : null,
+    forward_to_hod:        gatepassId ? `/api/gatepasses/${gatepassId}/forward-to-hod`        : null,
+    forward_to_coordinator: gatepassId ? `/api/gatepasses/${gatepassId}/forward-to-coordinator` : null
+  }
+
+  const apiPath = BACKGROUND_ACTIONS[action]
+
+  if (apiPath) {
+    // Fire background fetch and then open the app to the related route
+    event.waitUntil(
+      fetch(new URL(apiPath, self.location.origin).toString(), {
+        method: 'PATCH',
+        credentials: 'include',          // sends the session cookie automatically
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source: 'push_notification_action' })
       })
-  )
+        .then((res) => {
+          if (!res.ok) {
+            console.warn(`[sw] Notification action "${action}" returned ${res.status} — user may need to open the app`)
+          }
+        })
+        .catch((err) => {
+          console.error(`[sw] Notification action "${action}" fetch failed:`, err)
+        })
+        .finally(() => openOrFocusWindow(targetUrl))
+    )
+    return
+  }
+
+  // --- See QR / default tap: just open the app window ----------------------
+  event.waitUntil(openOrFocusWindow(targetUrl))
 })
+
+// Helper: find an existing DwarPal window and navigate it, or open a new one.
+function openOrFocusWindow(targetUrl) {
+  return self.clients
+    .matchAll({ type: 'window', includeUncontrolled: true })
+    .then((clientList) => {
+      // Try to find an existing window on the same origin
+      for (const client of clientList) {
+        if (client.url.startsWith(self.location.origin)) {
+          if ('navigate' in client) {
+            client.navigate(targetUrl)
+          }
+          return client.focus()
+        }
+      }
+      // No existing window — open a new one
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl)
+      }
+    })
+}

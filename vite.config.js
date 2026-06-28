@@ -61,6 +61,9 @@ export default defineConfig(({ mode }) => {
       hmr: {
         clientPort: 5173,
       },
+      watch: {
+        ignored: ['**/playwright-report/**', '**/test-results/**', '**/e2e/**', '**/*.log'],
+      },
       proxy: {
         '/api': {
           target: backendTarget,

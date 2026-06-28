@@ -5,8 +5,8 @@ const basePaginationQueryValidation = [
   query('page').optional().isInt({ min: 1 }).withMessage('page must be a positive integer').toInt(),
   query('limit')
     .optional()
-    .isInt({ min: 1, max: 50 })
-    .withMessage('limit must be between 1 and 50')
+    .isInt({ min: 1, max: 200 })
+    .withMessage('limit must be between 1 and 200')
     .toInt(),
   query('sortBy')
     .optional()
