@@ -101,6 +101,9 @@ const legacyMongoUri = normalizeEnvString(process.env.MONGODB_URI);
 const mongoUri = configuredMongoUri || legacyMongoUri;
 const mongoUriSource = configuredMongoUri ? 'MONGO_URI' : legacyMongoUri ? 'MONGODB_URI' : null;
 const mongoUriConflict = Boolean(configuredMongoUri && legacyMongoUri && configuredMongoUri !== legacyMongoUri);
+const nodeEnvForDbName = normalizeEnvString(process.env.NODE_ENV) || 'development';
+const isProductionForDbName = nodeEnvForDbName === 'production';
+const mongoDbName = normalizeEnvString(process.env.MONGO_DB_NAME) || (isProductionForDbName ? 'dwarpal' : 'test');
 const legacyEmailFrom = parseEmailIdentity(process.env.EMAIL_FROM);
 
 const defaultClientUrl = normalizeUrl(process.env.CLIENT_URL || 'http://localhost:5173');
@@ -163,6 +166,7 @@ const env = {
   mongoUri,
   mongoUriSource,
   mongoUriConflict,
+  mongoDbName,
   enableInMemoryDb: parseBooleanEnv(process.env.ENABLE_IN_MEMORY_DB, false),
   autoBootstrapSystemAccounts,
   jwtSecret: normalizeEnvString(process.env.JWT_SECRET),

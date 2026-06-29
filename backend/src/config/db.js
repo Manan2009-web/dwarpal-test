@@ -12,7 +12,8 @@ const CONNECTION_RETRY_DELAY_MS = 2000;
 const READY_DATABASE_MODES = new Set(['external', 'in-memory']);
 const MONGODB_CONNECT_OPTIONS = {
   autoIndex: !env.isProduction,
-  serverSelectionTimeoutMS: 5000
+  serverSelectionTimeoutMS: 5000,
+  dbName: env.mongoDbName
 };
 
 let inMemoryServer = null;
