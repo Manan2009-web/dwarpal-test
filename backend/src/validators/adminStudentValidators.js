@@ -73,10 +73,8 @@ const adminStudentCreateValidation = [
   body('temporaryPassword')
     .isString()
     .withMessage('Temporary password is required.')
-    .matches(PASSWORD_REGEX)
-    .withMessage(
-      'Temporary password must be at least 8 characters and include uppercase, lowercase, number, and special character.'
-    )
+    .isLength({ min: 8 })
+    .withMessage('Temporary password must be at least 8 characters long.')
 ];
 
 const adminStudentUpdateValidation = [
@@ -132,10 +130,8 @@ const adminStudentUpdateValidation = [
     .optional({ values: 'falsy' })
     .isString()
     .withMessage('Temporary password must be a string.')
-    .matches(PASSWORD_REGEX)
-    .withMessage(
-      'Temporary password must be at least 8 characters and include uppercase, lowercase, number, and special character.'
-    )
+    .isLength({ min: 8 })
+    .withMessage('Temporary password must be at least 8 characters long.')
 ];
 
 const adminStudentDeleteValidation = [param('id').isMongoId().withMessage('Valid student id is required.')];

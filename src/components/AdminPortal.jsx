@@ -13,6 +13,7 @@ import {
   History,
   LayoutDashboard,
   LogOut,
+  Menu,
   RefreshCw,
   Search,
   Settings,
@@ -216,11 +217,11 @@ function buildExportPayload(filters, activeSection, selectedRows, exportScope) {
   return request
 }
 
-function AdminSidebar({ currentUser, activeSection, onLogout, onOpenSupport }) {
+function AdminSidebar({ currentUser, activeSection, onLogout, onOpenSupport, isOpen, onLinkClick }) {
   const navItems = getAdminNavItems(currentUser)
 
   return (
-    <aside className="admin-sidebar">
+    <aside className={`admin-sidebar ${isOpen ? 'open' : ''}`}>
       <div className="admin-sidebar-brand">
         <AppBrand size="md" align="start" />
       </div>
@@ -234,6 +235,7 @@ function AdminSidebar({ currentUser, activeSection, onLogout, onOpenSupport }) {
             key={item.key}
             to={item.to}
             className={`admin-nav-link ${activeSection === item.key ? 'active' : ''}`}
+            onClick={onLinkClick}
           >
             <item.icon size={18} />
             <span>{item.label}</span>
@@ -247,7 +249,7 @@ function AdminSidebar({ currentUser, activeSection, onLogout, onOpenSupport }) {
             <span>Help</span>
           </button>
         ) : null}
-        <Link className="admin-secondary-link" to={`/${currentUser.role}/dashboard`}>
+        <Link className="admin-secondary-link" to={`/${currentUser.role}/dashboard`} onClick={onLinkClick}>
           User Panel
         </Link>
         <button type="button" className="admin-logout" onClick={onLogout}>
@@ -259,13 +261,23 @@ function AdminSidebar({ currentUser, activeSection, onLogout, onOpenSupport }) {
   )
 }
 
-function AdminHeader({ currentUser, title, subtitle, onRefresh, refreshing }) {
+function AdminHeader({ currentUser, title, subtitle, onRefresh, refreshing, onToggleSidebar }) {
   return (
     <header className="admin-header">
-      <div>
-        <p className="admin-eyebrow">DwarPal Admin Portal</p>
-        <h1>{title}</h1>
-        <span>{subtitle}</span>
+      <div className="admin-header-title-section" style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+        <button
+          type="button"
+          className="admin-hamburger-button"
+          onClick={onToggleSidebar}
+          aria-label="Toggle sidebar menu"
+        >
+          <Menu size={22} />
+        </button>
+        <div>
+          <p className="admin-eyebrow">DwarPal Admin Portal</p>
+          <h1>{title}</h1>
+          <span>{subtitle}</span>
+        </div>
       </div>
       <div className="admin-header-actions">
         <button
@@ -367,12 +379,29 @@ function ExportFilterPanel({ filters, options, onChange, onReset, lockedPartitio
         </FilterSelect>
         <FilterSelect label="Date preset" value={filters.datePreset} onChange={(value) => onChange('datePreset', value)}>
           <option value="">All dates</option>
+          <option value="custom">Custom Range</option>
           {(filterOptions.datePresets || []).map((item) => (
             <option key={item} value={item}>
               {item.replace(/_/g, ' ')}
             </option>
           ))}
         </FilterSelect>
+        {filters.datePreset === 'custom' ? (
+          <>
+            <FilterInput
+              label="Date From"
+              type="date"
+              value={filters.from || ''}
+              onChange={(value) => onChange('from', value)}
+            />
+            <FilterInput
+              label="Date To"
+              type="date"
+              value={filters.to || ''}
+              onChange={(value) => onChange('to', value)}
+            />
+          </>
+        ) : null}
         <FilterSelect label="Role type" value={filters.roleType} onChange={(value) => onChange('roleType', value)}>
           <option value="">All roles</option>
           {(filterOptions.roleTypes || []).map((item) => (
@@ -496,7 +525,18 @@ function ExportFilterPanel({ filters, options, onChange, onReset, lockedPartitio
           </FilterSelect>
           <FilterSelect label="Leave type" value={filters.leaveType} onChange={(value) => onChange('leaveType', value)}>
             <option value="">All leave types</option>
-            {['CL', 'EL', 'SL', 'LWP', 'OD', 'Others'].map((item) => (
+            {[
+              'Academic On Duty',
+              'Casual Leave',
+              'Compensatory Off',
+              'Leave Without Pay',
+              'Maternity Leave',
+              'On Duty',
+              'Paternity Leave',
+              'Short Leave',
+              'Summer Vacation',
+              'Wedding Leave'
+            ].map((item) => (
               <option key={item} value={item}>
                 {item}
               </option>
@@ -989,6 +1029,8 @@ export default function AdminPortal({ currentUser, onLogout, onOpenSupport = nul
   const [exportFormat, setExportFormat] = useState('excel')
   const [selectedRows, setSelectedRows] = useState({})
   const [recordsPage, setRecordsPage] = useState(1)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   const effectiveFilters = useMemo(() => applySectionFilters(filters, activeSection), [filters, activeSection])
   const requestFilters = useMemo(() => buildFiltersForRequest(effectiveFilters), [effectiveFilters])
@@ -1204,14 +1246,31 @@ export default function AdminPortal({ currentUser, onLogout, onOpenSupport = nul
   }
 
   return (
-    <div className="admin-shell">
-      <AdminSidebar currentUser={currentUser} activeSection={activeSection} onLogout={onLogout} onOpenSupport={onOpenSupport} />
+    <div className={`admin-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+      {sidebarOpen ? (
+        <div className="admin-sidebar-overlay" onClick={() => setSidebarOpen(false)} />
+      ) : null}
+      <AdminSidebar
+        currentUser={currentUser}
+        activeSection={activeSection}
+        onLogout={onLogout}
+        onOpenSupport={onOpenSupport}
+        isOpen={sidebarOpen}
+        onLinkClick={() => setSidebarOpen(false)}
+      />
       <main className="admin-main">
         <AdminHeader
           currentUser={currentUser}
           title={titleMap[activeSection] || 'Admin Portal'}
           subtitle="Compact college operations, scoped records, and audit-grade exports."
           refreshing={refreshBusy}
+          onToggleSidebar={() => {
+            if (window.innerWidth > 1100) {
+              setSidebarCollapsed((prev) => !prev)
+            } else {
+              setSidebarOpen((prev) => !prev)
+            }
+          }}
           onRefresh={() => {
             setRecordsPage(1)
             setFilters((previous) => ({ ...previous }))

@@ -485,15 +485,22 @@ async function sendStudentOnboardingEmail({ email, fullName, enrollmentNo, tempo
               <p style="margin:0 0 16px;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#6e7681;font-weight:700;">Your Login Credentials</p>
 
               <div style="display:flex;align-items:center;margin-bottom:16px;">
-                <div style="min-width:140px;font-size:12px;color:#6e7681;font-weight:600;">Enrollment No.</div>
+                <div style="min-width:140px;font-size:12px;color:#6e7681;font-weight:600;">Student Enrollment</div>
                 <div style="font-size:18px;font-weight:800;color:#58a6ff;letter-spacing:0.06em;font-family:monospace;">${safeEnrollmentNo}</div>
               </div>
 
               <div style="height:1px;background:#21262d;margin:0 0 16px;"></div>
 
-              <div style="display:flex;align-items:center;">
+              <div style="display:flex;align-items:center;margin-bottom:16px;">
                 <div style="min-width:140px;font-size:12px;color:#6e7681;font-weight:600;">Temporary Password</div>
                 <div style="font-size:16px;font-weight:700;color:#3fb950;letter-spacing:0.1em;font-family:monospace;background:#0d1117;border:1px dashed #3fb950;border-radius:8px;padding:6px 14px;">${escapeHtml(temporaryPassword)}</div>
+              </div>
+
+              <div style="height:1px;background:#21262d;margin:0 0 16px;"></div>
+
+              <div style="display:flex;align-items:center;">
+                <div style="min-width:140px;font-size:12px;color:#6e7681;font-weight:600;">Student Access Portal Link</div>
+                <div style="font-size:14px;font-weight:600;color:#58a6ff;word-break:break-all;"><a href="${safeLoginUrl}" style="color:#58a6ff;text-decoration:underline;">${safeLoginUrl}</a></div>
               </div>
             </div>
 
@@ -528,12 +535,11 @@ async function sendStudentOnboardingEmail({ email, fullName, enrollmentNo, tempo
     '',
     'Your student account has been created by the Cumulative Administration Office.',
     '',
-    `Enrollment Number : ${enrollmentNo}`,
-    `Temporary Password: ${temporaryPassword}`,
+    `Student Enrollment: ${enrollmentNo}`,
+    `Temporary Password : ${temporaryPassword}`,
+    `Student Access Portal Link: ${loginUrl}`,
     '',
     'IMPORTANT: You must change your password on your first login.',
-    '',
-    `Login at: ${loginUrl}`,
     '',
     'If you did not expect this email, contact your institution admin.'
   ].join('\n');

@@ -243,9 +243,9 @@ async function createStudent(payload, actor, requestMeta = {}) {
     throw createFieldError('Semester must be between 1 and 8.', 'semester', 400);
   }
 
-  if (!PASSWORD_REGEX.test(normalizedPayload.temporaryPassword)) {
+  if (!normalizedPayload.temporaryPassword || normalizedPayload.temporaryPassword.length < 8) {
     throw createFieldError(
-      'Temporary password must be at least 8 characters and include uppercase, lowercase, number, and special character.',
+      'Temporary password must be at least 8 characters long.',
       'temporaryPassword',
       400
     );
@@ -375,9 +375,9 @@ async function updateStudent(studentId, payload, actor, requestMeta = {}) {
   }
 
   if (normalizedPayload.temporaryPassword) {
-    if (!PASSWORD_REGEX.test(normalizedPayload.temporaryPassword)) {
+    if (normalizedPayload.temporaryPassword.length < 8) {
       throw createFieldError(
-        'Temporary password must be at least 8 characters and include uppercase, lowercase, number, and special character.',
+        'Temporary password must be at least 8 characters long.',
         'temporaryPassword',
         400
       );
