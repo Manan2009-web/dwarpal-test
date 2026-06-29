@@ -66,13 +66,6 @@ const createFacultyLeaveRequestValidation = [
     .trim()
     .isLength({ max: 120 })
     .withMessage('leaveDetails.leaveTypeOther cannot exceed 120 characters'),
-  body('leaveDetails.leaveTypeOther').custom((value, { req }) => {
-    if (req.body?.leaveDetails?.leaveType === 'Others' && !String(value || '').trim()) {
-      throw new Error('leaveDetails.leaveTypeOther is required when leave type is Others');
-    }
-
-    return true;
-  }),
   body('leaveDetails.reason')
     .trim()
     .notEmpty()
@@ -159,78 +152,97 @@ const createFacultyLeaveRequestValidation = [
     .isLength({ min: 2, max: 120 })
     .withMessage('declaration.digitalAcknowledgmentName must be between 2 and 120 characters'),
 
+  // shortLeave fields are only required when leaveType === 'Short Leave'.
+  // For all other leave types the entire shortLeave block is optional.
   body('shortLeave.staffMemberName')
+    .if(body('leaveDetails.leaveType').equals('Short Leave'))
     .trim()
     .notEmpty()
-    .withMessage('shortLeave.staffMemberName is required')
+    .withMessage('shortLeave.staffMemberName is required for Short Leave')
     .isLength({ min: 2, max: 120 })
     .withMessage('shortLeave.staffMemberName must be between 2 and 120 characters'),
   body('shortLeave.designation')
+    .if(body('leaveDetails.leaveType').equals('Short Leave'))
     .trim()
     .notEmpty()
-    .withMessage('shortLeave.designation is required')
+    .withMessage('shortLeave.designation is required for Short Leave')
     .isLength({ min: 2, max: 120 })
     .withMessage('shortLeave.designation must be between 2 and 120 characters'),
   body('shortLeave.department')
+    .if(body('leaveDetails.leaveType').equals('Short Leave'))
     .trim()
     .notEmpty()
-    .withMessage('shortLeave.department is required')
+    .withMessage('shortLeave.department is required for Short Leave')
     .isLength({ min: 2, max: 120 })
     .withMessage('shortLeave.department must be between 2 and 120 characters'),
   body('shortLeave.instituteName')
+    .if(body('leaveDetails.leaveType').equals('Short Leave'))
     .trim()
     .notEmpty()
-    .withMessage('shortLeave.instituteName is required')
+    .withMessage('shortLeave.instituteName is required for Short Leave')
     .isLength({ min: 2, max: 180 })
     .withMessage('shortLeave.instituteName must be between 2 and 180 characters'),
   body('shortLeave.employeeId')
+    .if(body('leaveDetails.leaveType').equals('Short Leave'))
     .trim()
     .notEmpty()
-    .withMessage('shortLeave.employeeId is required')
+    .withMessage('shortLeave.employeeId is required for Short Leave')
     .isLength({ min: 2, max: 40 })
     .withMessage('shortLeave.employeeId must be between 2 and 40 characters'),
   body('shortLeave.leaveDate')
+    .if(body('leaveDetails.leaveType').equals('Short Leave'))
     .isISO8601()
     .withMessage('shortLeave.leaveDate must be a valid date')
     .toDate(),
   body('shortLeave.requestedFrom')
+    .if(body('leaveDetails.leaveType').equals('Short Leave'))
     .trim()
     .matches(TIME_REGEX)
     .withMessage('shortLeave.requestedFrom must be in HH:mm format'),
   body('shortLeave.requestedTo')
+    .if(body('leaveDetails.leaveType').equals('Short Leave'))
     .trim()
     .matches(TIME_REGEX)
     .withMessage('shortLeave.requestedTo must be in HH:mm format'),
   body('shortLeave.totalDurationMinutes')
+    .if(body('leaveDetails.leaveType').equals('Short Leave'))
     .isInt({ min: 1, max: 1440 })
     .withMessage('shortLeave.totalDurationMinutes must be between 1 and 1440')
     .toInt(),
   body('shortLeave.reason')
+    .if(body('leaveDetails.leaveType').equals('Short Leave'))
     .trim()
     .notEmpty()
-    .withMessage('shortLeave.reason is required')
+    .withMessage('shortLeave.reason is required for Short Leave')
     .isLength({ min: 5, max: 1200 })
     .withMessage('shortLeave.reason must be between 5 and 1200 characters'),
-  requireTrueBoolean('shortLeave.applicantConfirmed', 'shortLeave.applicantConfirmed must be confirmed'),
+  body('shortLeave.applicantConfirmed')
+    .if(body('leaveDetails.leaveType').equals('Short Leave'))
+    .custom((value) => value === true)
+    .withMessage('shortLeave.applicantConfirmed must be confirmed for Short Leave'),
   body('shortLeave.applicationDate')
+    .if(body('leaveDetails.leaveType').equals('Short Leave'))
     .isISO8601()
     .withMessage('shortLeave.applicationDate must be a valid date')
     .toDate(),
   body('shortLeave.digitalSignatureName')
+    .if(body('leaveDetails.leaveType').equals('Short Leave'))
     .trim()
     .notEmpty()
-    .withMessage('shortLeave.digitalSignatureName is required')
+    .withMessage('shortLeave.digitalSignatureName is required for Short Leave')
     .isLength({ min: 2, max: 120 })
     .withMessage('shortLeave.digitalSignatureName must be between 2 and 120 characters'),
-  body('shortLeave.requestedTo').custom((value, { req }) => {
-    const requestedFrom = req.body?.shortLeave?.requestedFrom;
+  body('shortLeave.requestedTo')
+    .if(body('leaveDetails.leaveType').equals('Short Leave'))
+    .custom((value, { req }) => {
+      const requestedFrom = req.body?.shortLeave?.requestedFrom;
 
-    if (requestedFrom && timeToMinutes(value) <= timeToMinutes(requestedFrom)) {
-      throw new Error('shortLeave.requestedTo must be after shortLeave.requestedFrom');
-    }
+      if (requestedFrom && timeToMinutes(value) <= timeToMinutes(requestedFrom)) {
+        throw new Error('shortLeave.requestedTo must be after shortLeave.requestedFrom');
+      }
 
-    return true;
-  })
+      return true;
+    })
 ];
 
 const approveFacultyLeaveRequestValidation = [

@@ -232,8 +232,13 @@ function resolveGatepassApprovedBy(gatepass) {
     }
   }
 
-  if (gatepass.applicantType === 'faculty' && gatepass.caoAction?.status === 'approved') {
-    return gatepass.caoAction?.actionBy?.fullName || 'CAO';
+  if (gatepass.applicantType === 'faculty') {
+    if (gatepass.caoAction?.status === 'approved') {
+      return gatepass.caoAction?.actionBy?.fullName || 'CAO';
+    }
+    if (gatepass.principalAction?.status === 'approved') {
+      return gatepass.principalAction?.actionBy?.fullName || 'Principal';
+    }
   }
 
   return 'Awaiting approval';
@@ -775,6 +780,17 @@ function getInitialGatepassState(user) {
     };
   }
 
+  if (user.role === 'faculty') {
+    return {
+      status: 'pending_principal',
+      currentApprovalLevel: 'principal',
+      principalAction: { status: 'pending' },
+      hodAction: { status: 'not_required' },
+      coordinatorAction: { status: 'not_required' },
+      caoAction: { status: 'pending' }
+    };
+  }
+
   return {
     status: 'pending_cao',
     currentApprovalLevel: 'cao',
@@ -1134,7 +1150,7 @@ function buildAccessFilter(actor) {
 
       return { createdBy: actor._id };
     case 'principal':
-      return { applicantType: 'student' };
+      return { applicantType: { $in: ['student', 'faculty'] } };
     case 'hod':
       return {
         applicantType: 'student',
@@ -1162,7 +1178,7 @@ function isEditableByRequester(actor, gatepass) {
   }
 
   if (actor.role === 'faculty') {
-    return gatepass.status === 'pending_cao';
+    return ['pending_principal', 'pending_cao'].includes(gatepass.status);
   }
 
   return false;
@@ -1191,7 +1207,7 @@ function canUserAccessGatepass(actor, gatepass) {
   }
 
   if (actor.role === 'principal') {
-    return gatepass.applicantType === 'student';
+    return ['student', 'faculty'].includes(gatepass.applicantType);
   }
 
   if (actor.role === 'hod') {
@@ -1395,15 +1411,15 @@ async function createGatepass(actor, payload, requestMeta) {
       reviewerRole = routeResult.routedTo;
     }
   } else {
-    reviewer = await getActiveUserByRole('cao');
-    reviewerRole = 'cao';
+    reviewer = await getActiveUserByRole('principal');
+    reviewerRole = 'principal';
     gatepass.forwardedTo = reviewer._id;
-    gatepass.forwardedToRole = 'cao';
+    gatepass.forwardedToRole = 'principal';
     appendRoutingHistoryEntry(gatepass, {
       fromLevel: 'system',
-      toLevel: 'cao',
+      toLevel: 'principal',
       trigger: 'initial_assignment',
-      note: 'Submitted to CAO for faculty workflow approval.',
+      note: 'Submitted to Principal for first-level review.',
       actedBy: actor._id,
       actedByRole: actor.role
     });
@@ -1609,7 +1625,7 @@ async function getPendingGatepassesForRole(actor, query = {}) {
   let allowedStatuses;
 
   if (actor.role === 'principal') {
-    filter.applicantType = 'student';
+    filter.applicantType = { $in: ['student', 'faculty'] };
     allowedStatuses = ['pending_principal'];
   } else if (actor.role === 'hod') {
     filter.applicantType = 'student';
@@ -1757,42 +1773,94 @@ async function approveGatepass(gatepassId, actor, payload, requestMeta) {
   let auditMessage = '';
 
   if (actor.role === 'principal') {
-    if (gatepass.applicantType !== 'student' || gatepass.status !== 'pending_principal') {
-      throw new AppError('Principal can only approve pending student gatepasses', 400);
+    if (!['student', 'faculty'].includes(gatepass.applicantType) || gatepass.status !== 'pending_principal') {
+      throw new AppError('Principal can only approve pending gatepasses', 400);
     }
 
-    gatepass.status = 'approved_final';
-    gatepass.currentApprovalLevel = 'security';
-    gatepass.isCancelled = false;
-    gatepass.isCompleted = false;
-    gatepass.principalAction = {
-      status: 'approved',
-      actionBy: actor._id,
-      actedAt: new Date(),
-      comment: payload.comment || ''
-    };
-    gatepass.forwardedTo = null;
-    gatepass.forwardedToRole = 'security';
-    await assignApprovedQr(gatepass);
-    auditMessage = `Gatepass ${gatepass.passNumber} approved by Principal`;
+    if (gatepass.applicantType === 'student') {
+      gatepass.status = 'approved_final';
+      gatepass.currentApprovalLevel = 'security';
+      gatepass.isCancelled = false;
+      gatepass.isCompleted = false;
+      gatepass.principalAction = {
+        status: 'approved',
+        actionBy: actor._id,
+        actedAt: new Date(),
+        comment: payload.comment || ''
+      };
+      gatepass.forwardedTo = null;
+      gatepass.forwardedToRole = 'security';
+      await assignApprovedQr(gatepass);
+      auditMessage = `Gatepass ${gatepass.passNumber} approved by Principal`;
 
-    notifications.push(
-      {
+      notifications.push(
+        {
+          recipient: gatepass.createdBy._id,
+          sender: actor._id,
+          gatepass: gatepass._id,
+          type: 'gatepass_approved',
+          status: 'approved',
+          title: 'Gatepass approved',
+          message: `Your gatepass ${gatepass.passNumber} was approved by Principal and is ready for security verification.`,
+          metadata: buildGatepassNotificationMetadata(gatepass, {
+            verificationToken: gatepass.verificationToken,
+            qrVerificationUrl: gatepass.qrVerificationUrl
+          })
+        }
+      );
+
+      notifications.push(...(await buildSecurityReadyGatepassNotifications(gatepass, actor)));
+    } else {
+      // applicantType === 'faculty' -> Route to CAO
+      const caoUser = await getActiveUserByRole('cao');
+      gatepass.status = 'pending_cao';
+      gatepass.currentApprovalLevel = 'cao';
+      gatepass.isCancelled = false;
+      gatepass.isCompleted = false;
+      gatepass.principalAction = {
+        status: 'approved',
+        actionBy: actor._id,
+        actedAt: new Date(),
+        comment: payload.comment || ''
+      };
+      gatepass.forwardedTo = caoUser._id;
+      gatepass.forwardedToRole = 'cao';
+      appendRoutingHistoryEntry(gatepass, {
+        fromLevel: 'principal',
+        toLevel: 'cao',
+        trigger: 'approval',
+        note: 'Approved by Principal and sent to CAO.',
+        actedBy: actor._id,
+        actedByRole: actor.role
+      });
+      auditMessage = `Faculty gatepass ${gatepass.passNumber} approved by Principal and sent to CAO`;
+
+      notifications.push({
         recipient: gatepass.createdBy._id,
         sender: actor._id,
         gatepass: gatepass._id,
         type: 'gatepass_approved',
         status: 'approved',
-        title: 'Gatepass approved',
-        message: `Your gatepass ${gatepass.passNumber} was approved by Principal and is ready for security verification.`,
+        title: 'Gatepass approved by Principal',
+        message: `Your gatepass ${gatepass.passNumber} was approved by Principal and forwarded to CAO.`,
         metadata: buildGatepassNotificationMetadata(gatepass, {
-          verificationToken: gatepass.verificationToken,
-          qrVerificationUrl: gatepass.qrVerificationUrl
+          workflow: 'cao_review'
         })
-      }
-    );
+      });
 
-    notifications.push(...(await buildSecurityReadyGatepassNotifications(gatepass, actor)));
+      notifications.push({
+        recipient: caoUser._id,
+        sender: actor._id,
+        gatepass: gatepass._id,
+        type: 'gatepass_submitted',
+        status: 'submitted',
+        title: 'Gatepass awaiting CAO review',
+        message: `Faculty gatepass ${gatepass.passNumber} approved by Principal is now awaiting your review.`,
+        metadata: buildGatepassNotificationMetadata(gatepass, {
+          workflow: 'cao_review'
+        })
+      });
+    }
   } else if (actor.role === 'hod') {
     if (gatepass.applicantType !== 'student' || gatepass.status !== 'forwarded_to_hod') {
       throw new AppError('HOD can only approve forwarded student gatepasses', 400);
@@ -2012,8 +2080,8 @@ async function rejectGatepass(gatepassId, actor, payload, requestMeta) {
   let auditMessage = '';
 
   if (actor.role === 'principal') {
-    if (gatepass.applicantType !== 'student' || gatepass.status !== 'pending_principal') {
-      throw new AppError('Principal can only reject pending student gatepasses', 400);
+    if (!['student', 'faculty'].includes(gatepass.applicantType) || gatepass.status !== 'pending_principal') {
+      throw new AppError('Principal can only reject pending student or faculty gatepasses', 400);
     }
 
     gatepass.status = 'rejected_by_principal';

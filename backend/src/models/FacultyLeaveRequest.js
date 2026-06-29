@@ -473,12 +473,14 @@ const facultyLeaveRequestSchema = new mongoose.Schema(
     },
     shortLeave: {
       type: shortLeaveSchema,
-      required: true
+      required: false,
+      default: null
     },
     hodReviewer: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      required: false,
+      default: null,
       index: true
     },
     principalReviewer: {

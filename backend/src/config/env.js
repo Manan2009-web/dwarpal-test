@@ -101,9 +101,7 @@ const legacyMongoUri = normalizeEnvString(process.env.MONGODB_URI);
 const mongoUri = configuredMongoUri || legacyMongoUri;
 const mongoUriSource = configuredMongoUri ? 'MONGO_URI' : legacyMongoUri ? 'MONGODB_URI' : null;
 const mongoUriConflict = Boolean(configuredMongoUri && legacyMongoUri && configuredMongoUri !== legacyMongoUri);
-const nodeEnvForDbName = normalizeEnvString(process.env.NODE_ENV) || 'development';
-const isProductionForDbName = nodeEnvForDbName === 'production';
-const mongoDbName = normalizeEnvString(process.env.MONGO_DB_NAME) || (isProductionForDbName ? 'dwarpal' : 'test');
+const mongoDbName = normalizeEnvString(process.env.DB_NAME) || normalizeEnvString(process.env.MONGO_DB_NAME) || 'test';
 const legacyEmailFrom = parseEmailIdentity(process.env.EMAIL_FROM);
 
 const defaultClientUrl = normalizeUrl(process.env.CLIENT_URL || 'http://localhost:5173');

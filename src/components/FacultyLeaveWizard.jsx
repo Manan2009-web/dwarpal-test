@@ -3,7 +3,8 @@ import { ArrowLeft, ArrowRight, Plus, Send, Trash2 } from 'lucide-react'
 import { ActionButton, ModalForm, SelectField } from './ui'
 
 const REQUIRED_FIELD_MESSAGE = 'Please fill this field'
-const STEP_TITLES = ['Faculty & Leave Details', 'Applicant Declaration', 'Short Leave Application']
+const ALL_STEP_TITLES = ['Faculty & Leave Details', 'Applicant Declaration', 'Short Leave Application']
+const STANDARD_STEP_TITLES = ['Faculty & Leave Details', 'Applicant Declaration']
 
 function getTodayInputValue() {
   return new Date().toISOString().slice(0, 10)
@@ -153,6 +154,10 @@ export default function FacultyLeaveWizard({ open, currentUser, onClose, onSubmi
   const wasOpenRef = useRef(false)
   const currentUserKey = currentUser?.id || currentUser?.employeeId || currentUser?.name || ''
 
+  const isShortLeave = form.leaveDetails.leaveType === 'Short Leave'
+  const totalSteps = isShortLeave ? 3 : 2
+  const stepTitles = isShortLeave ? ALL_STEP_TITLES : STANDARD_STEP_TITLES
+
   useEffect(() => {
     if (!open) {
       wasOpenRef.current = false
@@ -170,6 +175,14 @@ export default function FacultyLeaveWizard({ open, currentUser, onClose, onSubmi
     setIsSubmitting(false)
     wasOpenRef.current = true
   }, [open, currentUser, currentUserKey])
+
+  // When switching away from Short Leave, clamp the step back to 2 so the
+  // user is never stranded on a hidden step 3.
+  useEffect(() => {
+    if (!isShortLeave && step === 3) {
+      setStep(2)
+    }
+  }, [isShortLeave, step])
 
   const computedTotalDays = useMemo(
     () => calculateTotalDays(form.leaveDetails.leaveFrom, form.leaveDetails.leaveTo),
@@ -307,10 +320,6 @@ export default function FacultyLeaveWizard({ open, currentUser, onClose, onSubmi
       nextErrors['leaveDetails.leaveType'] = 'Please select leave type'
     }
 
-    if (form.leaveDetails.leaveType === 'Others' && isBlank(form.leaveDetails.leaveTypeOther)) {
-      nextErrors['leaveDetails.leaveTypeOther'] = REQUIRED_FIELD_MESSAGE
-    }
-
     if (isBlank(form.leaveDetails.reason)) {
       nextErrors['leaveDetails.reason'] = REQUIRED_FIELD_MESSAGE
     }
@@ -437,7 +446,9 @@ export default function FacultyLeaveWizard({ open, currentUser, onClose, onSubmi
   function validateCurrentStep(currentStep) {
     if (currentStep === 1) return validateStep1()
     if (currentStep === 2) return validateStep2()
-    return validateStep3()
+    // Step 3 only exists when Short Leave is selected
+    if (currentStep === 3 && isShortLeave) return validateStep3()
+    return {}
   }
 
   function handleNext() {
@@ -448,7 +459,7 @@ export default function FacultyLeaveWizard({ open, currentUser, onClose, onSubmi
       return
     }
 
-    setStep((prev) => Math.min(prev + 1, 3))
+    setStep((prev) => Math.min(prev + 1, totalSteps))
   }
 
   function handleBack() {
@@ -460,7 +471,7 @@ export default function FacultyLeaveWizard({ open, currentUser, onClose, onSubmi
 
     const step1Errors = validateStep1()
     const step2Errors = validateStep2()
-    const step3Errors = validateStep3()
+    const step3Errors = isShortLeave ? validateStep3() : {}
     const nextErrors = {
       ...step1Errors,
       ...step2Errors,
@@ -476,6 +487,14 @@ export default function FacultyLeaveWizard({ open, currentUser, onClose, onSubmi
     setIsSubmitting(true)
     setSubmitError('')
 
+    // Only include shortLeave payload when the faculty selected 'Short Leave'
+    const shortLeavePayload = isShortLeave
+      ? {
+          ...form.shortLeave,
+          totalDurationMinutes: computedShortLeaveDuration,
+        }
+      : form.shortLeave // pass through unchanged so backend schema stays satisfied
+
     const result = await onSubmit({
       requestKind: 'faculty_leave',
       ...form,
@@ -483,10 +502,7 @@ export default function FacultyLeaveWizard({ open, currentUser, onClose, onSubmi
         ...form.leaveDetails,
         totalDays: computedTotalDays,
       },
-      shortLeave: {
-        ...form.shortLeave,
-        totalDurationMinutes: computedShortLeaveDuration,
-      },
+      shortLeave: shortLeavePayload,
     })
 
     setIsSubmitting(false)
@@ -507,13 +523,13 @@ export default function FacultyLeaveWizard({ open, currentUser, onClose, onSubmi
     <ModalForm
       open={open}
       title="Faculty Leave Application"
-      subtitle={`Step ${step} of 3 - ${STEP_TITLES[step - 1]}`}
+      subtitle={`Step ${step} of ${totalSteps} - ${stepTitles[step - 1]}`}
       onClose={isSubmitting ? undefined : onClose}
       className="faculty-leave-modal"
     >
       <form className="modal-form faculty-leave-wizard" onSubmit={handleSubmit} noValidate>
         <div className="wizard-stepper" aria-label="Faculty leave request steps">
-          {STEP_TITLES.map((title, index) => {
+          {stepTitles.map((title, index) => {
             const stepNumber = index + 1
             const stepState = step === stepNumber ? 'current' : step > stepNumber ? 'complete' : 'upcoming'
 
@@ -622,30 +638,25 @@ export default function FacultyLeaveWizard({ open, currentUser, onClose, onSubmi
                     className={getFieldClass('leaveDetails.leaveType')}
                   >
                     <option value="">Select leave type</option>
-                    <option value="CL">CL</option>
-                    <option value="EL">EL</option>
-                    <option value="SL">SL</option>
-                    <option value="LWP">LWP</option>
-                    <option value="OD">OD</option>
-                    <option value="Others">Others</option>
+                    <option value="Academic On Duty">Academic On Duty</option>
+                    <option value="Casual Leave">Casual Leave</option>
+                    <option value="Compensatory Off">Compensatory Off</option>
+                    <option value="Leave Without Pay">Leave Without Pay</option>
+                    <option value="Maternity Leave">Maternity Leave</option>
+                    <option value="On Duty">On Duty</option>
+                    <option value="Paternity Leave">Paternity Leave</option>
+                    <option value="Short Leave">Short Leave</option>
+                    <option value="Summer Vacation">Summer Vacation</option>
+                    <option value="Wedding Leave">Wedding Leave</option>
                   </SelectField>
                   {errors['leaveDetails.leaveType'] ? (
                     <p className="field-error">{errors['leaveDetails.leaveType']}</p>
                   ) : null}
                 </label>
-                {form.leaveDetails.leaveType === 'Others' ? (
-                  <label>
-                    <FieldLabel required>Specify Leave Type</FieldLabel>
-                    <input
-                      type="text"
-                      value={form.leaveDetails.leaveTypeOther}
-                      onChange={(event) => updateNestedSection('leaveDetails', 'leaveTypeOther', event.target.value)}
-                      className={getFieldClass('leaveDetails.leaveTypeOther')}
-                    />
-                    {errors['leaveDetails.leaveTypeOther'] ? (
-                      <p className="field-error">{errors['leaveDetails.leaveTypeOther']}</p>
-                    ) : null}
-                  </label>
+                {isShortLeave ? (
+                  <p className="wizard-helper-text" style={{ gridColumn: '1 / -1', marginTop: '0' }}>
+                    ℹ️ Step 3 will appear for Short Leave time details.
+                  </p>
                 ) : null}
                 <label className="wizard-grid-span">
                   <FieldLabel required>Reason for Leave</FieldLabel>
@@ -1079,7 +1090,7 @@ export default function FacultyLeaveWizard({ open, currentUser, onClose, onSubmi
               </>
             )}
           </ActionButton>
-          {step < 3 ? (
+          {step < totalSteps ? (
             <ActionButton type="button" onClick={handleNext} disabled={isSubmitting}>
               <span>Next</span>
               <ArrowRight size={16} />

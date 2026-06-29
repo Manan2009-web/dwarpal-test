@@ -41,7 +41,18 @@ const ROLES = Object.freeze([
 const PUBLIC_REGISTRATION_ROLES = Object.freeze(ROLES.filter((role) => role !== 'student'));
 const ADMIN_ROLES = Object.freeze(['principal', 'hod', 'cao', 'security', 'admin']);
 const SEMESTERS = Object.freeze([1, 2, 3, 4, 5, 6, 7, 8]);
-const FACULTY_LEAVE_TYPES = Object.freeze(['CL', 'EL', 'SL', 'LWP', 'OD', 'Others']);
+const FACULTY_LEAVE_TYPES = Object.freeze([
+  'Academic On Duty',
+  'Casual Leave',
+  'Compensatory Off',
+  'Leave Without Pay',
+  'Maternity Leave',
+  'On Duty',
+  'Paternity Leave',
+  'Short Leave',
+  'Summer Vacation',
+  'Wedding Leave'
+]);
 const FACULTY_WORKLOAD_STATUSES = Object.freeze([
   'pending_hod',
   'approved_by_hod',

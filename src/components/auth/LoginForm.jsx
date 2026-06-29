@@ -181,7 +181,7 @@ export default function LoginForm({
                     className="tw:peer tw:sr-only"
                   />
                   <span className="tw:flex tw:h-5 tw:w-5 tw:items-center tw:justify-center tw:rounded-md tw:border tw:border-white/[0.1] tw:bg-black/[0.25] tw:shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)] tw:transition tw:duration-200 tw:peer-checked:border-white/[0.3] tw:peer-checked:bg-white/[0.12]">
-                    <Check className="tw:h-3.5 tw:w-3.5 tw:scale-0 tw:text-white tw:transition tw:duration-150 tw:peer-checked:scale-100" />
+                    <Check className={`tw:h-3.5 tw:w-3.5 tw:text-white tw:transition tw:duration-150 ${rememberMe ? 'tw:scale-100' : 'tw:scale-0'}`} />
                   </span>
                   Remember me
                 </label>

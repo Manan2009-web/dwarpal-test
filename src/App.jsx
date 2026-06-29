@@ -1753,17 +1753,16 @@ function App() {
     }
 
     try {
-      const requestPayload =
-        currentUser.role === 'faculty'
-          ? {
-              ...form,
-              requestKind: 'faculty_leave',
-            }
-          : {
-              ...form,
-              requestKind: 'student_gatepass',
-              vehicleNumber: normalizeVehicleNumber(form.vehicleNumber),
-            }
+      const isLeave = form.requestKind === 'faculty_leave'
+      const requestPayload = isLeave
+        ? {
+            ...form,
+          }
+        : {
+            ...form,
+            requestKind: currentUser.role === 'faculty' ? 'faculty_gatepass' : 'student_gatepass',
+            vehicleNumber: normalizeVehicleNumber(form.vehicleNumber),
+          }
 
       const createdRequest = await submitRequest(requestPayload)
       setGatepasses((previousGatepasses) => [
@@ -1772,11 +1771,10 @@ function App() {
       ])
       await refreshAppData(undefined, { force: true })
       toast.success({
-        title: currentUser.role === 'faculty' ? 'Leave request created' : 'Gatepass created',
-        message:
-          currentUser.role === 'faculty'
-            ? 'Your leave request was submitted successfully.'
-            : 'Your gatepass request was submitted successfully.',
+        title: isLeave ? 'Leave request created' : 'Gatepass created',
+        message: isLeave
+          ? 'Your leave request was submitted successfully.'
+          : 'Your gatepass request was submitted successfully.',
       })
       return { ok: true, request: createdRequest }
     } catch (error) {
@@ -3678,6 +3676,7 @@ function AppShell({
   const [currentServerPage, setCurrentServerPage] = useState(1)
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
+  const [modalType, setModalType] = useState('gatepass')
   const [rejectRequest, setRejectRequest] = useState(null)
   const [navOpen, setNavOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
@@ -4017,7 +4016,10 @@ function AppShell({
               statusFilter={statusFilter}
               onStatusFilterChange={handleStatusFilterChange}
               onPageChange={handleServerPageChange}
-              onOpenModal={() => setModalOpen(true)}
+              onOpenModal={(type) => {
+                setModalType(type || 'gatepass')
+                setModalOpen(true)
+              }}
               onGatepassAction={handleDashboardGatepassAction}
               focusReference={focusReference}
               onOpenQrPreview={handleOpenQrPreview}
@@ -4088,13 +4090,13 @@ function AppShell({
       </div>
 
       <CreateGatepassModal
-        open={currentUser.role === 'student' ? modalOpen : false}
+        open={(currentUser.role === 'student' || (currentUser.role === 'faculty' && modalType === 'gatepass')) ? modalOpen : false}
         currentUser={currentUser}
         onClose={() => setModalOpen(false)}
         onSubmit={onAddGatepass}
       />
       <FacultyLeaveWizard
-        open={currentUser.role === 'faculty' ? modalOpen : false}
+        open={currentUser.role === 'faculty' && modalType === 'leave' ? modalOpen : false}
         currentUser={currentUser}
         onClose={() => setModalOpen(false)}
         onSubmit={onAddGatepass}
@@ -4319,9 +4321,18 @@ function DashboardPage({
               <span className="dashboard-toolbar-pill muted">{ROLE_META[currentUser.role].title}</span>
             </div>
           </div>
-          <ActionButton icon={Send} onClick={onOpenModal}>
-            + New Gatepass
-          </ActionButton>
+          <div className="dashboard-toolbar-actions" style={{ display: 'flex', gap: '8px' }}>
+            {currentUser.role === 'student' ? (
+              <ActionButton icon={Send} onClick={() => onOpenModal('gatepass')}>
+                + New Gatepass
+              </ActionButton>
+            ) : null}
+            {currentUser.role === 'faculty' ? (
+              <ActionButton icon={Send} onClick={() => onOpenModal('leave')}>
+                + New Leave Request
+              </ActionButton>
+            ) : null}
+          </div>
         </section>
       ) : null}
 

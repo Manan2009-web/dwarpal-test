@@ -804,8 +804,7 @@ async function createFacultyLeaveRequest(actor, payload, requestMeta) {
     throw new AppError('Only faculty users can create faculty leave requests', 403);
   }
 
-  const [hodReviewer, principalReviewer, caoReviewer] = await Promise.all([
-    getActiveUserByRole('hod', { department: payload.facultyDetails.department || actor.department }),
+  const [principalReviewer, caoReviewer] = await Promise.all([
     getActiveUserByRole('principal'),
     getActiveUserByRole('cao')
   ]);
@@ -845,29 +844,31 @@ async function createFacultyLeaveRequest(actor, payload, requestMeta) {
       declarationDate: normalizeDateOnly(payload.declaration.declarationDate),
       digitalAcknowledgmentName: payload.declaration.digitalAcknowledgmentName
     },
-    shortLeave: {
-      staffMemberName: payload.shortLeave.staffMemberName,
-      designation: payload.shortLeave.designation,
-      department: payload.shortLeave.department,
-      instituteName: payload.shortLeave.instituteName,
-      employeeId: payload.shortLeave.employeeId,
-      leaveDate: normalizeDateOnly(payload.shortLeave.leaveDate),
-      requestedFrom: payload.shortLeave.requestedFrom,
-      requestedTo: payload.shortLeave.requestedTo,
-      totalDurationMinutes: payload.shortLeave.totalDurationMinutes,
-      reason: payload.shortLeave.reason,
-      applicantConfirmed: payload.shortLeave.applicantConfirmed,
-      applicationDate: normalizeDateOnly(payload.shortLeave.applicationDate),
-      digitalSignatureName: payload.shortLeave.digitalSignatureName
-    },
-    hodReviewer: hodReviewer._id,
+    shortLeave: payload.leaveDetails.leaveType === 'Short Leave'
+      ? {
+          staffMemberName: payload.shortLeave.staffMemberName,
+          designation: payload.shortLeave.designation,
+          department: payload.shortLeave.department,
+          instituteName: payload.shortLeave.instituteName,
+          employeeId: payload.shortLeave.employeeId,
+          leaveDate: normalizeDateOnly(payload.shortLeave.leaveDate),
+          requestedFrom: payload.shortLeave.requestedFrom,
+          requestedTo: payload.shortLeave.requestedTo,
+          totalDurationMinutes: payload.shortLeave.totalDurationMinutes,
+          reason: payload.shortLeave.reason,
+          applicantConfirmed: payload.shortLeave.applicantConfirmed,
+          applicationDate: normalizeDateOnly(payload.shortLeave.applicationDate),
+          digitalSignatureName: payload.shortLeave.digitalSignatureName
+        }
+      : null,
+    hodReviewer: null,
     principalReviewer: principalReviewer._id,
     caoReviewer: caoReviewer._id,
-    workloadStatus: 'pending_hod',
+    workloadStatus: 'approved_by_hod',
     shortLeaveStatus: 'pending_principal',
     overallStatus: 'pending',
     hodAction: {
-      status: 'pending'
+      status: 'not_required'
     },
     principalAction: {
       status: 'pending'
@@ -879,24 +880,12 @@ async function createFacultyLeaveRequest(actor, payload, requestMeta) {
 
   await createBulkNotifications([
     {
-      recipient: hodReviewer._id,
-      sender: actor._id,
-      facultyLeaveRequest: request._id,
-      type: 'faculty_leave_submitted',
-      status: 'submitted',
-      title: 'Workload adjustment awaiting HOD review',
-      message: `${payload.facultyDetails.name} submitted faculty leave request ${request.requestNumber} for workload adjustment approval.`,
-      metadata: buildFacultyLeaveNotificationMetadata(request, {
-        workflow: 'workload_review'
-      })
-    },
-    {
       recipient: principalReviewer._id,
       sender: actor._id,
       facultyLeaveRequest: request._id,
       type: 'faculty_leave_submitted',
       status: 'submitted',
-      title: 'Short leave awaiting Principal review',
+      title: 'Faculty leave request awaiting Principal review',
       message: `${payload.facultyDetails.name} submitted faculty leave request ${request.requestNumber} for Principal review.`,
       metadata: buildFacultyLeaveNotificationMetadata(request, {
         workflow: 'principal_review'
@@ -908,7 +897,7 @@ async function createFacultyLeaveRequest(actor, payload, requestMeta) {
       facultyLeaveRequest: request._id,
       type: 'faculty_leave_submitted',
       status: 'submitted',
-      title: 'Faculty gatepass submitted',
+      title: 'Faculty leave request submitted',
       message: `Faculty leave request ${request.requestNumber} was submitted and will reach CAO approval after Principal review.`,
       metadata: buildFacultyLeaveNotificationMetadata(request, {
         workflow: 'cao_awareness'
@@ -921,7 +910,7 @@ async function createFacultyLeaveRequest(actor, payload, requestMeta) {
       type: 'faculty_leave_submitted',
       status: 'submitted',
       title: 'Faculty leave request submitted',
-      message: `Faculty leave request ${request.requestNumber} has been submitted to HOD and Principal.`,
+      message: `Faculty leave request ${request.requestNumber} has been submitted to Principal.`,
       metadata: buildFacultyLeaveNotificationMetadata(request, {
         workflow: 'requester_submission'
       })
