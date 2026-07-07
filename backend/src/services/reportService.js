@@ -1243,7 +1243,7 @@ async function getReportPreview(actor, inputFilters = {}) {
     empty: dataset.recordCount === 0,
     weeklyTrend: buildWeeklyTrend(dataset.gatepasses),
     activeInactiveRatio: { active, inactive },
-    studentLeaderboard: isCoord ? dataset.studentSummaries : undefined
+    studentLeaderboard: (isCoord || ['hod', 'principal', 'admin', 'cao'].includes(actor?.role)) ? dataset.studentSummaries : undefined
   };
 }
 

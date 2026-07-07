@@ -6142,3 +6142,347 @@ html, body, #root, .admin-shell {
   max-width: 100vw;
   overflow-x: hidden;
 }
+
+/* Upgraded HOD Admin Portal UI Styles */
+
+.admin-welcome-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  background: var(--app-surface);
+  border: 1px solid var(--app-surface-border);
+  border-radius: 12px;
+  box-shadow: var(--app-surface-shadow);
+  margin-bottom: 0.5rem;
+}
+
+.admin-welcome-copy h2 {
+  margin: 0.2rem 0 0.4rem;
+  font-size: 1.55rem;
+  font-weight: 700;
+  color: var(--app-shell-text);
+}
+
+.admin-welcome-copy span {
+  color: var(--app-shell-muted);
+  font-size: 0.88rem;
+}
+
+.admin-welcome-badges {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.admin-welcome-badge {
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem 0.8rem;
+  border-radius: 8px;
+  background: var(--app-shell-bg);
+  border: 1px solid var(--app-surface-border);
+  min-width: 110px;
+}
+
+.admin-welcome-badge .label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--app-shell-muted);
+  margin-bottom: 0.15rem;
+}
+
+.admin-welcome-badge .val {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--app-shell-text);
+}
+
+/* Upgraded Admin Stat Cards */
+.admin-stat-card {
+  border-radius: 12px !important;
+  background: var(--app-surface) !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -1px rgba(0, 0, 0, 0.01) !important;
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.22s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  border: 1px solid var(--app-surface-border) !important;
+}
+
+.admin-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02) !important;
+}
+
+.admin-stat-icon {
+  width: 2.75rem !important;
+  height: 2.75rem !important;
+  border-radius: 10px !important;
+}
+
+/* Stat card border-left indicator colors */
+.admin-stat-card.warning {
+  border-left: 3px solid var(--warning) !important;
+}
+.admin-stat-card.success {
+  border-left: 3px solid var(--success) !important;
+}
+.admin-stat-card.info {
+  border-left: 3px solid var(--app-accent) !important;
+}
+.admin-stat-card.danger {
+  border-left: 3px solid var(--danger) !important;
+}
+
+.admin-stat-card.info .admin-stat-icon {
+  color: var(--app-accent-strong) !important;
+  background: var(--app-accent-soft-bg) !important;
+}
+
+/* Admin Dashboard Columns Layout */
+.admin-dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.85fr);
+  gap: 1.1rem;
+  align-items: start;
+}
+
+.admin-charts-column {
+  display: grid;
+  gap: 1.1rem;
+}
+
+.admin-leaderboard-card {
+  padding: 1.25rem !important;
+  border-radius: 12px !important;
+  background: var(--app-surface) !important;
+  box-shadow: var(--app-surface-shadow) !important;
+}
+
+.admin-chart-panel-card {
+  padding: 1.1rem !important;
+  border-radius: 12px !important;
+  background: var(--app-surface) !important;
+  box-shadow: var(--app-surface-shadow) !important;
+}
+
+.mini-chart-container {
+  min-height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.75rem;
+}
+
+.mini-chart-container.pie-container {
+  min-height: 160px;
+}
+
+/* Student Activity Leaderboard Table */
+.leaderboard-table-wrap {
+  margin-top: 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--app-surface-border);
+  overflow-x: auto;
+  max-height: 380px;
+}
+
+.leaderboard-row {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.leaderboard-row:hover {
+  background-color: var(--sidebar-hover) !important;
+}
+
+.leaderboard-row td {
+  padding: 0.85rem 1rem !important;
+  vertical-align: middle !important;
+}
+
+.student-name {
+  color: var(--app-shell-text);
+  font-weight: 600;
+}
+
+.student-enrollment {
+  color: var(--app-shell-muted);
+  font-size: 0.85rem;
+}
+
+/* Clean badges */
+.status-badge.count-badge {
+  background: var(--app-accent-soft-bg) !important;
+  color: var(--app-accent-strong) !important;
+  font-weight: 700;
+  border: 1px solid var(--control-border);
+}
+
+/* Search input improvements */
+.admin-search-wrapper {
+  position: relative;
+  min-width: 260px;
+}
+
+.admin-search-wrapper .search-icon {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--app-shell-muted);
+  pointer-events: none;
+}
+
+.admin-search-input {
+  width: 100%;
+  height: 2.5rem;
+  padding-left: 36px !important;
+  padding-right: 12px !important;
+  border-radius: 8px !important;
+  border: 1px solid var(--control-border) !important;
+  background: var(--app-surface) !important;
+  color: var(--app-shell-text) !important;
+  font-size: 0.9rem !important;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease !important;
+}
+
+.admin-search-input:focus {
+  border-color: var(--app-accent) !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15) !important;
+  outline: none !important;
+}
+
+/* Avatar chips and design elements in sidebar and header */
+.admin-user-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 10px;
+}
+
+.admin-user-chip-avatar {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  background: var(--app-accent-soft-bg);
+  color: var(--app-accent-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid var(--sidebar-panel-border);
+}
+
+.admin-user-chip-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.admin-user-chip-info strong {
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-user-chip-info span {
+  font-size: 0.75rem;
+  color: var(--app-shell-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Header User Profile component centering */
+.admin-header-user {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.65rem !important;
+}
+
+.admin-header-user .header-avatar {
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 50%;
+  background: var(--app-accent-soft-bg);
+  color: var(--app-accent-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid var(--app-surface-border);
+}
+
+.admin-header-user .user-details {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.admin-header-user .user-details strong {
+  font-size: 0.88rem;
+  line-height: 1.2;
+}
+
+.admin-header-user .user-details span {
+  font-size: 0.76rem;
+  color: var(--app-shell-muted);
+  margin-top: 1px;
+}
+
+/* Sidebar nav link active left bar style */
+.admin-nav-link {
+  position: relative;
+  transition: all 0.18s ease;
+}
+
+.admin-nav-link.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 15%;
+  height: 70%;
+  width: 3px;
+  background-color: var(--app-accent);
+  border-radius: 0 4px 4px 0;
+}
+
+.admin-nav-link:hover {
+  transform: translateX(2px);
+}
+
+/* Responsive Overrides to prevent overflow */
+@media (max-width: 1024px) {
+  .admin-welcome-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  .admin-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .admin-header-user {
+    border-top: none;
+    padding-top: 0;
+  }
+}
+
+.admin-icon-button.admin-logout-button:hover {
+  color: var(--danger) !important;
+  border-color: var(--danger-soft) !important;
+  background: var(--danger-soft) !important;
+}
+
+.admin-header-divider {
+  width: 1px;
+  height: 24px;
+  background-color: var(--app-surface-border);
+  margin: 0 4px;
+}
+

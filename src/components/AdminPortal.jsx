@@ -19,6 +19,8 @@ import {
   Settings,
   ShieldCheck,
   SlidersHorizontal,
+  TrendingUp,
+  User,
   Users,
   UserCheck,
   UserRoundCog,
@@ -230,7 +232,7 @@ function buildExportPayload(filters, activeSection, selectedRows, exportScope) {
   return request
 }
 
-function AdminSidebar({ currentUser, activeSection, onLogout, onOpenSupport, isOpen, onLinkClick }) {
+function AdminSidebar({ currentUser, activeSection, isOpen, onLinkClick }) {
   const navItems = getAdminNavItems(currentUser)
 
   return (
@@ -239,8 +241,13 @@ function AdminSidebar({ currentUser, activeSection, onLogout, onOpenSupport, isO
         <AppBrand size="md" align="start" />
       </div>
       <div className="admin-user-chip">
-        <strong>{currentUser.name}</strong>
-        <span>{[currentUser.role, currentUser.department].filter(Boolean).join(' | ')}</span>
+        <div className="admin-user-chip-avatar">
+          <User size={18} />
+        </div>
+        <div className="admin-user-chip-info">
+          <strong>{currentUser.name}</strong>
+          <span>{[currentUser.role?.toUpperCase(), currentUser.department].filter(Boolean).join(' | ')}</span>
+        </div>
       </div>
       <nav className="admin-nav" aria-label="Admin portal navigation">
         {navItems.map((item) => (
@@ -255,26 +262,14 @@ function AdminSidebar({ currentUser, activeSection, onLogout, onOpenSupport, isO
           </Link>
         ))}
       </nav>
-      <div className="admin-sidebar-footer">
-        {onOpenSupport ? (
-          <button type="button" className="admin-secondary-link" onClick={onOpenSupport}>
-            <CircleHelp size={16} />
-            <span>Help</span>
-          </button>
-        ) : null}
-        <Link className="admin-secondary-link" to={`/${currentUser.role}/dashboard`} onClick={onLinkClick}>
-          User Panel
-        </Link>
-        <button type="button" className="admin-logout" onClick={onLogout}>
-          <LogOut size={17} />
-          <span>Logout</span>
-        </button>
+      <div className="admin-sidebar-footer" style={{ padding: '0.5rem 0.2rem', textAlign: 'center' }}>
+        <span style={{ fontSize: '0.72rem', color: 'var(--app-shell-muted)', opacity: 0.8 }}>DwarPal v1.0</span>
       </div>
     </aside>
   )
 }
 
-function AdminHeader({ currentUser, title, subtitle, onRefresh, refreshing, onToggleSidebar }) {
+function AdminHeader({ currentUser, title, subtitle, onRefresh, refreshing, onToggleSidebar, onOpenSupport, onLogout }) {
   return (
     <header className="admin-header">
       <div className="admin-header-title-section" style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
@@ -292,22 +287,61 @@ function AdminHeader({ currentUser, title, subtitle, onRefresh, refreshing, onTo
         <div>
           <p className="admin-eyebrow">DwarPal Admin Portal</p>
           <h1>{title}</h1>
-          <span>{subtitle}</span>
+          <span className="subtitle-text">{subtitle}</span>
         </div>
       </div>
       <div className="admin-header-actions">
+        {onOpenSupport ? (
+          <button
+            type="button"
+            className="admin-icon-button"
+            onClick={onOpenSupport}
+            title="Help & Support"
+            aria-label="Open support"
+          >
+            <CircleHelp size={18} />
+          </button>
+        ) : null}
+        
+        <Link
+          className="admin-icon-button"
+          to={`/${currentUser.role}/dashboard`}
+          title="User Dashboard"
+          aria-label="User Dashboard"
+        >
+          <LayoutDashboard size={18} />
+        </Link>
+
+        <button
+          type="button"
+          className="admin-icon-button admin-logout-button"
+          onClick={onLogout}
+          title="Logout"
+          aria-label="Logout"
+        >
+          <LogOut size={18} />
+        </button>
+
+        <div className="admin-header-divider" style={{ width: '1px', height: '24px', backgroundColor: 'var(--app-surface-border)', margin: '0 4px' }} />
+
         <button
           type="button"
           className="admin-icon-button"
           onClick={onRefresh}
           disabled={refreshing}
           aria-label="Refresh admin data"
+          title="Refresh Data"
         >
           <RefreshCw size={18} className={refreshing ? 'spin' : ''} />
         </button>
         <div className="admin-header-user">
-          <strong>{currentUser.name}</strong>
-          <span>{currentUser.employeeId || currentUser.enrollment || currentUser.role}</span>
+          <div className="header-avatar">
+            <User size={16} />
+          </div>
+          <div className="user-details">
+            <strong>{currentUser.name}</strong>
+            <span>{currentUser.employeeId || currentUser.enrollment || currentUser.role?.toUpperCase()}</span>
+          </div>
         </div>
       </div>
     </header>
@@ -925,6 +959,8 @@ function DashboardOverview({ preview, options, currentUser, onStudentClick }) {
 
   const isCoord = Boolean(currentUser?.isCoordinator || currentUser?.coordinatorAssignment?.isCoordinator || currentUser?.coordinatorScope?.isCoordinator)
   const studentLeaderboard = preview?.studentLeaderboard || []
+  const weeklyTrend = preview?.weeklyTrend || []
+  const activeInactiveRatio = preview?.activeInactiveRatio || { active: 0, inactive: 0 }
 
   const sortedLeaderboard = useMemo(() => {
     return [...studentLeaderboard].sort((a, b) => (b.totalGatepasses || 0) - (a.totalGatepasses || 0))
@@ -939,103 +975,150 @@ function DashboardOverview({ preview, options, currentUser, onStudentClick }) {
     )
   }, [sortedLeaderboard, searchQuery])
 
+  const activeCount = activeInactiveRatio.active || 0
+  const pendingCount = summary.totalPending || 0
+  const approvedCount = summary.totalApproved || 0
+  const totalCount = preview?.recordCount || summary.totalGatepasses || 0
+
+  const card4 = isCoord
+    ? { label: 'Rejected Passes', value: summary.totalRejected || 0, icon: XCircle, tone: 'danger' }
+    : currentUser?.role === 'hod'
+      ? { label: 'Active Outside', value: activeCount, icon: SlidersHorizontal, tone: 'info' }
+      : { label: 'Faculty Leaves', value: summary.totalFacultyRequests || 0, icon: UserRoundCog, tone: 'info' }
+
+  const showLeaderboard = studentLeaderboard.length > 0 || isCoord || ['hod', 'principal', 'admin', 'cao'].includes(currentUser?.role)
+
+  const pieData = [
+    { label: 'Active', value: activeCount, color: '#3B82F6' },
+    { label: 'Returned / Inactive', value: activeInactiveRatio.inactive || 0, color: '#9CA3AF' }
+  ]
+
   return (
     <div className="admin-page-stack">
-      <div className="admin-stat-grid">
-        <StatCard label="Total Gatepasses" value={preview?.recordCount || summary.totalGatepasses} icon={ClipboardList} />
-        <StatCard label="Approved" value={summary.totalApproved} icon={ShieldCheck} tone="success" />
-        <StatCard label="Pending" value={summary.totalPending} icon={History} tone="warning" />
-        {isCoord ? (
-          <StatCard label="Rejected" value={summary.totalRejected} icon={XCircle} tone="danger" />
-        ) : (
-          <StatCard label="Faculty Requests" value={summary.totalFacultyRequests} icon={UserRoundCog} />
-        )}
+      {/* Welcome Scope Banner */}
+      <div className="admin-welcome-banner">
+        <div className="admin-welcome-copy">
+          <p className="admin-eyebrow">DwarPal Management Panel</p>
+          <h2>Welcome back, {currentUser.name}</h2>
+          <span>
+            Overseeing campus security, logs, and activity records for your assigned scope.
+          </span>
+        </div>
+        <div className="admin-welcome-badges">
+          <div className="admin-welcome-badge">
+            <span className="label">Access Level</span>
+            <span className="val">{access.role || currentUser.role?.toUpperCase()}</span>
+          </div>
+          <div className="admin-welcome-badge">
+            <span className="label">Department</span>
+            <span className="val">{access.department || 'All Departments'}</span>
+          </div>
+          <div className="admin-welcome-badge">
+            <span className="label">Scope Type</span>
+            <span className="val">{access.scopeType || 'Role Scoped'}</span>
+          </div>
+        </div>
       </div>
-      
-      {isCoord ? (
-        <section className="admin-wide-panel" style={{ padding: '1.25rem' }}>
-          <div className="admin-panel-heading" style={{ flexWrap: 'wrap', gap: '1rem', alignItems: 'center' }}>
-            <div>
-              <p className="admin-eyebrow">Student Leaderboard</p>
-              <h2>Class Student List</h2>
-              <span>All students in your assigned class sorted by number of gatepasses taken. Click a student to view their history.</span>
+
+      {/* Stats Metric Cards Grid */}
+      <div className="admin-stat-grid">
+        <StatCard label="Total Gatepasses" value={totalCount} icon={ClipboardList} />
+        <StatCard label="Approved Passes" value={approvedCount} icon={ShieldCheck} tone="success" />
+        <StatCard label="Pending Review" value={pendingCount} icon={History} tone="warning" />
+        <StatCard label={card4.label} value={card4.value} icon={card4.icon} tone={card4.tone} />
+      </div>
+
+      {/* Main Analytics Grid layout */}
+      <div className="admin-dashboard-grid">
+        {/* Column 1: Activity Leaderboard */}
+        {showLeaderboard && (
+          <section className="admin-wide-panel admin-leaderboard-card">
+            <div className="admin-panel-heading" style={{ flexWrap: 'wrap', gap: '1rem', alignItems: 'center' }}>
+              <div>
+                <p className="admin-eyebrow">Student Ledger</p>
+                <h2>Gatepass Leaderboard</h2>
+                <span className="subtext">Students sorted by number of gatepasses taken. Click to inspect complete logs.</span>
+              </div>
+              <div className="admin-search-wrapper">
+                <Search size={16} className="search-icon" />
+                <input
+                  type="text"
+                  placeholder="Search student or enrollment..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="admin-search-input"
+                />
+              </div>
             </div>
-            <div className="admin-search-wrapper" style={{ position: 'relative', minWidth: '280px', marginLeft: 'auto' }}>
-              <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--app-shell-muted)' }} />
-              <input
-                type="text"
-                placeholder="Search student or enrollment..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{
-                  paddingLeft: '32px',
-                  height: '2.45rem',
-                  width: '100%',
-                  borderRadius: '6px',
-                  border: '1px solid var(--control-border)',
-                  background: 'var(--app-surface)',
-                  color: 'var(--app-shell-text)'
-                }}
-              />
-            </div>
-          </div>
-          <div className="admin-table-wrap" style={{ maxHeight: '350px', overflowY: 'auto', marginTop: '1rem' }}>
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Enrollment Number</th>
-                  <th style={{ textAlign: 'right' }}>Total Gatepasses</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredLeaderboard.length ? (
-                  filteredLeaderboard.map((student) => (
-                    <tr 
-                      key={student.user?._id || student.enrollmentNo} 
-                      onClick={() => onStudentClick && onStudentClick(student)}
-                      style={{ cursor: 'pointer' }}
-                      className="leaderboard-row"
-                    >
-                      <td>
-                        <strong style={{ color: 'var(--app-shell-text)' }}>{student.name}</strong>
-                      </td>
-                      <td>{student.enrollmentNo}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{student.totalGatepasses}</td>
-                    </tr>
-                  ))
-                ) : (
+            
+            <div className="admin-table-wrap leaderboard-table-wrap">
+              <table className="admin-table">
+                <thead>
                   <tr>
-                    <td colSpan={3} style={{ textAlign: 'center', padding: '2rem', color: 'var(--app-shell-muted)' }}>
-                      No students found.
-                    </td>
+                    <th>Name</th>
+                    <th>Enrollment Number</th>
+                    <th className="text-right">Total Passes</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      ) : (
-        <section className="admin-wide-panel">
-          <div className="admin-panel-heading">
-            <div>
-              <p className="admin-eyebrow">Access Scope</p>
-              <h2>{access.scopeType || 'admin'} access</h2>
+                </thead>
+                <tbody>
+                  {filteredLeaderboard.length ? (
+                    filteredLeaderboard.map((student) => (
+                      <tr 
+                        key={student.user?._id || student.enrollmentNo || student.id} 
+                        onClick={() => onStudentClick && onStudentClick(student)}
+                        className="leaderboard-row"
+                      >
+                        <td>
+                          <strong className="student-name">{student.name}</strong>
+                        </td>
+                        <td>
+                          <span className="student-enrollment">{student.enrollmentNo}</span>
+                        </td>
+                        <td className="text-right">
+                          <span className="status-badge approved">{student.totalGatepasses || student.totalRequests || 0}</span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={3} className="text-center empty-cell">
+                        No student activity found within your scope.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
-            <Link className="admin-text-button" to="/admin/export">
-              Open Export Center
-            </Link>
-          </div>
-          <div className="admin-info-grid">
-            <span>Role</span>
-            <strong>{access.role || 'admin'}</strong>
-            <span>Department</span>
-            <strong>{access.department || 'All departments'}</strong>
-            <span>Export Scope</span>
-            <strong>{access.scopeType || 'role scoped'}</strong>
-          </div>
-        </section>
-      )}
+          </section>
+        )}
+
+        {/* Column 2: visual widgets */}
+        <div className="admin-charts-column">
+          <section className="admin-wide-panel admin-chart-panel-card">
+            <div className="admin-panel-heading">
+              <div>
+                <p className="admin-eyebrow">Trends</p>
+                <h2>Weekly Volumes</h2>
+              </div>
+            </div>
+            <div className="mini-chart-container">
+              <SvgLineChart data={weeklyTrend} height={150} />
+            </div>
+          </section>
+
+          <section className="admin-wide-panel admin-chart-panel-card">
+            <div className="admin-panel-heading">
+              <div>
+                <p className="admin-eyebrow">Distribution</p>
+                <h2>Active Status</h2>
+              </div>
+            </div>
+            <div className="mini-chart-container pie-container">
+              <SvgPieChart data={pieData} size={140} />
+            </div>
+          </section>
+        </div>
+      </div>
     </div>
   )
 }
@@ -1829,8 +1912,6 @@ export default function AdminPortal({ currentUser, onLogout, onOpenSupport = nul
       <AdminSidebar
         currentUser={currentUser}
         activeSection={activeSection}
-        onLogout={onLogout}
-        onOpenSupport={onOpenSupport}
         isOpen={sidebarOpen}
         onLinkClick={() => setSidebarOpen(false)}
       />
@@ -1854,6 +1935,8 @@ export default function AdminPortal({ currentUser, onLogout, onOpenSupport = nul
               loadHistory()
             }
           }}
+          onOpenSupport={onOpenSupport}
+          onLogout={onLogout}
         />
 
         {activeSection === 'history' ? <HistoryPanel history={history} loading={historyLoading} onRefresh={loadHistory} /> : null}
