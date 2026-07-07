@@ -5,7 +5,7 @@ const PendingRegistration = require('../models/PendingRegistration');
 const AppError = require('../utils/appError');
 const authService = require('./authService');
 const { logAction } = require('./auditService');
-const { sendVerificationOtpEmail } = require('./emailService');
+const { sendVerificationOtpEmail, sendStaffWelcomeEmail } = require('./emailService');
 const {
   compareOtpHash,
   generateOtp,
@@ -203,6 +203,19 @@ async function verifyRegistrationOtp(payload, requestMeta = {}) {
 
   await user.save();
   await pendingRegistration.deleteOne();
+
+  // Fire-and-forget staff welcome email — must not block account creation
+  sendStaffWelcomeEmail({
+    email: user.email,
+    fullName: user.fullName,
+    role: user.role,
+    collegeName: require('../config/env').collegeName
+  }).catch((err) => {
+    console.warn('[staff-welcome] Failed to send staff welcome email:', err.message || err, {
+      email: user.email,
+      role: user.role
+    });
+  });
 
   await logAction({
     actorId: user._id,

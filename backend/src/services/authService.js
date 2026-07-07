@@ -11,6 +11,7 @@ const pickUser = require('../utils/pickUser');
 const { createAccessToken } = require('../utils/token');
 const { getClientFingerprint } = require('../utils/request');
 const { logAction } = require('./auditService');
+const { sendStaffWelcomeEmail } = require('./emailService');
 const {
   consumeRateLimit,
   createRateLimitError,
@@ -315,6 +316,19 @@ async function registerUser(payload, req, requestMeta) {
 
   const user = applyRegistrationDetailsToUser(new User(), normalizedPayload);
   await user.save();
+
+  // Fire-and-forget welcome email — must not block account creation
+  sendStaffWelcomeEmail({
+    email: user.email,
+    fullName: user.fullName,
+    role: user.role,
+    collegeName: env.collegeName
+  }).catch((err) => {
+    console.warn('[staff-welcome] Failed to send welcome email after registration:', err.message || err, {
+      email: user.email,
+      role: user.role
+    });
+  });
 
   await logAction({
     actorId: user._id,

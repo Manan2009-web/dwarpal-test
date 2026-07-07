@@ -451,93 +451,139 @@ async function sendStudentOnboardingEmail({ email, fullName, enrollmentNo, tempo
     return { skipped: true, reason: 'smtp_not_configured' };
   }
 
-  const safeFullName = escapeHtml(fullName || 'Student');
+  const safeFullName   = escapeHtml(fullName || 'Student');
   const safeEnrollmentNo = escapeHtml(enrollmentNo || '');
-  const safeCollegeName = escapeHtml(collegeName || 'Your College');
-  const loginUrl = env.clientUrl || env.serverUrl || 'http://localhost:5173';
-  const safeLoginUrl = escapeHtml(loginUrl);
+  const safeCollegeName  = escapeHtml(collegeName || 'Your College');
+  const loginUrl       = 'https://dwarpal-test.vercel.app';
+  const safeLoginUrl   = escapeHtml(loginUrl);
+  const year           = new Date().getFullYear();
 
-  const html = `
-    <!doctype html>
-    <html lang="en">
-      <body style="margin:0;padding:24px;background:#0d1117;font-family:'Segoe UI',Arial,sans-serif;color:#e6edf3;">
-        <div style="max-width:600px;margin:0 auto;">
+  const html = `<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DwarPal — Student Account Ready</title></head>
+<body style="margin:0;padding:0;background:#f0f4f8;font-family:'Segoe UI',Helvetica,Arial,sans-serif;color:#1e293b;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f4f8;padding:32px 16px;">
+  <tr><td align="center">
+    <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;">
 
-          <!-- Header -->
-          <div style="background:linear-gradient(135deg,#1f2937 0%,#111827 100%);border-radius:20px 20px 0 0;padding:36px 40px;text-align:center;border:1px solid rgba(255,255,255,0.06);border-bottom:none;">
-            <div style="display:inline-block;background:linear-gradient(135deg,#6d28d9,#4f46e5);border-radius:16px;padding:12px 20px;margin-bottom:20px;">
-              <span style="font-size:20px;font-weight:800;color:#ffffff;letter-spacing:0.05em;">DwarPal</span>
-            </div>
-            <h1 style="margin:0;font-size:26px;font-weight:700;color:#f0f6fc;line-height:1.3;">Welcome to ${safeCollegeName}</h1>
-            <p style="margin:10px 0 0;font-size:15px;color:#8b949e;">Your DwarPal student account is ready.</p>
-          </div>
-
-          <!-- Body -->
-          <div style="background:#161b22;border:1px solid rgba(255,255,255,0.06);border-top:none;border-radius:0 0 20px 20px;padding:36px 40px;">
-            <p style="margin:0 0 20px;font-size:16px;color:#c9d1d9;">Hi <strong style="color:#f0f6fc;">${safeFullName}</strong>,</p>
-            <p style="margin:0 0 28px;font-size:15px;line-height:1.7;color:#8b949e;">
-              Your student account has been created by the Cumulative Administration Office.
-              Use the credentials below to sign in to the DwarPal Gatepass Portal.
-            </p>
-
-            <!-- Credentials Card -->
-            <div style="background:#0d1117;border:1px solid #30363d;border-radius:14px;padding:24px;margin:0 0 28px;">
-              <p style="margin:0 0 16px;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#6e7681;font-weight:700;">Your Login Credentials</p>
-
-              <div style="display:flex;align-items:center;margin-bottom:16px;">
-                <div style="min-width:140px;font-size:12px;color:#6e7681;font-weight:600;">Student Enrollment</div>
-                <div style="font-size:18px;font-weight:800;color:#58a6ff;letter-spacing:0.06em;font-family:monospace;">${safeEnrollmentNo}</div>
-              </div>
-
-              <div style="height:1px;background:#21262d;margin:0 0 16px;"></div>
-
-              <div style="display:flex;align-items:center;margin-bottom:16px;">
-                <div style="min-width:140px;font-size:12px;color:#6e7681;font-weight:600;">Temporary Password</div>
-                <div style="font-size:16px;font-weight:700;color:#3fb950;letter-spacing:0.1em;font-family:monospace;background:#0d1117;border:1px dashed #3fb950;border-radius:8px;padding:6px 14px;">${escapeHtml(temporaryPassword)}</div>
-              </div>
-
-              <div style="height:1px;background:#21262d;margin:0 0 16px;"></div>
-
-              <div style="display:flex;align-items:center;">
-                <div style="min-width:140px;font-size:12px;color:#6e7681;font-weight:600;">Student Access Portal Link</div>
-                <div style="font-size:14px;font-weight:600;color:#58a6ff;word-break:break-all;"><a href="${safeLoginUrl}" style="color:#58a6ff;text-decoration:underline;">${safeLoginUrl}</a></div>
-              </div>
-            </div>
-
-            <!-- Warning -->
-            <div style="background:rgba(210,153,34,0.1);border:1px solid rgba(210,153,34,0.3);border-radius:10px;padding:16px 20px;margin:0 0 28px;">
-              <p style="margin:0;font-size:13px;color:#d29922;">&#9888; You will be required to change your password upon your first login. Keep your credentials safe and do not share them with anyone.</p>
-            </div>
-
-            <!-- CTA -->
-            <div style="text-align:center;margin:0 0 32px;">
-              <a href="${safeLoginUrl}" style="display:inline-block;background:linear-gradient(135deg,#6d28d9,#4f46e5);color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:14px 36px;border-radius:50px;letter-spacing:0.04em;">
-                Sign In to DwarPal &rarr;
-              </a>
-            </div>
-
-            <!-- Footer -->
-            <p style="margin:0;font-size:12px;color:#484f58;text-align:center;line-height:1.6;">
-              If you did not expect this email, contact your institution's administration office.<br/>
-              &copy; ${new Date().getFullYear()} DwarPal &bull; ${safeCollegeName}
-            </p>
-          </div>
-
+      <!-- ═══ HEADER ═══ -->
+      <tr><td style="background:linear-gradient(135deg,#1e3a5f 0%,#1e40af 100%);border-radius:16px 16px 0 0;padding:36px 40px;text-align:center;">
+        <div style="display:inline-block;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);border-radius:10px;padding:8px 22px;margin-bottom:18px;">
+          <span style="font-size:22px;font-weight:800;color:#ffffff;letter-spacing:0.06em;">&#127968; DwarPal</span>
         </div>
-      </body>
-    </html>
-  `;
+        <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#ffffff;line-height:1.3;">Welcome to Your Smart Campus Gateway</h1>
+        <p style="margin:0;font-size:14px;color:#bfdbfe;">Your DwarPal student account is active and ready.</p>
+      </td></tr>
+
+      <!-- ═══ BODY ═══ -->
+      <tr><td style="background:#ffffff;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 16px 16px;padding:36px 40px;">
+
+        <p style="margin:0 0 8px;font-size:17px;font-weight:600;color:#1e293b;">Hi ${safeFullName},</p>
+        <p style="margin:0 0 28px;font-size:14px;line-height:1.75;color:#475569;">
+          Your student credentials have been set up by the <strong>Campus Operations &amp; IT Desk</strong>
+          to grant you secure access to the DwarPal gatepass network.
+          Use the details below to sign in for the first time.
+        </p>
+
+        <!-- ── Credential Table ── -->
+        <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:12px;padding:6px 0;margin:0 0 24px;overflow:hidden;">
+          <p style="margin:0;padding:14px 22px 10px;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#64748b;font-weight:700;border-bottom:1px solid #e2e8f0;">Your Login Credentials</p>
+
+          <!-- Enrollment Number -->
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="padding:14px 22px 6px;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;white-space:nowrap;">Enrollment Number</td>
+            </tr>
+            <tr>
+              <td style="padding:0 22px 14px;font-size:18px;font-weight:800;color:#1e40af;font-family:monospace;letter-spacing:0.06em;word-break:break-word;overflow-wrap:break-word;">${safeEnrollmentNo}</td>
+            </tr>
+          </table>
+          <div style="height:1px;background:#e2e8f0;"></div>
+
+          <!-- Temporary Password -->
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="padding:14px 22px 6px;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;white-space:nowrap;">Temporary Password</td>
+            </tr>
+            <tr>
+              <td style="padding:0 22px 14px;">
+                <span style="display:inline-block;font-size:15px;font-weight:700;color:#16a34a;font-family:monospace;background:#f0fdf4;border:1px dashed #86efac;border-radius:7px;padding:5px 14px;word-break:break-word;overflow-wrap:break-word;">${escapeHtml(temporaryPassword)}</span>
+              </td>
+            </tr>
+          </table>
+          <div style="height:1px;background:#e2e8f0;"></div>
+
+          <!-- Network Access Code -->
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="padding:14px 22px 6px;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;white-space:nowrap;">Student Access Code</td>
+            </tr>
+            <tr>
+              <td style="padding:0 22px 14px;font-size:14px;font-weight:700;color:#1e40af;font-family:monospace;letter-spacing:0.04em;">STUDENT2026</td>
+            </tr>
+          </table>
+          <div style="height:1px;background:#e2e8f0;"></div>
+
+          <!-- Network Access Password -->
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="padding:14px 22px 6px;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;white-space:nowrap;">Access Password</td>
+            </tr>
+            <tr>
+              <td style="padding:0 22px 14px;font-size:14px;font-weight:700;color:#1e40af;font-family:monospace;letter-spacing:0.04em;">dwarpal-student-access</td>
+            </tr>
+          </table>
+          <div style="height:1px;background:#e2e8f0;"></div>
+
+          <!-- Portal Link -->
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="padding:14px 22px 6px;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;white-space:nowrap;">Student Portal</td>
+            </tr>
+            <tr>
+              <td style="padding:0 22px 14px;font-size:13px;word-break:break-word;overflow-wrap:break-word;">
+                <a href="${safeLoginUrl}" style="color:#2563eb;text-decoration:underline;font-weight:600;">${safeLoginUrl}</a>
+              </td>
+            </tr>
+          </table>
+        </div>
+
+        <!-- ── Warning Banner ── -->
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;margin:0 0 28px;">
+          <tr><td style="padding:14px 20px;">
+            <p style="margin:0;font-size:13px;color:#92400e;"><strong>&#9888; Important:</strong> You will be prompted to change your password on your first sign-in. Keep your credentials private and do not share them.</p>
+          </td></tr>
+        </table>
+
+        <!-- ── CTA Button ── -->
+        <div style="text-align:center;margin:0 0 32px;">
+          <a href="${safeLoginUrl}" style="display:inline-block;background:linear-gradient(135deg,#1e40af,#1d4ed8);color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:14px 38px;border-radius:50px;letter-spacing:0.04em;">Sign In to DwarPal &rarr;</a>
+        </div>
+
+        <!-- ── Footer ── -->
+        <div style="border-top:1px solid #e2e8f0;padding-top:20px;text-align:center;">
+          <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.6;">If you did not expect this email, contact your institution's administration office.<br/>&copy; ${year} DwarPal &bull; ${safeCollegeName}</p>
+        </div>
+
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>`;
 
   const text = [
-    `Welcome to ${collegeName || 'Your College'} — DwarPal Student Account`,
+    `Welcome to DwarPal — Student Account Ready`,
     '',
     `Hi ${fullName},`,
     '',
-    'Your student account has been created by the Cumulative Administration Office.',
+    'Your student credentials have been set up by the Campus Operations & IT Desk.',
     '',
-    `Student Enrollment: ${enrollmentNo}`,
-    `Temporary Password : ${temporaryPassword}`,
-    `Student Access Portal Link: ${loginUrl}`,
+    `Enrollment Number : ${enrollmentNo}`,
+    `Temporary Password: ${temporaryPassword}`,
+    `Student Access Code: STUDENT2026`,
+    `Access Password    : dwarpal-student-access`,
+    `Student Portal     : ${loginUrl}`,
     '',
     'IMPORTANT: You must change your password on your first login.',
     '',
@@ -553,6 +599,130 @@ async function sendStudentOnboardingEmail({ email, fullName, enrollmentNo, tempo
   });
 }
 
+async function sendStaffWelcomeEmail({ email, fullName, role, collegeName }) {
+  if (!isSmtpConfigured()) {
+    console.info('[email] SMTP not configured — skipping staff welcome email.', { to: maskEmail(email) });
+    return { skipped: true, reason: 'smtp_not_configured' };
+  }
+
+  const safeFullName    = escapeHtml(fullName || 'Team Member');
+  const safeRole        = escapeHtml(role || 'Staff');
+  const safeCollegeName = escapeHtml(collegeName || 'Your College');
+  const loginUrl        = 'https://dwarpal-test.vercel.app';
+  const safeLoginUrl    = escapeHtml(loginUrl);
+  const year            = new Date().getFullYear();
+
+  const html = `<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DwarPal — Account Registration Received</title></head>
+<body style="margin:0;padding:0;background:#f0f4f8;font-family:'Segoe UI',Helvetica,Arial,sans-serif;color:#1e293b;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f4f8;padding:32px 16px;">
+  <tr><td align="center">
+    <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;">
+
+      <!-- ═══ HEADER ═══ -->
+      <tr><td style="background:linear-gradient(135deg,#1e3a5f 0%,#1e40af 100%);border-radius:16px 16px 0 0;padding:36px 40px;text-align:center;">
+        <div style="display:inline-block;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);border-radius:10px;padding:8px 22px;margin-bottom:18px;">
+          <span style="font-size:22px;font-weight:800;color:#ffffff;letter-spacing:0.06em;">&#127968; DwarPal</span>
+        </div>
+        <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#ffffff;line-height:1.3;">Welcome to Your Smart Campus Gateway</h1>
+        <p style="margin:0;font-size:14px;color:#bfdbfe;">Your institutional account workspace is ready.</p>
+      </td></tr>
+
+      <!-- ═══ BODY ═══ -->
+      <tr><td style="background:#ffffff;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 16px 16px;padding:36px 40px;">
+
+        <p style="margin:0 0 8px;font-size:17px;font-weight:600;color:#1e293b;">Hi ${safeFullName},</p>
+        <p style="margin:0 0 28px;font-size:14px;line-height:1.75;color:#475569;">
+          Your <strong>${safeRole}</strong> registration request has been received by the
+          <strong>Campus Operations &amp; IT Desk</strong>. Your department management workspace
+          on the DwarPal platform is now active and awaiting your first sign-in.
+        </p>
+
+        <!-- ── Info Card ── -->
+        <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:12px;padding:6px 0;margin:0 0 24px;overflow:hidden;">
+          <p style="margin:0;padding:14px 22px 10px;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#64748b;font-weight:700;border-bottom:1px solid #e2e8f0;">Account Details</p>
+
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="padding:14px 22px 6px;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">Registered Name</td>
+            </tr>
+            <tr>
+              <td style="padding:0 22px 14px;font-size:16px;font-weight:700;color:#1e293b;word-break:break-word;overflow-wrap:break-word;">${safeFullName}</td>
+            </tr>
+          </table>
+          <div style="height:1px;background:#e2e8f0;"></div>
+
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="padding:14px 22px 6px;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">Role</td>
+            </tr>
+            <tr>
+              <td style="padding:0 22px 14px;font-size:15px;font-weight:700;color:#1e40af;font-family:monospace;letter-spacing:0.04em;">${safeRole}</td>
+            </tr>
+          </table>
+          <div style="height:1px;background:#e2e8f0;"></div>
+
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="padding:14px 22px 6px;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">Admin Dashboard</td>
+            </tr>
+            <tr>
+              <td style="padding:0 22px 14px;font-size:13px;word-break:break-word;overflow-wrap:break-word;">
+                <a href="${safeLoginUrl}" style="color:#2563eb;text-decoration:underline;font-weight:600;">${safeLoginUrl}</a>
+              </td>
+            </tr>
+          </table>
+        </div>
+
+        <!-- ── Info Banner ── -->
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;margin:0 0 28px;">
+          <tr><td style="padding:14px 20px;">
+            <p style="margin:0;font-size:13px;color:#1e40af;"><strong>&#8505; Next Steps:</strong> Sign in to your dashboard using the credentials you set during registration. You may be asked to complete an OTP verification on your first login.</p>
+          </td></tr>
+        </table>
+
+        <!-- ── CTA Button ── -->
+        <div style="text-align:center;margin:0 0 32px;">
+          <a href="${safeLoginUrl}" style="display:inline-block;background:linear-gradient(135deg,#1e40af,#1d4ed8);color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:14px 38px;border-radius:50px;letter-spacing:0.04em;">Open Admin Dashboard &rarr;</a>
+        </div>
+
+        <!-- ── Footer ── -->
+        <div style="border-top:1px solid #e2e8f0;padding-top:20px;text-align:center;">
+          <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.6;">If you did not initiate this registration, please contact your IT administrator immediately.<br/>&copy; ${year} DwarPal &bull; ${safeCollegeName}</p>
+        </div>
+
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>`;
+
+  const text = [
+    `Welcome to DwarPal — Account Registration Received`,
+    '',
+    `Hi ${fullName},`,
+    '',
+    `Your ${role} registration has been received by the Campus Operations & IT Desk.`,
+    'Your department management workspace on DwarPal is now active.',
+    '',
+    `Admin Dashboard: ${loginUrl}`,
+    '',
+    'Sign in using the credentials you set during registration.',
+    '',
+    'If you did not initiate this registration, contact your IT administrator.'
+  ].join('\n');
+
+  return sendMail({
+    to: email,
+    subject: `Welcome to DwarPal — Your ${role} Account is Ready`,
+    html,
+    text,
+    context: 'staff-welcome'
+  });
+}
+
 
 module.exports = {
   getSmtpConfigurationWarnings,
@@ -562,5 +732,6 @@ module.exports = {
   sendPasswordResetOtpEmail,
   sendStudentLoginOtpEmail,
   sendStudentOnboardingEmail,
+  sendStaffWelcomeEmail,
   sendVerificationOtpEmail
 };
