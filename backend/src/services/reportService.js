@@ -16,8 +16,10 @@ const {
   canExportReport,
   getAdminAccessProfile,
   getApprovedByUserIds,
+  getCoordinatorScope,
   getStatusBucketFilter,
-  impossibleFilter
+  impossibleFilter,
+  isCoordinator
 } = require('../utils/adminScope');
 const { createdDateMatch, dateMatch, parseReportFilters, publicFilterSummary } = require('../utils/reportFilters');
 const AppError = require('../utils/appError');
@@ -822,6 +824,36 @@ function buildMonthlyTrend(gatepasses, facultyLeaves) {
   return Array.from(trendMap.values()).sort((left, right) => left.month.localeCompare(right.month));
 }
 
+function buildWeeklyTrend(gatepasses) {
+  const trendMap = new Map();
+  
+  // Initialize the last 8 weeks
+  for (let i = 7; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i * 7);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(d.setDate(diff));
+    const weekLabel = monday.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+    trendMap.set(weekLabel, 0);
+  }
+
+  // Fill in count data
+  gatepasses.forEach((gatepass) => {
+    const date = new Date(gatepass.outDate || gatepass.createdAt);
+    const day = date.getDay();
+    const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(date.setDate(diff));
+    const weekLabel = monday.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+
+    if (trendMap.has(weekLabel)) {
+      trendMap.set(weekLabel, trendMap.get(weekLabel) + 1);
+    }
+  });
+
+  return Array.from(trendMap.entries()).map(([week, count]) => ({ week, count }));
+}
+
 function buildInsights(studentSummaries, departmentAnalytics, gatepasses, facultySummaries) {
   const topGatepassUsers = [...studentSummaries]
     .filter((item) => item.totalGatepasses > 0)
@@ -1038,6 +1070,14 @@ function getFacultyRoleFilter() {
 async function fetchReportDataset(actor, inputFilters = {}) {
   const filters = parseReportFilters(inputFilters);
 
+  if (isCoordinator(actor)) {
+    const scope = getCoordinatorScope(actor);
+    filters.semester = scope.semester;
+    filters.department = scope.department;
+    filters.program = scope.program;
+    filters.recordPartition = 'students';
+  }
+
   if (!canExportReport(actor, filters.reportType)) {
     throw new AppError('You do not have permission to export this report.', 403);
   }
@@ -1045,11 +1085,13 @@ async function fetchReportDataset(actor, inputFilters = {}) {
   const gatepassFilter = includeGatepasses(filters.reportType, filters.recordPartition)
     ? buildGatepassFilter(filters, actor)
     : impossibleFilter();
-  const facultyLeaveFilter = includeFacultyLeaves(filters.reportType, filters.recordPartition)
+  const facultyLeaveFilter = includeFacultyLeaves(filters.reportType, filters.recordPartition) && !isCoordinator(actor)
     ? buildFacultyLeaveFilter(filters, actor)
     : impossibleFilter();
   const studentFilter = buildUserFilter(filters, actor, 'student');
-  const facultyFilter = buildUserFilter(filters, actor, getFacultyRoleFilter());
+  const facultyFilter = !isCoordinator(actor)
+    ? buildUserFilter(filters, actor, getFacultyRoleFilter())
+    : impossibleFilter();
   const gatepassPopulateFields = [
     {
       path: 'createdBy',
@@ -1071,7 +1113,7 @@ async function fetchReportDataset(actor, inputFilters = {}) {
           .limit(MAX_EXPORT_RECORDS)
           .lean()
       : [],
-    includeFacultyLeaves(filters.reportType, filters.recordPartition)
+    includeFacultyLeaves(filters.reportType, filters.recordPartition) && !isCoordinator(actor)
       ? FacultyLeaveRequest.find(facultyLeaveFilter)
           .populate([
             {
@@ -1093,11 +1135,13 @@ async function fetchReportDataset(actor, inputFilters = {}) {
       .sort({ fullName: 1 })
       .limit(MAX_EXPORT_RECORDS)
       .lean(),
-    User.find(facultyFilter)
-      .select('fullName email role department employeeId phone coordinatorAssignment coordinatorScope isCoordinator permissions')
-      .sort({ fullName: 1 })
-      .limit(MAX_EXPORT_RECORDS)
-      .lean()
+    !isCoordinator(actor)
+      ? User.find(facultyFilter)
+          .select('fullName email role department employeeId phone coordinatorAssignment coordinatorScope isCoordinator permissions')
+          .sort({ fullName: 1 })
+          .limit(MAX_EXPORT_RECORDS)
+          .lean()
+      : []
   ]);
 
   const students = filters.recordPartition === 'faculty' ? [] : rawStudents;
@@ -1167,6 +1211,20 @@ async function fetchReportDataset(actor, inputFilters = {}) {
 
 async function getReportPreview(actor, inputFilters = {}) {
   const dataset = await fetchReportDataset(actor, inputFilters);
+  const isCoord = isCoordinator(actor);
+  const activeStatuses = [
+    'approved_final',
+    'approved_by_hod',
+    'approved_by_coordinator',
+    'approved_by_cao',
+    'pending_principal',
+    'forwarded_to_hod',
+    'forwarded_to_coordinator',
+    'pending_cao',
+    'checked_out_by_security'
+  ];
+  const active = dataset.gatepasses.filter((item) => activeStatuses.includes(item.status)).length;
+  const inactive = dataset.gatepasses.filter((item) => !activeStatuses.includes(item.status)).length;
 
   return {
     access: dataset.access,
@@ -1182,7 +1240,10 @@ async function getReportPreview(actor, inputFilters = {}) {
     topStudents: dataset.insights.topGatepassUsers.slice(0, 5),
     busiestDepartment: dataset.insights.busiestDepartment,
     monthlyTrend: dataset.monthlyTrend.slice(-6),
-    empty: dataset.recordCount === 0
+    empty: dataset.recordCount === 0,
+    weeklyTrend: buildWeeklyTrend(dataset.gatepasses),
+    activeInactiveRatio: { active, inactive },
+    studentLeaderboard: isCoord ? dataset.studentSummaries : undefined
   };
 }
 
@@ -1190,8 +1251,10 @@ async function getExportRecords(actor, input = {}) {
   const dataset = await fetchReportDataset(actor, input);
   const page = Math.max(Number(input.page) || 1, 1);
   const limit = Math.min(Math.max(Number(input.limit) || 12, 1), 100);
-  const rows =
-    dataset.filters.recordPartition === 'students'
+  const isDetailed = input.detailLevel === 'detailed_only' || input.reportType === 'individual_student_history' || input.recordPartition === 'details';
+  const rows = isDetailed
+    ? dataset.detailedActivityRows
+    : dataset.filters.recordPartition === 'students'
       ? dataset.studentOverviewRows
       : dataset.filters.recordPartition === 'faculty'
         ? dataset.facultyOverviewRows

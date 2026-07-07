@@ -17,7 +17,7 @@ export default function AppBrand({
   const resolvedAlign = ALIGN_VARIANTS.has(align) ? align : 'center'
   const isStacked = resolvedLayout === 'stacked'
   const isLeftAligned = !isStacked && resolvedAlign === 'start'
-  const gapClassName = isStacked ? 'gap-2' : resolvedSize === 'sm' ? 'gap-1' : 'gap-2'
+  const gapClassName = isStacked ? 'gap-2' : resolvedSize === 'sm' ? 'gap-1' : 'gap-1.5'
   const titleSizeClassNames =
     resolvedSize === 'sm' && !isStacked
       ? ['text-base', 'md:text-lg']

@@ -22,6 +22,7 @@ import {
   Users,
   UserCheck,
   UserRoundCog,
+  XCircle,
 } from 'lucide-react'
 import AppBrand from './AppBrand'
 import StudentManagementPanel from './StudentManagementPanel'
@@ -101,6 +102,18 @@ function readAllowedReportTypes(options) {
 
 function getAdminNavItems(currentUser) {
   const isSecurity = currentUser.role === 'security'
+  const isCoord = Boolean(currentUser.isCoordinator || currentUser.coordinatorAssignment?.isCoordinator || currentUser.coordinatorScope?.isCoordinator)
+  
+  if (isCoord) {
+    return [
+      { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, to: '/admin/dashboard' },
+      { key: 'gatepasses', label: 'Gatepass Ops', icon: ClipboardList, to: '/admin/gatepasses' },
+      { key: 'reports', label: 'Reports', icon: BarChart3, to: '/admin/reports' },
+      { key: 'students', label: 'Students', icon: Users, to: '/admin/students' },
+      { key: 'export', label: 'Export Center', icon: Download, to: '/admin/export' },
+    ]
+  }
+
   const items = [
     { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, to: '/admin/dashboard' },
     { key: 'gatepasses', label: 'Gatepass Ops', icon: ClipboardList, to: '/admin/gatepasses' },
@@ -268,7 +281,10 @@ function AdminHeader({ currentUser, title, subtitle, onRefresh, refreshing, onTo
         <button
           type="button"
           className="admin-hamburger-button"
-          onClick={onToggleSidebar}
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleSidebar && onToggleSidebar()
+          }}
           aria-label="Toggle sidebar menu"
         >
           <Menu size={22} />
@@ -355,6 +371,9 @@ function ExportFilterPanel({ filters, options, onChange, onReset, lockedPartitio
   const allowedReports = readAllowedReportTypes(options)
   const filterOptions = options?.filters || {}
   const people = options?.people || {}
+  const access = options?.access || {}
+  const isCoord = Boolean(access.coordinatorScope?.isCoordinator)
+  const coordScope = access.coordinatorScope || {}
 
   return (
     <section className="admin-filter-panel">
@@ -402,14 +421,16 @@ function ExportFilterPanel({ filters, options, onChange, onReset, lockedPartitio
             />
           </>
         ) : null}
-        <FilterSelect label="Role type" value={filters.roleType} onChange={(value) => onChange('roleType', value)}>
-          <option value="">All roles</option>
-          {(filterOptions.roleTypes || []).map((item) => (
-            <option key={item} value={item}>
-              {item}
-            </option>
-          ))}
-        </FilterSelect>
+        {!isCoord && (
+          <FilterSelect label="Role type" value={filters.roleType} onChange={(value) => onChange('roleType', value)}>
+            <option value="">All roles</option>
+            {(filterOptions.roleTypes || []).map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </FilterSelect>
+        )}
         <FilterSelect label="Status" value={filters.status} onChange={(value) => onChange('status', value)}>
           <option value="">All statuses</option>
           {(filterOptions.statuses || []).map((item) => (
@@ -454,36 +475,71 @@ function ExportFilterPanel({ filters, options, onChange, onReset, lockedPartitio
           Academic and user scope
         </summary>
         <div className="admin-filter-grid">
-          <FilterSelect label="Data partition" value={filters.recordPartition} onChange={(value) => onChange('recordPartition', value)} disabled={Boolean(lockedPartition)}>
-            {(filterOptions.recordPartitions || ['students', 'faculty', 'mixed']).map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
+          {!isCoord && (
+            <FilterSelect label="Data partition" value={filters.recordPartition} onChange={(value) => onChange('recordPartition', value)} disabled={Boolean(lockedPartition)}>
+              {(filterOptions.recordPartitions || ['students', 'faculty', 'mixed']).map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </FilterSelect>
+          )}
+          <FilterSelect 
+            label="Department" 
+            value={isCoord ? coordScope.department : filters.department} 
+            onChange={(value) => onChange('department', value)}
+            disabled={isCoord}
+          >
+            {isCoord ? (
+              <option value={coordScope.department}>{coordScope.department}</option>
+            ) : (
+              <>
+                <option value="">All departments</option>
+                {(filterOptions.departments || []).map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </>
+            )}
           </FilterSelect>
-          <FilterSelect label="Department" value={filters.department} onChange={(value) => onChange('department', value)}>
-            <option value="">All departments</option>
-            {(filterOptions.departments || []).map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
+          <FilterSelect 
+            label="Program" 
+            value={isCoord ? coordScope.program : filters.program} 
+            onChange={(value) => onChange('program', value)}
+            disabled={isCoord}
+          >
+            {isCoord ? (
+              <option value={coordScope.program}>{coordScope.program}</option>
+            ) : (
+              <>
+                <option value="">All programs</option>
+                {(filterOptions.programs || []).map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </>
+            )}
           </FilterSelect>
-          <FilterSelect label="Program" value={filters.program} onChange={(value) => onChange('program', value)}>
-            <option value="">All programs</option>
-            {(filterOptions.programs || []).map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </FilterSelect>
-          <FilterSelect label="Semester" value={filters.semester} onChange={(value) => onChange('semester', value)}>
-            <option value="">All semesters</option>
-            {(filterOptions.semesters || []).map((item) => (
-              <option key={item} value={item}>
-                Semester {item}
-              </option>
-            ))}
+          <FilterSelect 
+            label="Semester" 
+            value={isCoord ? coordScope.semester : filters.semester} 
+            onChange={(value) => onChange('semester', value)}
+            disabled={isCoord}
+          >
+            {isCoord ? (
+              <option value={coordScope.semester}>Semester {coordScope.semester}</option>
+            ) : (
+              <>
+                <option value="">All semesters</option>
+                {(filterOptions.semesters || []).map((item) => (
+                  <option key={item} value={item}>
+                    Semester {item}
+                  </option>
+                ))}
+              </>
+            )}
           </FilterSelect>
           <FilterSelect label="Student" value={filters.studentId} onChange={(value) => onChange('studentId', value)}>
             <option value="">Any student</option>
@@ -493,23 +549,27 @@ function ExportFilterPanel({ filters, options, onChange, onReset, lockedPartitio
               </option>
             ))}
           </FilterSelect>
-          <FilterSelect label="Faculty" value={filters.facultyId} onChange={(value) => onChange('facultyId', value)}>
-            <option value="">Any faculty</option>
-            {(people.faculty || []).map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </FilterSelect>
+          {!isCoord && (
+            <FilterSelect label="Faculty" value={filters.facultyId} onChange={(value) => onChange('facultyId', value)}>
+              <option value="">Any faculty</option>
+              {(people.faculty || []).map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </FilterSelect>
+          )}
         </div>
-        <label className="admin-check-row">
-          <input
-            type="checkbox"
-            checked={filters.coordinatorOnly}
-            onChange={(event) => onChange('coordinatorOnly', event.target.checked)}
-          />
-          <span>Only coordinator records</span>
-        </label>
+        {!isCoord && (
+          <label className="admin-check-row">
+            <input
+              type="checkbox"
+              checked={filters.coordinatorOnly}
+              onChange={(event) => onChange('coordinatorOnly', event.target.checked)}
+            />
+            <span>Only coordinator records</span>
+          </label>
+        )}
       </details>
 
       <details className="admin-filter-section">
@@ -631,6 +691,10 @@ function RecordsPanel({
   onClearFilters,
   onClearSelection,
   onPageChange,
+  onStudentClick,
+  activeSection = 'export',
+  personSearchVal = '',
+  onSearchChange,
 }) {
   const selectedCount = Object.keys(selectedRows).length
   const selectableRows = rows.filter((row) => row.id)
@@ -642,42 +706,64 @@ function RecordsPanel({
     <section className="admin-records-panel">
       <div className="admin-panel-heading">
         <div>
-          <p className="admin-eyebrow">Admin Data Table</p>
-          <h2>Filtered records</h2>
-          <span>Search, paginate, select one row, or export mixed selected records from the current scope.</span>
+          <p className="admin-eyebrow">{activeSection === 'students' ? 'Students List' : 'Admin Data Table'}</p>
+          <h2>{activeSection === 'students' ? 'Class Student Roster' : 'Filtered records'}</h2>
+          <span>{activeSection === 'students' ? 'Click a student row to view their complete gatepass timeline.' : 'Search, paginate, select one row, or export mixed selected records from the current scope.'}</span>
         </div>
       </div>
 
-      <div className="admin-table-toolbar">
-        <div className="admin-table-selection">
-          <span className="admin-selection-count">{formatMetric(selectedCount)} selected</span>
-          {selectedCount ? (
-            <button type="button" className="admin-text-button" onClick={onClearSelection}>
-              Clear selection
+      {activeSection !== 'students' && (
+        <div className="admin-table-toolbar" style={{ flexWrap: 'wrap', gap: '1rem' }}>
+          {activeSection === 'students' && onSearchChange && (
+            <div className="admin-search-wrapper" style={{ position: 'relative', minWidth: '280px' }}>
+              <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--app-shell-muted)' }} />
+              <input
+                type="text"
+                placeholder="Search students..."
+                value={personSearchVal}
+                onChange={(e) => onSearchChange(e.target.value)}
+                style={{
+                  paddingLeft: '32px',
+                  height: '2.2rem',
+                  width: '100%',
+                  borderRadius: '6px',
+                  border: '1px solid var(--control-border)',
+                  background: 'var(--app-surface)',
+                  color: 'var(--app-shell-text)'
+                }}
+              />
+            </div>
+          )}
+          <div className="admin-table-selection" style={{ marginLeft: activeSection === 'students' ? '0' : 'auto' }}>
+            <span className="admin-selection-count">{formatMetric(selectedCount)} selected</span>
+            {selectedCount ? (
+              <button type="button" className="admin-text-button" onClick={onClearSelection}>
+                Clear selection
+              </button>
+            ) : null}
+          </div>
+          <div className="admin-inline-actions" style={{ marginLeft: activeSection === 'students' ? 'auto' : '0' }}>
+            <button
+              type="button"
+              className="admin-primary-button inline"
+              onClick={() => onExport('selected')}
+              disabled={!selectedCount || exportBusy}
+            >
+              <Download size={16} />
+              <span>{exportBusy ? 'Generating...' : `Export Selected ${formatLabel}`}</span>
             </button>
-          ) : null}
+            <button type="button" className="admin-secondary-link" onClick={() => onExport('filtered')} disabled={exportBusy}>
+              Export Filtered
+            </button>
+            <button type="button" className="admin-secondary-link" onClick={() => onExport('bulk')} disabled={exportBusy}>
+              Export Full Data
+            </button>
+            <button type="button" className="admin-text-button" onClick={onClearFilters}>
+              Clear filters
+            </button>
+          </div>
         </div>
-        <div className="admin-inline-actions">
-          <button
-            type="button"
-            className="admin-primary-button inline"
-            onClick={() => onExport('selected')}
-            disabled={!selectedCount || exportBusy}
-          >
-            <Download size={16} />
-            <span>{exportBusy ? 'Generating...' : `Export Selected ${formatLabel}`}</span>
-          </button>
-          <button type="button" className="admin-secondary-link" onClick={() => onExport('filtered')} disabled={exportBusy}>
-            Export Filtered
-          </button>
-          <button type="button" className="admin-secondary-link" onClick={() => onExport('bulk')} disabled={exportBusy}>
-            Export Full Data
-          </button>
-          <button type="button" className="admin-text-button" onClick={onClearFilters}>
-            Clear filters
-          </button>
-        </div>
-      </div>
+      )}
 
       {loading ? (
         <div className="admin-empty-state">Loading records...</div>
@@ -687,34 +773,53 @@ function RecordsPanel({
             <table className="admin-table admin-record-table">
               <thead>
                 <tr>
-                  <th>
-                    <input type="checkbox" checked={allVisibleSelected} onChange={(event) => onToggleAllVisible(event.target.checked)} />
-                  </th>
+                  {activeSection !== 'students' && (
+                    <th>
+                      <input type="checkbox" checked={allVisibleSelected} onChange={(event) => onToggleAllVisible(event.target.checked)} />
+                    </th>
+                  )}
                   <th>Name</th>
                   <th>ID</th>
-                  <th>User Type</th>
-                  <th>Department</th>
-                  <th>Program / Semester</th>
-                  <th>Contact</th>
+                  <th className="col-user-type">User Type</th>
+                  <th className="col-dept">Department</th>
+                  <th className="col-prog-sem">Program / Semester</th>
+                  <th className="col-contact">Contact</th>
                   <th>Total</th>
                   <th>Approved</th>
-                  <th>Rejected</th>
-                  <th>Pending</th>
-                  <th>Out / Returned</th>
-                  <th>Last Activity</th>
+                  <th className="col-rejected">Rejected</th>
+                  <th className="col-pending">Pending</th>
+                  <th className="col-out-ret">Out / Returned</th>
+                  <th className="col-last-act">Last Activity</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
-                  <tr key={row.rowKey}>
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={Boolean(selectedRows[row.rowKey])}
-                        disabled={!row.id}
-                        onChange={() => onToggleRow(row)}
-                      />
-                    </td>
+                {rows.map((row) => {
+                  const handleRowClick = (event) => {
+                    if (event.target.type === 'checkbox' || event.target.closest('td:first-child')) {
+                      if (activeSection !== 'students') return
+                    }
+                    if (row.userType === 'student' && onStudentClick) {
+                      onStudentClick(row)
+                    }
+                  }
+                  
+                  return (
+                    <tr 
+                      key={row.rowKey} 
+                      onClick={handleRowClick}
+                      style={{ cursor: row.userType === 'student' ? 'pointer' : 'default' }}
+                      className={row.userType === 'student' ? 'interactive-row' : ''}
+                    >
+                      {activeSection !== 'students' && (
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={Boolean(selectedRows[row.rowKey])}
+                            disabled={!row.id}
+                            onChange={() => onToggleRow(row)}
+                          />
+                        </td>
+                      )}
                     <td>
                       <div className="admin-record-primary">
                         <strong>{row.name}</strong>
@@ -724,20 +829,21 @@ function RecordsPanel({
                     <td>
                       <span className="admin-record-badge">{row.primaryId || 'Not available'}</span>
                     </td>
-                    <td>
+                    <td className="col-user-type">
                       <span className="admin-record-type">{[row.userType, row.roleType].filter(Boolean).join(' / ')}</span>
                     </td>
-                    <td>{row.department || 'All departments'}</td>
-                    <td>{[row.program, row.semester ? `Sem ${row.semester}` : ''].filter(Boolean).join(' | ') || 'Not applicable'}</td>
-                    <td>{[row.phone, row.email].filter(Boolean).join(' | ') || 'Not available'}</td>
+                    <td className="col-dept">{row.department || 'All departments'}</td>
+                    <td className="col-prog-sem">{[row.program, row.semester ? `Sem ${row.semester}` : ''].filter(Boolean).join(' | ') || 'Not applicable'}</td>
+                    <td className="col-contact">{[row.phone, row.email].filter(Boolean).join(' | ') || 'Not available'}</td>
                     <td>{formatMetric(row.totalRequests)}</td>
                     <td>{formatMetric(row.approvedCount)}</td>
-                    <td>{formatMetric(row.rejectedCount)}</td>
-                    <td>{formatMetric(row.pendingCount)}</td>
-                    <td>{`${formatMetric(row.outCount)} / ${formatMetric(row.returnedCount)}`}</td>
-                    <td>{formatDateTime(row.lastActivityAt)}</td>
+                    <td className="col-rejected">{formatMetric(row.rejectedCount)}</td>
+                    <td className="col-pending">{formatMetric(row.pendingCount)}</td>
+                    <td className="col-out-ret">{`${formatMetric(row.outCount)} / ${formatMetric(row.returnedCount)}`}</td>
+                    <td className="col-last-act">{formatDateTime(row.lastActivityAt)}</td>
                   </tr>
-                ))}
+                );
+              })}
               </tbody>
             </table>
           </div>
@@ -812,80 +918,527 @@ function HistoryPanel({ history, loading, onRefresh }) {
   )
 }
 
-function DashboardOverview({ preview, options }) {
+function DashboardOverview({ preview, options, currentUser, onStudentClick }) {
   const summary = preview?.summary || {}
   const access = options?.access || preview?.access || {}
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const isCoord = Boolean(currentUser?.isCoordinator || currentUser?.coordinatorAssignment?.isCoordinator || currentUser?.coordinatorScope?.isCoordinator)
+  const studentLeaderboard = preview?.studentLeaderboard || []
+
+  const sortedLeaderboard = useMemo(() => {
+    return [...studentLeaderboard].sort((a, b) => (b.totalGatepasses || 0) - (a.totalGatepasses || 0))
+  }, [studentLeaderboard])
+
+  const filteredLeaderboard = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim()
+    if (!q) return sortedLeaderboard
+    return sortedLeaderboard.filter((s) => 
+      String(s.name || '').toLowerCase().includes(q) || 
+      String(s.enrollmentNo || '').toLowerCase().includes(q)
+    )
+  }, [sortedLeaderboard, searchQuery])
 
   return (
     <div className="admin-page-stack">
       <div className="admin-stat-grid">
-        <StatCard label="Detailed Records" value={preview?.recordCount} icon={ClipboardList} />
+        <StatCard label="Total Gatepasses" value={preview?.recordCount || summary.totalGatepasses} icon={ClipboardList} />
         <StatCard label="Approved" value={summary.totalApproved} icon={ShieldCheck} tone="success" />
         <StatCard label="Pending" value={summary.totalPending} icon={History} tone="warning" />
-        <StatCard label="Faculty Requests" value={summary.totalFacultyRequests} icon={UserRoundCog} />
+        {isCoord ? (
+          <StatCard label="Rejected" value={summary.totalRejected} icon={XCircle} tone="danger" />
+        ) : (
+          <StatCard label="Faculty Requests" value={summary.totalFacultyRequests} icon={UserRoundCog} />
+        )}
       </div>
-      <section className="admin-wide-panel">
-        <div className="admin-panel-heading">
-          <div>
-            <p className="admin-eyebrow">Access Scope</p>
-            <h2>{access.scopeType || 'admin'} access</h2>
+      
+      {isCoord ? (
+        <section className="admin-wide-panel" style={{ padding: '1.25rem' }}>
+          <div className="admin-panel-heading" style={{ flexWrap: 'wrap', gap: '1rem', alignItems: 'center' }}>
+            <div>
+              <p className="admin-eyebrow">Student Leaderboard</p>
+              <h2>Class Student List</h2>
+              <span>All students in your assigned class sorted by number of gatepasses taken. Click a student to view their history.</span>
+            </div>
+            <div className="admin-search-wrapper" style={{ position: 'relative', minWidth: '280px', marginLeft: 'auto' }}>
+              <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--app-shell-muted)' }} />
+              <input
+                type="text"
+                placeholder="Search student or enrollment..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  paddingLeft: '32px',
+                  height: '2.45rem',
+                  width: '100%',
+                  borderRadius: '6px',
+                  border: '1px solid var(--control-border)',
+                  background: 'var(--app-surface)',
+                  color: 'var(--app-shell-text)'
+                }}
+              />
+            </div>
           </div>
-          <Link className="admin-text-button" to="/admin/export">
-            Open Export Center
-          </Link>
+          <div className="admin-table-wrap" style={{ maxHeight: '350px', overflowY: 'auto', marginTop: '1rem' }}>
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Enrollment Number</th>
+                  <th style={{ textAlign: 'right' }}>Total Gatepasses</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredLeaderboard.length ? (
+                  filteredLeaderboard.map((student) => (
+                    <tr 
+                      key={student.user?._id || student.enrollmentNo} 
+                      onClick={() => onStudentClick && onStudentClick(student)}
+                      style={{ cursor: 'pointer' }}
+                      className="leaderboard-row"
+                    >
+                      <td>
+                        <strong style={{ color: 'var(--app-shell-text)' }}>{student.name}</strong>
+                      </td>
+                      <td>{student.enrollmentNo}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{student.totalGatepasses}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={3} style={{ textAlign: 'center', padding: '2rem', color: 'var(--app-shell-muted)' }}>
+                      No students found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : (
+        <section className="admin-wide-panel">
+          <div className="admin-panel-heading">
+            <div>
+              <p className="admin-eyebrow">Access Scope</p>
+              <h2>{access.scopeType || 'admin'} access</h2>
+            </div>
+            <Link className="admin-text-button" to="/admin/export">
+              Open Export Center
+            </Link>
+          </div>
+          <div className="admin-info-grid">
+            <span>Role</span>
+            <strong>{access.role || 'admin'}</strong>
+            <span>Department</span>
+            <strong>{access.department || 'All departments'}</strong>
+            <span>Export Scope</span>
+            <strong>{access.scopeType || 'role scoped'}</strong>
+          </div>
+        </section>
+      )}
+    </div>
+  )
+}
+
+function StudentDetailModal({ student, onClose }) {
+  const [gatepasses, setGatepasses] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const studentId = student?.id || student?.user?._id
+    if (!studentId) return
+
+    setLoading(true)
+    setError('')
+    fetchAdminExportRecords({
+      studentId,
+      recordPartition: 'students',
+      reportType: 'individual_student_history',
+      detailLevel: 'detailed_only'
+    })
+      .then((res) => {
+        setGatepasses(res.rows || [])
+      })
+      .catch((err) => {
+        console.error(err)
+        setError('Failed to fetch gatepass history.')
+      })
+      .finally(() => {
+        setLoading(false)
+      })
+  }, [student])
+
+  if (!student) return null
+
+  return (
+    <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }} onClick={onClose}>
+      <div className="admin-wide-panel" style={{ width: '100%', maxWidth: '720px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '1.5rem', background: 'var(--app-surface)', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)', borderRadius: '12px' }} onClick={(e) => e.stopPropagation()}>
+        
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--app-surface-border)', paddingBottom: '1rem', marginBottom: '1rem' }}>
+          <div>
+            <p className="admin-eyebrow" style={{ margin: 0 }}>Student Profile & History</p>
+            <h2 style={{ margin: '0.2rem 0 0 0', fontSize: '1.5rem', color: 'var(--app-shell-text)' }}>{student.name}</h2>
+            <span style={{ fontSize: '0.85rem', color: 'var(--app-shell-muted)' }}>
+              {student.enrollmentNo || student.primaryId} | {student.program} {student.semester ? `Semester ${student.semester}` : ''} ({student.department})
+            </span>
+          </div>
+          <button type="button" className="admin-text-button" style={{ fontSize: '1.5rem', padding: '0.25rem 0.5rem', lineHeight: '1', border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--app-shell-muted)' }} onClick={onClose}>&times;</button>
         </div>
-        <div className="admin-info-grid">
-          <span>Role</span>
-          <strong>{access.role || 'admin'}</strong>
-          <span>Department</span>
-          <strong>{access.department || 'All departments'}</strong>
-          <span>Export Scope</span>
-          <strong>{access.scopeType || 'role scoped'}</strong>
+
+        {/* Info Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
+          <div style={{ padding: '0.75rem', borderRadius: '6px', background: 'var(--app-shell-bg, #F8FAFC)', border: '1px solid var(--app-surface-border)' }}>
+            <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.75rem', color: 'var(--app-shell-muted)' }}>Contact Details</p>
+            <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 600 }}>Email: {student.email || 'N/A'}</p>
+            <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 600 }}>Phone: {student.phone || 'N/A'}</p>
+          </div>
+          <div style={{ padding: '0.75rem', borderRadius: '6px', background: 'var(--app-shell-bg, #F8FAFC)', border: '1px solid var(--app-surface-border)' }}>
+            <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.75rem', color: 'var(--app-shell-muted)' }}>Summary Stats</p>
+            <div style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap', fontSize: '0.8rem' }}>
+              <span>Total: <strong>{student.totalGatepasses || student.totalRequests || 0}</strong></span>
+              <span style={{ color: '#10B981' }}>Approved: <strong>{student.approvedCount || 0}</strong></span>
+              <span style={{ color: '#F59E0B' }}>Pending: <strong>{student.pendingCount || 0}</strong></span>
+              <span style={{ color: '#EF4444' }}>Rejected: <strong>{student.rejectedCount || 0}</strong></span>
+            </div>
+          </div>
         </div>
-      </section>
+
+        {/* Gatepass Timeline list */}
+        <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '1.1rem', color: 'var(--app-shell-text)' }}>Gatepass History Log</h3>
+        
+        <div style={{ flex: 1, overflowY: 'auto', paddingRight: '0.5rem', minHeight: '200px' }}>
+          {loading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem', color: 'var(--app-shell-muted)' }}>Loading gatepass timeline...</div>
+          ) : error ? (
+            <div style={{ color: 'var(--danger)', padding: '1rem', textAlign: 'center' }}>{error}</div>
+          ) : gatepasses.length ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {gatepasses.map((gp, idx) => (
+                <div key={gp.rowKey || idx} style={{ padding: '1rem', borderRadius: '8px', border: '1px solid var(--app-surface-border)', background: 'var(--app-surface)', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <span style={{ fontWeight: 'bold', fontSize: '0.9rem', color: 'var(--app-shell-text)' }}>
+                      #{gp.requestNumber || 'Gatepass'}
+                    </span>
+                    <span className={`status-badge ${gp.approvalStatus === 'completed' ? 'approved' : gp.approvalStatus === 'checked_out_by_security' ? 'out' : gp.approvalStatus.startsWith('rejected') ? 'rejected' : 'pending'}`}>
+                      {gp.approvalStatus?.replace(/_/g, ' ') || 'Pending'}
+                    </span>
+                  </div>
+                  
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--app-shell-muted)' }}>
+                    <div>
+                      <strong>Departure:</strong> {formatDateTime(gp.gatepassDate)}
+                    </div>
+                    <div>
+                      <strong>Expected Return:</strong> {gp.returnTime || 'N/A'}
+                    </div>
+                    {gp.actualReturnTime && (
+                      <div>
+                        <strong>Returned At:</strong> {formatDateTime(gp.actualReturnTime)}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', borderTop: '1px solid var(--app-surface-border)', paddingTop: '0.5rem' }}>
+                    <p style={{ margin: '0 0 0.25rem 0' }}><strong>Reason:</strong> {gp.reason}</p>
+                    <p style={{ margin: '0 0 0.25rem 0' }}><strong>Destination:</strong> {gp.destination || 'N/A'} {gp.vehicleNumber ? `| Vehicle: ${gp.vehicleNumber}` : ''}</p>
+                    {gp.rejectionReason && (
+                      <p style={{ margin: 0, color: 'var(--danger)' }}><strong>Rejection Comment:</strong> {gp.rejectionReason}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem', color: 'var(--app-shell-muted)' }}>No gatepasses found.</div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{ marginTop: '1rem', borderTop: '1px solid var(--app-surface-border)', paddingTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
+          <button type="button" className="admin-primary-button inline" onClick={onClose}>Close Profile</button>
+        </div>
+        
+      </div>
+    </div>
+  )
+}
+
+function SvgPieChart({ data, size = 180 }) {
+  const total = data.reduce((sum, item) => sum + item.value, 0)
+  
+  if (total === 0) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', margin: 'auto' }}>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+          <circle cx={size / 2} cy={size / 2} r={size / 2.5} fill="var(--app-surface-border, #E5E7EB)" />
+        </svg>
+        <span style={{ fontSize: '0.85rem', color: 'var(--app-shell-muted)' }}>No data available</span>
+      </div>
+    )
+  }
+  
+  let accumulatedAngle = -90
+  const radius = size / 3
+  const cx = size / 2
+  const cy = size / 2
+  
+  const slices = data.map((item) => {
+    if (item.value === 0) return null
+    const percentage = item.value / total
+    const angle = percentage * 360
+    
+    const startAngleRad = (accumulatedAngle * Math.PI) / 180
+    const endAngleRad = ((accumulatedAngle + angle) * Math.PI) / 180
+    
+    const x1 = cx + radius * Math.cos(startAngleRad)
+    const y1 = cy + radius * Math.sin(startAngleRad)
+    const x2 = cx + radius * Math.cos(endAngleRad)
+    const y2 = cy + radius * Math.sin(endAngleRad)
+    
+    const largeArcFlag = angle > 180 ? 1 : 0
+    
+    const pathData = [
+      `M ${cx} ${cy}`,
+      `L ${x1} ${y1}`,
+      `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2}`,
+      'Z'
+    ].join(' ')
+    
+    accumulatedAngle += angle
+    
+    return {
+      pathData,
+      color: item.color,
+      label: item.label,
+      value: item.value,
+      percentage: (percentage * 100).toFixed(1)
+    }
+  }).filter(Boolean)
+  
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: '1.5rem', width: '100%' }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        {slices.map((slice, i) => (
+          <path
+            key={i}
+            d={slice.pathData}
+            fill={slice.color}
+            style={{ transition: 'opacity 0.2s', cursor: 'pointer' }}
+            title={`${slice.label}: ${slice.value} (${slice.percentage}%)`}
+          />
+        ))}
+        <circle cx={cx} cy={cy} r={radius * 0.5} fill="var(--app-surface, #ffffff)" />
+      </svg>
+      
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', minWidth: '120px' }}>
+        {data.map((item, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
+            <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '3px', backgroundColor: item.color }} />
+            <span style={{ color: 'var(--app-shell-text)' }}>{item.label}</span>
+            <strong style={{ marginLeft: 'auto', color: 'var(--app-shell-muted)' }}>
+              {item.value} ({total > 0 ? ((item.value / total) * 100).toFixed(0) : 0}%)
+            </strong>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function SvgLineChart({ data, width = 360, height = 180 }) {
+  if (!data || data.length === 0) {
+    return <span style={{ fontSize: '0.85rem', color: 'var(--app-shell-muted)', margin: 'auto' }}>No trend data available</span>
+  }
+  
+  const counts = data.map((d) => d.count)
+  const maxCount = Math.max(...counts, 5)
+  
+  const paddingLeft = 35
+  const paddingRight = 15
+  const paddingTop = 15
+  const paddingBottom = 25
+  
+  const chartWidth = width - paddingLeft - paddingRight
+  const chartHeight = height - paddingTop - paddingBottom
+  
+  const pointsCount = data.length
+  const stepX = pointsCount > 1 ? chartWidth / (pointsCount - 1) : chartWidth
+  
+  const points = data.map((d, i) => {
+    const x = paddingLeft + i * stepX
+    const y = paddingTop + chartHeight - (d.count / maxCount) * chartHeight
+    return { x, y, label: d.week, count: d.count }
+  })
+  
+  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+  const areaPath = points.length > 0 
+    ? `${linePath} L ${points[points.length - 1].x} ${paddingTop + chartHeight} L ${points[0].x} ${paddingTop + chartHeight} Z`
+    : ''
+    
+  const gridLinesCount = 4
+  const gridLines = Array.from({ length: gridLinesCount + 1 }).map((_, i) => {
+    const y = paddingTop + (i / gridLinesCount) * chartHeight
+    const value = Math.round(maxCount - (i / gridLinesCount) * maxCount)
+    return { y, value }
+  })
+  
+  return (
+    <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} style={{ overflow: 'visible' }}>
+      <defs>
+        <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.3" />
+          <stop offset="100%" stopColor="#3B82F6" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      
+      {gridLines.map((line, i) => (
+        <g key={i}>
+          <line
+            x1={paddingLeft}
+            y1={line.y}
+            x2={width - paddingRight}
+            y2={line.y}
+            stroke="var(--app-surface-border, #E5E7EB)"
+            strokeWidth={1}
+            strokeDasharray="3,3"
+          />
+          <text
+            x={paddingLeft - 8}
+            y={line.y + 3}
+            textAnchor="end"
+            fontSize="8"
+            fill="var(--app-shell-muted, #9CA3AF)"
+          >
+            {line.value}
+          </text>
+        </g>
+      ))}
+      
+      {areaPath && <path d={areaPath} fill="url(#chartGradient)" />}
+      
+      {linePath && (
+        <path
+          d={linePath}
+          fill="none"
+          stroke="#3B82F6"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      )}
+      
+      {points.map((p, i) => (
+        <g key={i}>
+          <circle
+            cx={p.x}
+            cy={p.y}
+            r={3.5}
+            fill="#ffffff"
+            stroke="#3B82F6"
+            strokeWidth={2}
+            style={{ cursor: 'pointer' }}
+          />
+          <text
+            x={p.x}
+            y={p.y - 8}
+            textAnchor="middle"
+            fontSize="7"
+            fontWeight="bold"
+            fill="#2563EB"
+          >
+            {p.count}
+          </text>
+          <text
+            x={p.x}
+            y={height - 8}
+            textAnchor="middle"
+            fontSize="8"
+            fill="var(--app-shell-muted, #9CA3AF)"
+          >
+            {p.label}
+          </text>
+        </g>
+      ))}
+    </svg>
+  )
+}
+
+function GatepassOpsPage({ preview }) {
+  const summary = preview?.summary || {}
+  
+  const data = [
+    { label: 'Approved', value: summary.totalApproved || 0, color: '#10B981' },
+    { label: 'Pending', value: summary.totalPending || 0, color: '#F59E0B' },
+    { label: 'Rejected', value: summary.totalRejected || 0, color: '#EF4444' },
+    { label: 'Out', value: summary.totalOut || 0, color: '#3B82F6' },
+    { label: 'Returned', value: summary.totalReturned || 0, color: '#6B7280' },
+  ]
+  
+  return (
+    <div className="admin-page-stack">
+      <div className="gatepass-ops-layout" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem' }}>
+        <div className="admin-page-stack">
+          <div className="admin-stat-grid" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.75rem' }}>
+            <StatCard label="Total" value={summary.totalGatepasses} icon={ClipboardList} />
+            <StatCard label="Approved" value={summary.totalApproved} icon={ShieldCheck} tone="success" />
+            <StatCard label="Pending" value={summary.totalPending} icon={History} tone="warning" />
+            <StatCard label="Rejected" value={summary.totalRejected} icon={XCircle} tone="danger" />
+            <StatCard label="Out" value={summary.totalOut} icon={ClipboardList} />
+            <StatCard label="Return" value={summary.totalReturned} icon={History} />
+          </div>
+        </div>
+        
+        <section className="admin-wide-panel" style={{ padding: '1.2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <h3 style={{ margin: '0 0 1rem 0', alignSelf: 'flex-start' }}>Status Distribution</h3>
+          <SvgPieChart data={data} size={180} />
+        </section>
+      </div>
     </div>
   )
 }
 
 function ReportsPage({ preview }) {
-  const summary = preview?.summary || {}
+  const weeklyTrend = preview?.weeklyTrend || []
+  const activeInactiveRatio = preview?.activeInactiveRatio || { active: 0, inactive: 0 }
+  
+  const pieData = [
+    { label: 'Active', value: activeInactiveRatio.active || 0, color: '#3B82F6' },
+    { label: 'Inactive / Completed', value: activeInactiveRatio.inactive || 0, color: '#9CA3AF' }
+  ]
+  
   return (
     <div className="admin-page-stack">
-      <section className="admin-wide-panel">
-        <div className="admin-panel-heading">
-          <div>
-            <p className="admin-eyebrow">Current Snapshot</p>
-            <h2>Operational report summary</h2>
-          </div>
-          <Link className="admin-text-button" to="/admin/export">
-            Build detailed export
-          </Link>
-        </div>
-        <div className="admin-stat-grid compact">
-          <StatCard label="Approved" value={summary.totalApproved} icon={ShieldCheck} tone="success" />
-          <StatCard label="Rejected" value={summary.totalRejected} icon={FileText} tone="danger" />
-          <StatCard label="Out" value={summary.totalOut} icon={ClipboardList} />
-          <StatCard label="Returned" value={summary.totalReturned} icon={History} />
-        </div>
-      </section>
-      <section className="admin-wide-panel">
-        <div className="admin-panel-heading">
-          <div>
-            <p className="admin-eyebrow">Trend</p>
-            <h2>Recent monthly activity</h2>
-          </div>
-        </div>
-        <div className="admin-trend-list">
-          {(preview?.monthlyTrend || []).map((item) => (
-            <div key={item.month} className="admin-trend-row">
-              <strong>{item.month}</strong>
-              <span>Students {formatMetric(item.studentGatepasses)}</span>
-              <span>Faculty {formatMetric(item.facultyGatepasses)}</span>
-              <span>Leave {formatMetric(item.leaveRequests)}</span>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.2rem' }}>
+        
+        <section className="admin-wide-panel" style={{ padding: '1.2rem', display: 'flex', flexDirection: 'column' }}>
+          <div className="admin-panel-heading">
+            <div>
+              <p className="admin-eyebrow">Trends</p>
+              <h2>Weekly Gatepass Activity</h2>
+              <span>Weekly volume of gatepasses issued over the last 8 weeks.</span>
             </div>
-          ))}
-        </div>
-      </section>
+          </div>
+          <div style={{ flex: 1, minHeight: '220px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '1rem' }}>
+            <SvgLineChart data={weeklyTrend} />
+          </div>
+        </section>
+        
+        <section className="admin-wide-panel" style={{ padding: '1.2rem', display: 'flex', flexDirection: 'column' }}>
+          <div className="admin-panel-heading">
+            <div>
+              <p className="admin-eyebrow">Distribution</p>
+              <h2>Active vs Inactive</h2>
+              <span>Ratio of active (in progress/out) vs inactive (completed/rejected/cancelled) gatepasses.</span>
+            </div>
+          </div>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '1rem' }}>
+            <SvgPieChart data={pieData} size={180} />
+          </div>
+        </section>
+        
+      </div>
     </div>
   )
 }
@@ -937,6 +1490,7 @@ function ExportWorkspace({
   onToggleAllVisible,
   onClearSelection,
   onPageChange,
+  onStudentClick,
 }) {
   const lockedPartition = getSectionFilterOverrides(activeSection).recordPartition || ''
   const partitionOptions = lockedPartition
@@ -957,38 +1511,45 @@ function ExportWorkspace({
         { value: 'mixed', label: 'Mixed / Combined' },
       ]
 
+  const isCoord = Boolean(options?.access?.isCoordinator || options?.access?.scopeType === 'class scoped')
+  const isStudentsSectionCoord = activeSection === 'students' && isCoord
+
   return (
     <div className="admin-export-page">
-      <section className="admin-wide-panel admin-toolbar-panel">
-        <div className="admin-panel-heading">
-          <div>
-            <p className="admin-eyebrow">Export Data</p>
-            <h2>Students, faculty, mixed, selected, filtered, and bulk exports</h2>
-          </div>
-        </div>
-        <div className="admin-toolbar-grid">
-          <SectionTabs
-            title="Partition"
-            value={filters.recordPartition}
-            locked={Boolean(lockedPartition)}
-            onChange={(value) => onFilterChange('recordPartition', value)}
-            options={partitionOptions}
-          />
-          <SectionTabs title="Format" value={exportFormat} onChange={onExportFormatChange} options={FORMAT_TABS} />
-          <SectionTabs title="Detail" value={filters.detailLevel} onChange={(value) => onFilterChange('detailLevel', value)} options={DETAIL_LEVEL_OPTIONS} />
-        </div>
-      </section>
+      {!isStudentsSectionCoord && (
+        <>
+          <section className="admin-wide-panel admin-toolbar-panel">
+            <div className="admin-panel-heading">
+              <div>
+                <p className="admin-eyebrow">Export Data</p>
+                <h2>Students, faculty, mixed, selected, filtered, and bulk exports</h2>
+              </div>
+            </div>
+            <div className="admin-toolbar-grid">
+              <SectionTabs
+                title="Partition"
+                value={filters.recordPartition}
+                locked={Boolean(lockedPartition)}
+                onChange={(value) => onFilterChange('recordPartition', value)}
+                options={partitionOptions}
+              />
+              <SectionTabs title="Format" value={exportFormat} onChange={onExportFormatChange} options={FORMAT_TABS} />
+              <SectionTabs title="Detail" value={filters.detailLevel} onChange={(value) => onFilterChange('detailLevel', value)} options={DETAIL_LEVEL_OPTIONS} />
+            </div>
+          </section>
 
-      <div className="admin-export-grid">
-        <ExportFilterPanel
-          filters={filters}
-          options={options}
-          onChange={onFilterChange}
-          onReset={onResetFilters}
-          lockedPartition={lockedPartition}
-        />
-        <PreviewPanel preview={preview} loading={previewLoading} error={previewError} selectedCount={Object.keys(selectedRows).length} />
-      </div>
+          <div className="admin-export-grid">
+            <ExportFilterPanel
+              filters={filters}
+              options={options}
+              onChange={onFilterChange}
+              onReset={onResetFilters}
+              lockedPartition={lockedPartition}
+            />
+            <PreviewPanel preview={preview} loading={previewLoading} error={previewError} selectedCount={Object.keys(selectedRows).length} />
+          </div>
+        </>
+      )}
 
       <RecordsPanel
         rows={records}
@@ -1003,6 +1564,10 @@ function ExportWorkspace({
         onClearFilters={onResetFilters}
         onClearSelection={onClearSelection}
         onPageChange={onPageChange}
+        onStudentClick={onStudentClick}
+        activeSection={activeSection}
+        personSearchVal={filters.personSearch || ''}
+        onSearchChange={(val) => onFilterChange('personSearch', val)}
       />
     </div>
   )
@@ -1013,6 +1578,16 @@ export default function AdminPortal({ currentUser, onLogout, onOpenSupport = nul
   const navigate = useNavigate()
   const toast = useToast()
   const activeSection = getAdminSection(location.pathname)
+  const isCoord = useMemo(() => {
+    return Boolean(currentUser.isCoordinator || currentUser.coordinatorAssignment?.isCoordinator || currentUser.coordinatorScope?.isCoordinator)
+  }, [currentUser])
+
+  useEffect(() => {
+    if (isCoord && ['faculty', 'coordinators', 'settings', 'history'].includes(activeSection)) {
+      navigate('/admin/dashboard', { replace: true })
+    }
+  }, [activeSection, isCoord, navigate])
+
   const showStudentManagement = activeSection === 'students' && currentUser.role === 'cao'
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [options, setOptions] = useState(null)
@@ -1031,6 +1606,7 @@ export default function AdminPortal({ currentUser, onLogout, onOpenSupport = nul
   const [recordsPage, setRecordsPage] = useState(1)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [selectedStudentForModal, setSelectedStudentForModal] = useState(null)
 
   const effectiveFilters = useMemo(() => applySectionFilters(filters, activeSection), [filters, activeSection])
   const requestFilters = useMemo(() => buildFiltersForRequest(effectiveFilters), [effectiveFilters])
@@ -1282,9 +1858,18 @@ export default function AdminPortal({ currentUser, onLogout, onOpenSupport = nul
 
         {activeSection === 'history' ? <HistoryPanel history={history} loading={historyLoading} onRefresh={loadHistory} /> : null}
 
-        {activeSection === 'dashboard' ? <DashboardOverview preview={preview} options={options} /> : null}
+        {activeSection === 'dashboard' ? (
+          <DashboardOverview
+            preview={preview}
+            options={options}
+            currentUser={currentUser}
+            onStudentClick={(student) => setSelectedStudentForModal(student)}
+          />
+        ) : null}
 
-        {activeSection === 'reports' || activeSection === 'gatepasses' ? <ReportsPage preview={preview} /> : null}
+        {activeSection === 'gatepasses' ? <GatepassOpsPage preview={preview} /> : null}
+
+        {activeSection === 'reports' ? <ReportsPage preview={preview} /> : null}
 
         {showStudentManagement ? <StudentManagementPanel /> : null}
 
@@ -1312,6 +1897,14 @@ export default function AdminPortal({ currentUser, onLogout, onOpenSupport = nul
             onToggleAllVisible={handleToggleAllVisible}
             onClearSelection={handleClearSelection}
             onPageChange={setRecordsPage}
+            onStudentClick={(student) => setSelectedStudentForModal(student)}
+          />
+        ) : null}
+
+        {selectedStudentForModal ? (
+          <StudentDetailModal
+            student={selectedStudentForModal}
+            onClose={() => setSelectedStudentForModal(null)}
           />
         ) : null}
       </main>

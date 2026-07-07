@@ -237,6 +237,176 @@ function addUserSections(doc, dataset) {
   });
 }
 
+function buildWeeklyTrend(gatepasses) {
+  const trendMap = new Map();
+  for (let i = 7; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i * 7);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(d.setDate(diff));
+    const weekLabel = monday.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+    trendMap.set(weekLabel, 0);
+  }
+
+  gatepasses.forEach((gatepass) => {
+    const date = new Date(gatepass.outDate || gatepass.createdAt);
+    const day = date.getDay();
+    const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(date.setDate(diff));
+    const weekLabel = monday.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+
+    if (trendMap.has(weekLabel)) {
+      trendMap.set(weekLabel, trendMap.get(weekLabel) + 1);
+    }
+  });
+
+  return Array.from(trendMap.entries()).map(([week, count]) => ({ week, count }));
+}
+
+function drawPdfPieChart(doc, cx, cy, radius, data) {
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  if (total === 0) {
+    doc.fillColor('#E5E7EB').circle(cx, cy, radius).fill();
+    return;
+  }
+  
+  let accumulatedAngle = -90;
+  
+  data.forEach((item) => {
+    if (item.value === 0) return;
+    const percentage = item.value / total;
+    const angle = percentage * 360;
+    
+    const startAngleRad = (accumulatedAngle * Math.PI) / 180;
+    const endAngleRad = ((accumulatedAngle + angle) * Math.PI) / 180;
+    
+    const x1 = cx + radius * Math.cos(startAngleRad);
+    const y1 = cy + radius * Math.sin(startAngleRad);
+    
+    doc.fillColor(item.color)
+       .moveTo(cx, cy)
+       .lineTo(x1, y1)
+       .arc(cx, cy, radius, startAngleRad, endAngleRad, false)
+       .fill();
+       
+    accumulatedAngle += angle;
+  });
+  
+  doc.fillColor('#FFFFFF').circle(cx, cy, radius * 0.5).fill();
+  
+  let legendY = cy - 20;
+  data.forEach((item) => {
+    const percentageStr = total > 0 ? ` (${((item.value / total) * 100).toFixed(0)}%)` : '';
+    doc.fillColor(item.color).rect(cx + radius + 15, legendY, 6, 6).fill();
+    doc.fillColor('#173449').fontSize(7.5).font('Helvetica-Bold').text(`${item.label}: `, cx + radius + 25, legendY - 1, { continued: true });
+    doc.font('Helvetica').fillColor('#587086').text(`${item.value}${percentageStr}`);
+    legendY += 14;
+  });
+}
+
+function drawPdfLineChart(doc, startX, startY, width, height, trendData) {
+  if (!trendData || trendData.length === 0) {
+    doc.font('Helvetica').fontSize(9).fillColor('#587086').text('No trend data available.', startX, startY);
+    return;
+  }
+  
+  const counts = trendData.map((d) => d.count);
+  const maxCount = Math.max(...counts, 5);
+  
+  const paddingLeft = 25;
+  const paddingRight = 10;
+  const paddingTop = 10;
+  const paddingBottom = 15;
+  
+  const chartWidth = width - paddingLeft - paddingRight;
+  const chartHeight = height - paddingTop - paddingBottom;
+  
+  const gridLinesCount = 4;
+  for (let i = 0; i <= gridLinesCount; i++) {
+    const y = startY + paddingTop + (i / gridLinesCount) * chartHeight;
+    const val = Math.round(maxCount - (i / gridLinesCount) * maxCount);
+    
+    doc.strokeColor('#E2E8F0').lineWidth(0.5).dash(2, { space: 2 }).moveTo(startX + paddingLeft, y).lineTo(startX + width - paddingRight, y).stroke();
+    
+    doc.fillColor('#94A3B8').fontSize(6.5).font('Helvetica').text(String(val), startX, y - 3, { width: paddingLeft - 5, align: 'right' });
+  }
+  
+  doc.undash();
+  
+  const pointsCount = trendData.length;
+  const stepX = pointsCount > 1 ? chartWidth / (pointsCount - 1) : chartWidth;
+  
+  const points = trendData.map((d, i) => {
+    const x = startX + paddingLeft + i * stepX;
+    const y = startY + paddingTop + chartHeight - (d.count / maxCount) * chartHeight;
+    return { x, y, label: d.week, count: d.count };
+  });
+  
+  if (points.length > 0) {
+    doc.fillColor('#E0F2FE');
+    doc.moveTo(points[0].x, startY + paddingTop + chartHeight);
+    points.forEach((p) => {
+      doc.lineTo(p.x, p.y);
+    });
+    doc.lineTo(points[points.length - 1].x, startY + paddingTop + chartHeight);
+    doc.closePath().fill();
+  }
+  
+  if (points.length > 0) {
+    doc.strokeColor('#3B82F6').lineWidth(1.5);
+    doc.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) {
+      doc.lineTo(points[i].x, points[i].y);
+    }
+    doc.stroke();
+  }
+  
+  points.forEach((p) => {
+    doc.fillColor('#FFFFFF').circle(p.x, p.y, 2.5).fill();
+    doc.strokeColor('#3B82F6').lineWidth(1.0).circle(p.x, p.y, 2.5).stroke();
+    doc.fillColor('#2563EB').fontSize(6.5).font('Helvetica-Bold').text(String(p.count), p.x - 10, p.y - 8, { width: 20, align: 'center' });
+    doc.fillColor('#94A3B8').fontSize(6.5).font('Helvetica').text(p.label, p.x - 20, startY + height - paddingBottom + 3, { width: 40, align: 'center' });
+  });
+}
+
+function addPdfVisualCharts(doc, dataset) {
+  ensureSpace(doc, 160);
+  addSectionTitle(doc, 'Visual Analytics');
+  
+  const weeklyTrend = buildWeeklyTrend(dataset.gatepasses || []);
+  
+  const activeStatuses = [
+    'approved_final',
+    'approved_by_hod',
+    'approved_by_coordinator',
+    'approved_by_cao',
+    'pending_principal',
+    'forwarded_to_hod',
+    'forwarded_to_coordinator',
+    'pending_cao',
+    'checked_out_by_security'
+  ];
+  
+  const activeCount = (dataset.gatepasses || []).filter((item) => activeStatuses.includes(item.status)).length;
+  const inactiveCount = (dataset.gatepasses || []).filter((item) => !activeStatuses.includes(item.status)).length;
+  
+  const pieData = [
+    { label: 'Active', value: activeCount, color: '#3B82F6' },
+    { label: 'Inactive', value: inactiveCount, color: '#9CA3AF' }
+  ];
+  
+  const chartY = doc.y;
+  
+  doc.font('Helvetica-Bold').fontSize(9.5).fillColor('#173449').text('Weekly Activity Trend', 50, chartY);
+  drawPdfLineChart(doc, 50, chartY + 15, 230, 95, weeklyTrend);
+  
+  doc.font('Helvetica-Bold').fontSize(9.5).fillColor('#173449').text('Active vs Inactive Ratio', 315, chartY);
+  drawPdfPieChart(doc, 365, chartY + 60, 40, pieData);
+  
+  doc.y = chartY + 125;
+}
+
 function generatePdfBuffer(dataset) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
@@ -257,6 +427,7 @@ function generatePdfBuffer(dataset) {
     addHeader(doc, dataset, getReportTitle(dataset));
     addFilterSummary(doc, dataset);
     addMetricCards(doc, dataset);
+    addPdfVisualCharts(doc, dataset);
 
     if (dataset.filters.detailLevel !== 'summary_only') {
       addSectionTitle(doc, 'User Record Sections');

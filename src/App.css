@@ -818,6 +818,8 @@
   transition: background 0.2s;
   border: 1px solid var(--control-border);
   background: var(--button-secondary-bg);
+  position: relative;
+  z-index: 1005;
 }
 
 .admin-hamburger-button:hover {
@@ -847,7 +849,7 @@
     bottom: 0;
     height: 100vh !important;
     width: 280px;
-    z-index: 1000;
+    z-index: 1010;
     transform: translateX(-100%);
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 18px 0 40px rgba(15, 23, 42, 0.15) !important;
@@ -915,13 +917,16 @@
 
   .admin-nav,
   .admin-export-grid,
-  .admin-stat-grid,
-  .admin-stat-grid.compact,
   .admin-filter-grid,
   .admin-card-grid,
   .admin-info-grid,
   .admin-trend-row {
     grid-template-columns: 1fr;
+  }
+
+  .admin-stat-grid,
+  .admin-stat-grid.compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .admin-table-toolbar,
@@ -1125,6 +1130,7 @@ button {
 
 .brand {
   min-width: 0;
+  gap: 0.35rem;
 }
 
 .brand-centered {
@@ -1165,6 +1171,10 @@ button {
 
 .gap-1 {
   gap: 0.25rem;
+}
+
+.gap-1\.5 {
+  gap: 0.35rem;
 }
 
 .gap-2 {
@@ -6071,4 +6081,64 @@ button {
     left: 0.85rem;
     width: auto;
   }
+}
+
+@media (min-width: 769px) {
+  .admin-shell {
+    height: 100vh;
+    overflow: hidden;
+  }
+  
+  .admin-main {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 1.1rem;
+  }
+  
+  .admin-main > .admin-page-stack,
+  .admin-main > .admin-export-page,
+  .admin-main > .admin-history-panel {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    padding-bottom: 1.25rem;
+  }
+  
+  .admin-table-wrap {
+    max-height: calc(100vh - 350px);
+    overflow-y: auto;
+    border: 1px solid var(--app-surface-border);
+    border-radius: 6px;
+  }
+  
+  .modal-overlay {
+    backdrop-filter: blur(4px);
+  }
+}
+
+@media (max-width: 768px) {
+  .admin-table {
+    min-width: 0 !important;
+  }
+  .admin-table-wrap {
+    overflow-x: hidden !important;
+  }
+  .col-user-type,
+  .col-dept,
+  .col-prog-sem,
+  .col-contact,
+  .col-rejected,
+  .col-pending,
+  .col-out-ret,
+  .col-last-act {
+    display: none !important;
+  }
+}
+
+/* Ensure no global horizontal scrolling anywhere on the portal */
+html, body, #root, .admin-shell {
+  max-width: 100vw;
+  overflow-x: hidden;
 }

@@ -44,6 +44,7 @@ a {
 .brand {
   display: flex;
   align-items: center;
+  gap: 0.35rem;
 }
 
 .brand-centered {
@@ -83,6 +84,10 @@ a {
 
 .gap-1 {
   gap: 0.25rem;
+}
+
+.gap-1\.5 {
+  gap: 0.35rem;
 }
 
 .gap-2 {
