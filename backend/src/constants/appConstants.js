@@ -35,11 +35,12 @@ const ROLES = Object.freeze([
   'cao',
   'principal',
   'security',
-  'admin'
+  'admin',
+  'it'
 ]);
 
 const PUBLIC_REGISTRATION_ROLES = Object.freeze(ROLES.filter((role) => role !== 'student'));
-const ADMIN_ROLES = Object.freeze(['principal', 'hod', 'cao', 'security', 'admin']);
+const ADMIN_ROLES = Object.freeze(['principal', 'hod', 'cao', 'security', 'admin', 'it']);
 const SEMESTERS = Object.freeze([1, 2, 3, 4, 5, 6, 7, 8]);
 const FACULTY_LEAVE_TYPES = Object.freeze([
   'Academic On Duty',

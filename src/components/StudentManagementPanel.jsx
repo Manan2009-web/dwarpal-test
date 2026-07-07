@@ -54,7 +54,7 @@ function StudentFormFields({
 }) {
   return (
     <div className="student-form-grid">
-      <label className="student-form-field">
+      <label className="admin-field">
         <span>Full Name</span>
         <input
           value={form.fullName}
@@ -65,7 +65,7 @@ function StudentFormFields({
         {fieldErrors.fullName ? <p className="field-error">{fieldErrors.fullName}</p> : null}
       </label>
 
-      <label className="student-form-field">
+      <label className="admin-field">
         <span>Email</span>
         <input
           type="email"
@@ -77,7 +77,7 @@ function StudentFormFields({
         {fieldErrors.email ? <p className="field-error">{fieldErrors.email}</p> : null}
       </label>
 
-      <label className="student-form-field">
+      <label className="admin-field">
         <span>Enrollment Number</span>
         <input
           value={form.enrollmentNo}
@@ -90,7 +90,7 @@ function StudentFormFields({
         {fieldErrors.enrollmentNo ? <p className="field-error">{fieldErrors.enrollmentNo}</p> : null}
       </label>
 
-      <label className="student-form-field">
+      <label className="admin-field">
         <span>Phone Number</span>
         <input
           value={form.phone}
@@ -101,7 +101,7 @@ function StudentFormFields({
         {fieldErrors.phone ? <p className="field-error">{fieldErrors.phone}</p> : null}
       </label>
 
-      <label className="student-form-field">
+      <label className="admin-field">
         <span>Program</span>
         <SelectField value={form.program} onChange={(event) => onChange('program', event.target.value)}>
           {programOptions.map((program) => (
@@ -113,7 +113,7 @@ function StudentFormFields({
         {fieldErrors.program ? <p className="field-error">{fieldErrors.program}</p> : null}
       </label>
 
-      <label className="student-form-field">
+      <label className="admin-field">
         <span>Department</span>
         <SelectField value={form.department} onChange={(event) => onChange('department', event.target.value)}>
           {departmentOptions.map((department) => (
@@ -125,7 +125,7 @@ function StudentFormFields({
         {fieldErrors.department ? <p className="field-error">{fieldErrors.department}</p> : null}
       </label>
 
-      <label className="student-form-field">
+      <label className="admin-field">
         <span>Semester</span>
         <SelectField value={form.semester} onChange={(event) => onChange('semester', event.target.value)}>
           {semesterOptions.map((semester) => (
@@ -137,7 +137,7 @@ function StudentFormFields({
         {fieldErrors.semester ? <p className="field-error">{fieldErrors.semester}</p> : null}
       </label>
 
-      <label className="student-form-field">
+      <label className="admin-field">
         <span>{isEditMode ? 'Temporary Password Reset' : 'Temporary Password'}</span>
         <input
           type="password"
@@ -152,7 +152,7 @@ function StudentFormFields({
   )
 }
 
-export default function StudentManagementPanel() {
+export default function StudentManagementPanel({ currentUser, activeSection = 'students' }) {
   const toast = useToast()
   const [students, setStudents] = useState([])
   const [meta, setMeta] = useState({})
@@ -376,24 +376,85 @@ export default function StudentManagementPanel() {
     }
   }
 
+  if (currentUser?.role === 'it' && activeSection === 'students') {
+    return (
+      <>
+        <section className="admin-wide-panel student-management-panel" style={{ maxWidth: '800px', margin: '0 auto' }}>
+          <div className="admin-panel-heading" style={{ marginBottom: '1.5rem' }}>
+            <div>
+              <p className="admin-eyebrow">IT Student Management</p>
+              <h2>Register New Student</h2>
+              <span>Input student details below to generate temporary credentials and create the account.</span>
+            </div>
+          </div>
+
+          {submitError ? (
+            <div className="admin-alert danger" style={{ padding: '0.85rem', marginBottom: '1.25rem', borderRadius: '8px', background: 'var(--danger-soft)', color: 'var(--danger)', fontSize: '0.85rem' }}>
+              {submitError}
+            </div>
+          ) : null}
+
+          <form onSubmit={handleSubmit}>
+            <StudentFormFields
+              form={form}
+              fieldErrors={fieldErrors}
+              onChange={updateFormField}
+              isEditMode={false}
+              programOptions={options.programs}
+              departmentOptions={options.departments}
+              semesterOptions={options.semesters}
+            />
+            
+            <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button
+                type="button"
+                className="admin-secondary-link"
+                onClick={() => {
+                  setForm(createEmptyForm(options))
+                  setFieldErrors({})
+                  setSubmitError('')
+                }}
+                style={{ border: '1px solid var(--app-surface-border)', padding: '0.6rem 1.2rem', borderRadius: '8px' }}
+              >
+                Clear Form
+              </button>
+              <button
+                type="submit"
+                className="admin-primary-button inline"
+                disabled={submitting}
+                style={{ padding: '0.6rem 1.5rem' }}
+              >
+                {submitting ? 'Creating...' : 'Register Student'}
+              </button>
+            </div>
+          </form>
+        </section>
+      </>
+    )
+  }
+
+  const isItAdmin = currentUser?.role === 'it';
+
   return (
     <>
       <section className="admin-wide-panel student-management-panel">
         <div className="admin-panel-heading">
           <div>
-            <p className="admin-eyebrow">CAO Student Management</p>
-            <h2>Add, review, edit, delete, and export student access details</h2>
-            <span>Student access is now CAO-controlled with enrollment-based sign-in and temporary-password handling.</span>
+            <p className="admin-eyebrow">{isItAdmin ? 'IT Student Management' : 'CAO Student Management'}</p>
+            <h2>{isItAdmin ? 'Student Registration History' : 'Add, review, edit, delete, and export student access details'}</h2>
+            <span>{isItAdmin ? 'Review, search, edit, delete, and export registered student records.' : 'Student access is now CAO-controlled with enrollment-based sign-in and temporary-password handling.'}</span>
           </div>
           <div className="admin-inline-actions">
             <button type="button" className="admin-secondary-link" onClick={handleExportCredentials} disabled={exporting}>
               <Download size={16} />
               <span>{exporting ? 'Exporting...' : 'Export Student Credentials'}</span>
             </button>
-            <button type="button" className="admin-primary-button inline" onClick={openCreateModal}>
-              <Plus size={16} />
-              <span>Add New Student</span>
-            </button>
+            {!isItAdmin ? (
+              <button type="button" className="admin-primary-button inline" onClick={openCreateModal}>
+                <Plus size={16} />
+                <span>Add New Student</span>
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -402,22 +463,28 @@ export default function StudentManagementPanel() {
             <div className="admin-stat-icon">
               <UserRoundPlus size={18} />
             </div>
-            <p>Total Students</p>
-            <strong>{studentStats.total}</strong>
+            <div>
+              <p>Total Students</p>
+              <strong>{studentStats.total}</strong>
+            </div>
           </article>
           <article className="admin-stat-card success">
             <div className="admin-stat-icon">
               <ShieldCheck size={18} />
             </div>
-            <p>Visible Rows</p>
-            <strong>{studentStats.visible}</strong>
+            <div>
+              <p>Visible Rows</p>
+              <strong>{studentStats.visible}</strong>
+            </div>
           </article>
           <article className="admin-stat-card warning">
             <div className="admin-stat-icon">
               <KeyRound size={18} />
             </div>
-            <p>Temp Credentials Ready</p>
-            <strong>{studentStats.tempReady}</strong>
+            <div>
+              <p>Temp Credentials Ready</p>
+              <strong>{studentStats.tempReady}</strong>
+            </div>
           </article>
         </div>
 

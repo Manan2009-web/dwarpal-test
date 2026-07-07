@@ -102,6 +102,14 @@ function getSystemAccountSeedData() {
       phone: '9999999996',
       program: defaultProgram,
       accessLevel: 'Super'
+    },
+    {
+      role: 'it',
+      fullName: 'IT Admin DwarPal',
+      email: 'it@dwarpal.local',
+      employeeId: 'IT',
+      phone: '9999999997',
+      accessLevel: 'Full'
     }
   ];
 }

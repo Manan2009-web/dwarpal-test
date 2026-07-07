@@ -9,8 +9,8 @@ const {
   SEMESTERS
 } = require('../constants/appConstants');
 
-const ADMIN_PORTAL_ROLES = new Set(['principal', 'hod', 'cao', 'security', 'admin']);
-const FULL_ADMIN_ROLES = new Set(['principal', 'cao', 'admin']);
+const ADMIN_PORTAL_ROLES = new Set(['principal', 'hod', 'cao', 'security', 'admin', 'it']);
+const FULL_ADMIN_ROLES = new Set(['cao', 'admin', 'it']);
 const DEPARTMENT_ADMIN_ROLES = new Set(['hod']);
 const SECURITY_EXPORT_REPORTS = new Set([
   'all_gatepasses',
@@ -165,7 +165,7 @@ function canExportReport(user, reportType) {
     return true;
   }
 
-  if (FULL_ADMIN_ROLES.has(role) || DEPARTMENT_ADMIN_ROLES.has(role)) {
+  if (FULL_ADMIN_ROLES.has(role) || DEPARTMENT_ADMIN_ROLES.has(role) || role === 'principal') {
     return true;
   }
 
@@ -255,6 +255,19 @@ function buildGatepassScopeFilter(user) {
     return {};
   }
 
+  if (role === 'principal') {
+    const program = normalizeProgram(user?.program) || user?.program || null;
+    if (!program) {
+      return impossibleFilter();
+    }
+    return {
+      $or: [
+        { 'routingSnapshot.program': program },
+        { 'applicantSnapshot.program': program }
+      ]
+    };
+  }
+
   if (DEPARTMENT_ADMIN_ROLES.has(role)) {
     const department = getDepartmentScope(user);
     if (!department) {
@@ -315,6 +328,14 @@ function buildFacultyLeaveScopeFilter(user) {
     return {};
   }
 
+  if (role === 'principal') {
+    const program = normalizeProgram(user?.program) || user?.program || null;
+    if (!program) {
+      return impossibleFilter();
+    }
+    return {};
+  }
+
   if (DEPARTMENT_ADMIN_ROLES.has(role)) {
     const department = getDepartmentScope(user);
     return department ? { 'facultyDetails.department': department } : impossibleFilter();
@@ -337,6 +358,17 @@ function buildUserScopeFilter(user, roleFilter = null) {
   }
 
   if (FULL_ADMIN_ROLES.has(role)) {
+    return filter;
+  }
+
+  if (role === 'principal') {
+    const program = normalizeProgram(user?.program) || user?.program || null;
+    if (!program) {
+      return impossibleFilter();
+    }
+    if (roleFilter === 'student' || roleFilter === 'hod') {
+      return { ...filter, program };
+    }
     return filter;
   }
 
@@ -380,15 +412,17 @@ function getAdminAccessProfile(user) {
   const coordinatorScope = getCoordinatorScope(user);
   const scopeType = FULL_ADMIN_ROLES.has(role)
     ? 'full'
-    : DEPARTMENT_ADMIN_ROLES.has(role)
-      ? 'department'
-      : role === 'cao'
-        ? 'faculty'
-        : coordinatorScope.isCoordinator
-          ? 'coordinator'
-          : role === 'security'
-            ? 'security'
-            : 'none';
+    : role === 'principal'
+      ? 'program'
+      : DEPARTMENT_ADMIN_ROLES.has(role)
+        ? 'department'
+        : role === 'cao'
+          ? 'faculty'
+          : coordinatorScope.isCoordinator
+            ? 'coordinator'
+            : role === 'security'
+              ? 'security'
+              : 'none';
 
   return {
     role,
@@ -397,6 +431,7 @@ function getAdminAccessProfile(user) {
     permissions: getUserPermissions(user),
     scopeType,
     department: getDepartmentScope(user),
+    program: normalizeProgram(user?.program) || user?.program || null,
     coordinatorScope
   };
 }

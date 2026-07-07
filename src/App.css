@@ -369,32 +369,41 @@
 }
 
 .admin-stat-card {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  min-height: 5.6rem;
-  padding: 0.85rem;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.75rem !important;
+  min-height: 4.8rem !important;
+  padding: 0.65rem 0.85rem !important;
+  border-left: 4px solid var(--app-accent) !important;
 }
 
 .admin-stat-card p {
-  margin: 0 0 0.2rem;
-  color: var(--app-shell-muted);
-  font-size: 0.85rem;
+  margin: 0 0 0.1rem !important;
+  color: var(--app-shell-muted) !important;
+  font-size: 0.8rem !important;
 }
 
 .admin-stat-card strong {
-  font-size: 1.7rem;
-  color: var(--app-shell-text);
+  font-size: 1.45rem !important;
+  font-weight: 700 !important;
+  color: var(--app-shell-text) !important;
+  line-height: 1.2 !important;
 }
 
 .admin-stat-icon {
-  width: 2.35rem;
-  height: 2.35rem;
-  display: grid;
-  place-items: center;
-  border-radius: 8px;
-  color: var(--app-accent-strong);
-  background: var(--app-accent-soft-bg);
+  width: 2.35rem !important;
+  height: 2.35rem !important;
+  display: grid !important;
+  place-items: center !important;
+  border-radius: 8px !important;
+  color: var(--app-accent-strong) !important;
+  background: var(--app-accent-soft-bg) !important;
+  flex-shrink: 0;
+}
+
+.admin-stat-icon svg {
+  width: 16px !important;
+  height: 16px !important;
 }
 
 .admin-stat-card.success .admin-stat-icon {
@@ -2638,7 +2647,6 @@ button {
 
 .workspace-card,
 .profile-card,
-.summary-card,
 .gatepass-card,
 .hero-strip {
   border-top: 4px solid var(--app-accent);
@@ -2994,9 +3002,31 @@ button {
 }
 
 .summary-card {
-  border-radius: 20px;
-  padding: 0.9rem;
-  gap: 0.85rem;
+  border-radius: 12px !important;
+  padding: 0.65rem 0.85rem !important;
+  min-height: 4.8rem !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.75rem !important;
+  border-left: 4px solid var(--app-accent) !important;
+  border-top: 1px solid var(--app-surface-border) !important;
+}
+
+.summary-card.success {
+  border-left: 4px solid var(--success) !important;
+}
+
+.summary-card.warning {
+  border-left: 4px solid var(--warning) !important;
+}
+
+.summary-card.danger {
+  border-left: 4px solid var(--danger) !important;
+}
+
+.summary-card.info,
+.summary-card.default {
+  border-left: 4px solid var(--app-accent) !important;
 }
 
 .summary-card.success .summary-icon {
@@ -3021,13 +3051,33 @@ button {
 }
 
 .summary-icon {
-  width: 2.8rem;
-  height: 2.8rem;
-  border-radius: 16px;
+  width: 2.35rem !important;
+  height: 2.35rem !important;
+  border-radius: 8px !important;
   display: grid;
   place-items: center;
   background: var(--app-accent-soft-bg);
   color: var(--app-accent);
+  flex-shrink: 0;
+}
+
+.summary-icon svg {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+.summary-copy p {
+  font-size: 0.8rem !important;
+  margin: 0 0 0.1rem 0 !important;
+  color: var(--app-shell-muted) !important;
+}
+
+.summary-copy h3 {
+  font-size: 1.45rem !important;
+  font-weight: 700 !important;
+  color: var(--app-shell-text) !important;
+  margin: 0 !important;
+  line-height: 1.2 !important;
 }
 
 /* Routed app surfaces inherit semantic light tokens instead of fixed navy text. */
@@ -5352,11 +5402,14 @@ button {
 @media (max-width: 1080px) {
   .hero-card,
   .app-shell,
-  .summary-grid,
   .gatepass-grid,
   .profile-grid,
   .read-only-grid {
     grid-template-columns: 1fr;
+  }
+
+  .summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
   .app-shell {
@@ -6099,7 +6152,8 @@ button {
   
   .admin-main > .admin-page-stack,
   .admin-main > .admin-export-page,
-  .admin-main > .admin-history-panel {
+  .admin-main > .admin-history-panel,
+  .admin-main > .student-management-panel {
     flex: 1;
     overflow-y: auto;
     min-height: 0;
@@ -6214,24 +6268,18 @@ html, body, #root, .admin-shell {
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02) !important;
 }
 
-.admin-stat-icon {
-  width: 2.75rem !important;
-  height: 2.75rem !important;
-  border-radius: 10px !important;
-}
-
 /* Stat card border-left indicator colors */
 .admin-stat-card.warning {
-  border-left: 3px solid var(--warning) !important;
+  border-left: 4px solid var(--warning) !important;
 }
 .admin-stat-card.success {
-  border-left: 3px solid var(--success) !important;
+  border-left: 4px solid var(--success) !important;
 }
 .admin-stat-card.info {
-  border-left: 3px solid var(--app-accent) !important;
+  border-left: 4px solid var(--app-accent) !important;
 }
 .admin-stat-card.danger {
-  border-left: 3px solid var(--danger) !important;
+  border-left: 4px solid var(--danger) !important;
 }
 
 .admin-stat-card.info .admin-stat-icon {
@@ -6484,5 +6532,97 @@ html, body, #root, .admin-shell {
   height: 24px;
   background-color: var(--app-surface-border);
   margin: 0 4px;
+}
+
+@media (max-width: 600px) {
+  /* Force 2x2 grid on all dashboards */
+  .admin-stat-grid,
+  .admin-stat-grid.compact,
+  .summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.5rem !important;
+  }
+
+  /* Scale down student summary cards */
+  .summary-card {
+    padding: 0.5rem 0.6rem !important;
+    min-height: 4rem !important;
+    gap: 0.5rem !important;
+    border-radius: 10px !important;
+  }
+  .summary-icon {
+    width: 2rem !important;
+    height: 2rem !important;
+    border-radius: 6px !important;
+  }
+  .summary-icon svg {
+    width: 14px !important;
+    height: 14px !important;
+  }
+  .summary-copy p {
+    font-size: 0.72rem !important;
+  }
+  .summary-copy h3 {
+    font-size: 1.15rem !important;
+  }
+
+  /* Scale down admin stats cards */
+  .admin-stat-card {
+    padding: 0.5rem 0.6rem !important;
+    min-height: 4rem !important;
+    gap: 0.5rem !important;
+    border-radius: 10px !important;
+  }
+  .admin-stat-icon {
+    width: 2rem !important;
+    height: 2rem !important;
+    border-radius: 6px !important;
+  }
+  .admin-stat-icon svg {
+    width: 14px !important;
+    height: 14px !important;
+  }
+  .admin-stat-card p {
+    font-size: 0.72rem !important;
+  }
+  .admin-stat-card strong {
+    font-size: 1.15rem !important;
+  }
+}
+
+/* Student registration form grid layout */
+.student-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
+@media (max-width: 768px) {
+  .student-form-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+}
+
+.admin-field input:focus,
+.admin-field select:focus,
+.admin-field .select-field:focus-within select {
+  outline: none;
+  border-color: var(--app-accent, #3b82f6) !important;
+  box-shadow: 0 0 0 4px var(--app-accent-soft-bg, rgba(59, 130, 246, 0.15)) !important;
+}
+
+/* Vertical scroll & sticky header rules for student registration table */
+.student-management-panel .admin-table-wrap {
+  max-height: 520px;
+  overflow-y: auto;
+}
+
+.student-management-panel .admin-table-wrap thead th {
+  position: sticky;
+  top: 0;
+  background: var(--app-surface, #ffffff);
+  z-index: 2;
+  box-shadow: inset 0 -1px 0 var(--app-surface-border);
 }
 

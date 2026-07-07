@@ -159,6 +159,7 @@ const ROLE_DASHBOARD_PATHS = {
   security: '/security/dashboard',
   cao: '/cao/dashboard',
   admin: '/admin/dashboard',
+  it: '/admin/dashboard',
 }
 
 const DEFAULT_WORKSPACE_REQUEST_OPTIONS = {
@@ -208,7 +209,7 @@ function hasAdminPortalAccess(user) {
   const role = normalizeRole(user.role)
   const permissions = Array.isArray(user.permissions) ? user.permissions : []
 
-  if (['principal', 'hod', 'cao', 'security', 'admin'].includes(role)) {
+  if (['principal', 'hod', 'cao', 'security', 'admin', 'it'].includes(role)) {
     return true
   }
 

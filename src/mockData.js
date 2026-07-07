@@ -48,6 +48,13 @@ export const ROLE_META = {
     accent: 'var(--accent-admin)',
     idLabel: 'Employee ID',
   },
+  it: {
+    title: 'IT Admin',
+    shortTitle: 'IT',
+    panelTitle: 'IT Admin Dashboard',
+    accent: 'var(--accent-admin)',
+    idLabel: 'Employee ID',
+  },
 }
 
 export const STATUS_COLORS = {
@@ -62,7 +69,7 @@ export const STATUS_COLORS = {
   Cancelled: 'rejected',
 }
 
-export const ROLE_OPTIONS = ['student', 'faculty', 'hod', 'cao', 'principal', 'security', 'admin']
+export const ROLE_OPTIONS = ['student', 'faculty', 'hod', 'cao', 'principal', 'security', 'admin', 'it']
 
 export const PUBLIC_ROLE_OPTIONS = ROLE_OPTIONS.filter((role) => role !== 'student')
 
@@ -233,6 +240,16 @@ export const initialUsers = [
     employeeId: 'cao',
     phone: '8855555555',
     role: 'cao',
+    password: '12345',
+  },
+  {
+    id: 'it-demo',
+    name: 'IT Admin Demo',
+    email: 'it@dwarpal.edu',
+    department: 'Computer',
+    employeeId: 'it',
+    phone: '8833333333',
+    role: 'it',
     password: '12345',
   },
   {

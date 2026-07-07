@@ -22,6 +22,7 @@ import {
   TrendingUp,
   User,
   Users,
+  UserPlus,
   UserCheck,
   UserRoundCog,
   XCircle,
@@ -106,6 +107,14 @@ function getAdminNavItems(currentUser) {
   const isSecurity = currentUser.role === 'security'
   const isCoord = Boolean(currentUser.isCoordinator || currentUser.coordinatorAssignment?.isCoordinator || currentUser.coordinatorScope?.isCoordinator)
   
+  if (currentUser.role === 'it') {
+    return [
+      { key: 'students', label: 'Add Student', icon: UserPlus, to: '/admin/students' },
+      { key: 'student-history', label: 'Student Reg History', icon: History, to: '/admin/student-history' },
+      { key: 'settings', label: 'Settings', icon: Settings, to: '/admin/settings' }
+    ]
+  }
+
   if (isCoord) {
     return [
       { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, to: '/admin/dashboard' },
@@ -123,8 +132,10 @@ function getAdminNavItems(currentUser) {
   ]
 
   if (!isSecurity) {
+    if (currentUser.role !== 'cao') {
+      items.push({ key: 'students', label: 'Students', icon: Users, to: '/admin/students' })
+    }
     items.push(
-      { key: 'students', label: 'Students', icon: Users, to: '/admin/students' },
       { key: 'faculty', label: 'Faculty', icon: UserRoundCog, to: '/admin/faculty' },
       { key: 'coordinators', label: 'Coordinators', icon: UserCheck, to: '/admin/coordinators' },
       { key: 'export', label: 'Export Center', icon: Download, to: '/admin/export' },
@@ -165,7 +176,7 @@ function buildFiltersForRequest(filters) {
 }
 
 function getSectionFilterOverrides(activeSection) {
-  if (activeSection === 'students') {
+  if (activeSection === 'students' || activeSection === 'student-history') {
     return { recordPartition: 'students', reportType: 'student_report' }
   }
 
@@ -1669,9 +1680,18 @@ export default function AdminPortal({ currentUser, onLogout, onOpenSupport = nul
     if (isCoord && ['faculty', 'coordinators', 'settings', 'history'].includes(activeSection)) {
       navigate('/admin/dashboard', { replace: true })
     }
-  }, [activeSection, isCoord, navigate])
+    if (currentUser?.role === 'it' && !['students', 'student-history', 'settings'].includes(activeSection)) {
+      navigate('/admin/students', { replace: true })
+    }
+    if (currentUser?.role === 'cao' && activeSection === 'students') {
+      navigate('/admin/dashboard', { replace: true })
+    }
+    if (currentUser?.role !== 'it' && activeSection === 'student-history') {
+      navigate('/admin/dashboard', { replace: true })
+    }
+  }, [activeSection, isCoord, currentUser?.role, navigate])
 
-  const showStudentManagement = activeSection === 'students' && currentUser.role === 'cao'
+  const showStudentManagement = (activeSection === 'students' || activeSection === 'student-history') && currentUser?.role === 'it'
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [options, setOptions] = useState(null)
   const [preview, setPreview] = useState(null)
@@ -1895,7 +1915,8 @@ export default function AdminPortal({ currentUser, onLogout, onOpenSupport = nul
   const titleMap = {
     dashboard: 'Admin Dashboard',
     gatepasses: 'Gatepass Operations',
-    students: 'Students',
+    students: currentUser?.role === 'it' ? 'Add Student' : 'Students',
+    'student-history': 'Student Registration History',
     faculty: 'Faculty',
     coordinators: 'Coordinators',
     reports: 'Reports',
@@ -1954,7 +1975,7 @@ export default function AdminPortal({ currentUser, onLogout, onOpenSupport = nul
 
         {activeSection === 'reports' ? <ReportsPage preview={preview} /> : null}
 
-        {showStudentManagement ? <StudentManagementPanel /> : null}
+        {showStudentManagement ? <StudentManagementPanel currentUser={currentUser} activeSection={activeSection} /> : null}
 
         {activeSection === 'settings' ? <SettingsPage currentUser={currentUser} options={options} /> : null}
 
