@@ -317,6 +317,7 @@ export default function ScannerModal({
           {showPreview ? (
             <div className="scanner-modal-overlay" aria-hidden="true">
               <div className={`scanner-focus-frame ${status === 'verifying' || busy ? 'busy' : ''}`}>
+                {status === 'ready' && !busy ? <div className="scan-line" /> : null}
                 <span className="scanner-frame-corner top-left" />
                 <span className="scanner-frame-corner top-right" />
                 <span className="scanner-frame-corner bottom-left" />

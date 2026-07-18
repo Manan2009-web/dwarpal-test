@@ -6648,3 +6648,412 @@ html, body, #root, .admin-shell {
   box-shadow: inset 0 -1px 0 var(--app-surface-border);
 }
 
+/* Active Gatepass QR banner for Student Dashboard */
+.active-gatepass-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.15rem 1.4rem;
+  border-radius: 22px;
+  background: linear-gradient(135deg, #09131c 0%, #173549 100%);
+  border: 1px solid rgba(59, 130, 246, 0.22);
+  box-shadow: 0 8px 30px rgba(9, 26, 43, 0.25), 0 0 0 1px rgba(59, 130, 246, 0.05);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-bottom: 0.75rem;
+}
+.active-gatepass-banner:hover {
+  border-color: rgba(59, 130, 246, 0.45);
+  box-shadow: 0 12px 35px rgba(59, 130, 246, 0.18);
+  transform: translateY(-2px);
+}
+.active-gatepass-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-width: 0;
+}
+.active-gatepass-banner-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  flex-shrink: 0;
+}
+.pulse-qr-icon {
+  animation: pulseQr 2s infinite ease-in-out;
+}
+@keyframes pulseQr {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+    filter: drop-shadow(0 0 6px rgba(96, 165, 250, 0.8));
+  }
+}
+.active-gatepass-banner-text {
+  min-width: 0;
+}
+.active-gatepass-banner-text strong {
+  display: block;
+  font-size: 1.05rem;
+  color: #ffffff;
+  font-family: 'Syne', 'Outfit', sans-serif;
+  font-weight: 700;
+  margin-bottom: 0.15rem;
+}
+.active-gatepass-banner-text p {
+  margin: 0;
+  font-size: 0.86rem;
+  color: #94a3b8;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.active-gatepass-banner-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.65rem 1.15rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.86rem;
+  background: #3b82f6;
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  white-space: nowrap;
+}
+.active-gatepass-banner:hover .active-gatepass-banner-action-btn {
+  background: #2563eb;
+  transform: scale(1.03);
+}
+
+/* Compact Scanner Launcher (Idle card) */
+.security-scan-launcher-compact {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-start;
+  height: 100%;
+  padding: 1.35rem 1.5rem;
+  border-radius: 22px;
+  border: 1px solid rgba(23, 52, 73, 0.12);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.04);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.security-scan-launcher-compact:hover {
+  border-color: rgba(40, 114, 161, 0.28);
+  box-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.08);
+  transform: translateY(-2px);
+}
+.security-scan-launcher-icon-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 50px;
+  height: 50px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(40, 114, 161, 0.12), rgba(23, 52, 73, 0.06));
+  border: 1px solid rgba(40, 114, 161, 0.18);
+  color: #2872a1;
+  margin-bottom: 0.4rem;
+}
+.qr-pulse-icon {
+  animation: qrPulse 2s infinite ease-in-out;
+}
+@keyframes qrPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+    filter: drop-shadow(0 0 5px rgba(40, 114, 161, 0.35));
+  }
+}
+.security-scan-launcher-info h4 {
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+  color: var(--app-shell-text);
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+}
+.security-scan-launcher-info p {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--app-shell-muted);
+}
+.scanner-launch-btn {
+  width: 100%;
+  margin-top: 0.8rem;
+}
+
+/* Scanner Modal Redesign */
+.scanner-modal-card {
+  background: linear-gradient(180deg, #09131c 0%, #05080e 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: #f8fafc !important;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6) !important;
+}
+.scanner-modal-card .eyebrow {
+  color: rgba(96, 165, 250, 0.7);
+}
+.scanner-modal-card h3 {
+  color: #ffffff;
+  font-family: 'Syne', sans-serif;
+}
+.scanner-modal-card p {
+  color: #94a3b8 !important;
+}
+.scanner-modal-viewport {
+  min-height: 350px !important;
+  max-width: 350px;
+  aspect-ratio: 1;
+  margin: 1.5rem auto !important;
+  border: 2px solid rgba(59, 130, 246, 0.25);
+  box-shadow: 0 0 30px rgba(59, 130, 246, 0.15);
+  overflow: hidden;
+  border-radius: 32px !important;
+}
+.scanner-focus-frame {
+  width: 80% !important;
+  height: 80% !important;
+  border-radius: 24px;
+  box-shadow: 0 0 0 999px rgba(5, 8, 14, 0.62) !important;
+}
+.scan-line {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #60a5fa, #3b82f6, #60a5fa, transparent);
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.8);
+  animation: scanMove 2.2s infinite ease-in-out;
+  pointer-events: none;
+  z-index: 10;
+}
+@keyframes scanMove {
+  0% {
+    top: 10%;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    top: 90%;
+    opacity: 0;
+  }
+}
+.scanner-modal-card .scanner-frame-corner {
+  border-color: #3b82f6 !important;
+  animation: cornersPulse 2s infinite ease-in-out;
+}
+@keyframes cornersPulse {
+  0%, 100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.03);
+    filter: drop-shadow(0 0 4px #3b82f6);
+  }
+}
+.scanner-modal-status {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: #f1f5f9 !important;
+}
+.scanner-modal-close svg {
+  color: #94a3b8;
+}
+.scanner-modal-close:hover svg {
+  color: #ffffff;
+}
+
+/* Premium Gatepass QR Modal Redesign */
+.gatepass-qr-modal-card {
+  background: linear-gradient(135deg, #09131c 0%, #05080e 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: #f8fafc !important;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5) !important;
+  animation: qrScaleIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+.gatepass-qr-modal-card h3 {
+  color: #ffffff !important;
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+}
+.gatepass-qr-modal-card span {
+  color: rgba(96, 165, 250, 0.8) !important;
+}
+.gatepass-qr-modal-card .modal-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+.gatepass-qr-modal-card .modal-header button svg {
+  color: #94a3b8;
+}
+.gatepass-qr-modal-card .modal-header button:hover svg {
+  color: #ffffff;
+}
+@keyframes qrScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Screenshot protection badge */
+.gatepass-qr-security-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 0.95rem;
+  border-radius: 12px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  font-size: 0.8rem;
+  margin-bottom: 1.5rem;
+}
+.gatepass-qr-security-badge .badge-icon {
+  color: #ef4444;
+  flex-shrink: 0;
+}
+
+/* Glowing frame stage */
+.gatepass-qr-stage-wrapper {
+  position: relative;
+  padding: 1.25rem;
+  border-radius: 32px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 35px rgba(59, 130, 246, 0.12);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+}
+.gatepass-qr-live-indicator {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: #09131c;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  padding: 0.35rem 0.95rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #60a5fa;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+  z-index: 10;
+}
+.live-indicator-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: #3b82f6;
+  box-shadow: 0 0 8px #3b82f6;
+  animation: liveDotPulse 1.8s infinite ease-in-out;
+}
+@keyframes liveDotPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 1;
+  }
+}
+.gatepass-qr-stage {
+  background: #ffffff !important;
+  padding: 1.25rem !important;
+  border-radius: 24px !important;
+  border: 3px solid rgba(59, 130, 246, 0.25) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2) !important;
+}
+.secure-qr-canvas-shell {
+  background: #ffffff !important;
+  box-shadow: none !important;
+  border-radius: 12px !important;
+}
+
+/* Integrated info strip */
+.gatepass-qr-info-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.95rem;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  margin-bottom: 1.5rem;
+}
+.info-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+}
+.info-item .label {
+  color: #94a3b8;
+}
+.info-item .value {
+  color: #ffffff;
+  font-weight: 600;
+}
+.info-divider {
+  width: 1px;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.12);
+}
+.gatepass-qr-footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.05) !important;
+  padding-top: 1rem !important;
+}
+.gatepass-qr-footer-copy span {
+  color: #94a3b8 !important;
+  font-size: 0.88rem;
+}
+.gatepass-qr-limit-note span {
+  color: #94a3b8 !important;
+  font-size: 0.8rem;
+}
+.gatepass-qr-limit-note svg {
+  color: #eab308;
+}
+
+

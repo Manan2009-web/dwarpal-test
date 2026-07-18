@@ -173,47 +173,52 @@ export default function GatepassQrModal({ gatepass, open, onClose }) {
       backdropClassName="gatepass-qr-modal-backdrop"
     >
       <div className="gatepass-qr-modal-content">
-        <div className="gatepass-qr-security-banner">
-          <ShieldAlert size={18} />
-          <div>
-            <strong>Screenshots are not allowed for gatepass QR.</strong>
-            <p>Browser protection is best effort only. The QR hides when the tab loses focus.</p>
+        <div className="gatepass-qr-security-badge">
+          <ShieldAlert size={14} className="badge-icon" />
+          <span>Screenshot protection active. QR hides on tab blur.</span>
+        </div>
+
+        <div className="gatepass-qr-stage-wrapper">
+          <div className="gatepass-qr-live-indicator">
+            <span className="live-indicator-dot" />
+            <span>LIVE GATEPASS</span>
+          </div>
+          <div
+            className="gatepass-qr-stage"
+            onContextMenu={(event) => event.preventDefault()}
+          >
+            <SecureQrCanvas
+              dataUrl={qrDataUrl}
+              label={`QR code for ${gatepassLabel}`}
+              masked={requiresReveal}
+            />
+            {requiresReveal ? (
+              <button
+                type="button"
+                className="secure-qr-reveal"
+                onClick={() => setRequiresReveal(false)}
+              >
+                <Eye size={18} />
+                <span>Reveal QR again</span>
+              </button>
+            ) : null}
           </div>
         </div>
 
-        <div
-          className="gatepass-qr-stage"
-          onContextMenu={(event) => event.preventDefault()}
-        >
-          <SecureQrCanvas
-            dataUrl={qrDataUrl}
-            label={`QR code for ${gatepassLabel}`}
-            masked={requiresReveal}
-          />
-          {requiresReveal ? (
-            <button
-              type="button"
-              className="secure-qr-reveal"
-              onClick={() => setRequiresReveal(false)}
-            >
-              <Eye size={18} />
-              <span>Reveal QR again</span>
-            </button>
-          ) : null}
-        </div>
-
-        <div className="gatepass-qr-meta">
-          <div className="gatepass-qr-chip">
-            <span>Gatepass ID</span>
-            <strong>{gatepassLabel}</strong>
+        <div className="gatepass-qr-info-strip">
+          <div className="info-item">
+            <span className="label">Gatepass ID:</span>
+            <span className="value">{gatepassLabel}</span>
           </div>
-          <div className="gatepass-qr-chip">
-            <span>Name</span>
-            <strong>{gatepass.name || 'Not provided'}</strong>
+          <div className="info-divider" />
+          <div className="info-item">
+            <span className="label">Student:</span>
+            <span className="value">{gatepass.name || 'Not provided'}</span>
           </div>
-          <div className="gatepass-qr-chip">
-            <span>Approved By</span>
-            <strong>{gatepass.approvedBy || 'Awaiting approval'}</strong>
+          <div className="info-divider" />
+          <div className="info-item">
+            <span className="label">Approved by:</span>
+            <span className="value">{gatepass.approvedBy || 'Awaiting approval'}</span>
           </div>
         </div>
 
@@ -224,8 +229,8 @@ export default function GatepassQrModal({ gatepass, open, onClose }) {
           </div>
           <div className="gatepass-qr-footer-actions">
             <div className="gatepass-qr-limit-note">
-              <AlertTriangle size={16} />
-              <span>Long-press save, drag, and right-click are disabled where supported.</span>
+              <AlertTriangle size={14} />
+              <span>Right-click, long-press, and drag are disabled.</span>
             </div>
             <ActionButton type="button" tone="secondary" onClick={onClose}>
               Close QR

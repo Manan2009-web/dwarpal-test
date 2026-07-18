@@ -4276,6 +4276,15 @@ function DashboardPage({
         ? 'Try a different filter or start a new leave application.'
         : 'Try a different filter or wait for new requests.'
 
+  const activeApprovedGatepass = useMemo(() => {
+    if (currentUser.role !== 'student') {
+      return null
+    }
+    return gatepasses.find(
+      (g) => (g.status === 'Approved' || g.status === 'Out') && g.qr?.available
+    )
+  }, [currentUser.role, gatepasses])
+
   useEffect(() => {
     if (!focusReference) {
       return
@@ -4315,6 +4324,23 @@ function DashboardPage({
 
   return (
     <div className="page-stack">
+      {currentUser.role === 'student' && activeApprovedGatepass ? (
+        <section className="active-gatepass-banner" onClick={() => onOpenQrPreview(activeApprovedGatepass)}>
+          <div className="active-gatepass-banner-content">
+            <div className="active-gatepass-banner-icon">
+              <QrCode size={20} className="pulse-qr-icon" />
+            </div>
+            <div className="active-gatepass-banner-text">
+              <strong>Approved Gatepass Ready</strong>
+              <p>ID: {activeApprovedGatepass.gatepassId || activeApprovedGatepass.requestNumber || activeApprovedGatepass.id}. Tap to open secure scanner QR.</p>
+            </div>
+          </div>
+          <button type="button" className="active-gatepass-banner-action-btn">
+            Show QR
+          </button>
+        </section>
+      ) : null}
+
       {isRequester ? (
         <section className="dashboard-toolbar">
           <div className="dashboard-toolbar-copy">

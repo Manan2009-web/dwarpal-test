@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { Camera, RefreshCcw, ShieldCheck } from 'lucide-react'
+import { Camera, QrCode, RefreshCcw, ShieldCheck } from 'lucide-react'
 import {
   ApiError,
   extractGatepassVerificationData,
@@ -393,41 +393,25 @@ export default function SecurityVerificationPanel({
 
       <div className="security-verify-grid">
         <div className="security-scan-panel">
-          <div className="security-scan-card security-scan-launcher">
-            <div className="security-scan-card-header">
-              <div>
-                <span className="eyebrow">Camera Scanner</span>
-                <h4>Open Scanner</h4>
-                <p>Uses the device camera, duplicate-scan protection, and immediate verification after a successful read.</p>
-              </div>
-              <ActionButton
-                type="button"
-                icon={Camera}
-                onClick={() => setScannerOpen(true)}
-                disabled={isScanVerifying}
-              >
-                {isScanVerifying ? 'Verifying scan...' : 'Open Scanner'}
-              </ActionButton>
+          <div className="security-scan-card security-scan-launcher-compact">
+            <div className="security-scan-launcher-icon-badge">
+              <QrCode size={30} className="qr-pulse-icon" />
             </div>
-
-            <div className="scanner-launch-surface" aria-hidden="true">
-              <div className="scanner-launch-frame">
-                <span className="scanner-frame-corner top-left" />
-                <span className="scanner-frame-corner top-right" />
-                <span className="scanner-frame-corner bottom-left" />
-                <span className="scanner-frame-corner bottom-right" />
-              </div>
-              <div className="scanner-launch-copy">
-                <strong>Align QR inside the frame</strong>
-                <p>The scanner opens in a focused modal and fetches gatepass details as soon as the QR is detected.</p>
-              </div>
+            <div className="security-scan-launcher-info">
+              <span className="eyebrow">Instant Verification</span>
+              <h4>Camera Scanner</h4>
+              <p>Quickly read and verify student or faculty gatepass QRs with your camera.</p>
             </div>
-
-            <div className="scanner-launch-points">
-              <span>Fast QR detection</span>
-              <span>Permission + camera error handling</span>
-              <span>Manual fallback always available</span>
-            </div>
+            <ActionButton
+              type="button"
+              tone="primary"
+              icon={Camera}
+              onClick={() => setScannerOpen(true)}
+              disabled={isScanVerifying}
+              className="scanner-launch-btn"
+            >
+              {isScanVerifying ? 'Verifying scan...' : 'Open Scanner'}
+            </ActionButton>
           </div>
         </div>
 
