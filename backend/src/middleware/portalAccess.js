@@ -8,7 +8,7 @@ const AppError = require('../utils/appError');
 const PORTAL_ACCESS_HEADER = 'x-portal-access-token';
 const PORTAL_ACCESS_TYPES = Object.freeze(['student', 'faculty']);
 const PORTAL_CREDENTIALS_CONFIG_PATH = path.resolve(__dirname, '../../../src/config/portalCredentials.js');
-const TEMP_DISABLE_ACCESS_PORTAL = true;
+const TEMP_DISABLE_ACCESS_PORTAL = false;
 
 function normalizePortalAccessType(value) {
   const normalizedValue = String(value || '')
@@ -74,8 +74,8 @@ function isPortalAccessConfigured(accessType) {
 }
 
 function createPortalAccessToken(accessType) {
-  if (!env.jwtSecret) {
-    throw new Error('JWT_SECRET is not configured. Add it to your backend .env file.');
+  if (!env.jwtPortalSecret) {
+    throw new Error('JWT_PORTAL_SECRET is not configured. Add it to your backend .env file.');
   }
 
   const normalizedAccessType = normalizePortalAccessType(accessType);
@@ -85,7 +85,7 @@ function createPortalAccessToken(accessType) {
       type: 'portal_access',
       accessType: normalizedAccessType
     },
-    env.jwtSecret,
+    env.jwtPortalSecret,
     {
       subject: `portal:${normalizedAccessType}`,
       expiresIn: env.portalAccessTokenExpiresIn
@@ -102,7 +102,7 @@ function verifyPortalAccessToken(token) {
     return null;
   }
 
-  const decoded = jwt.verify(token, env.jwtSecret);
+  const decoded = jwt.verify(token, env.jwtPortalSecret, { algorithms: ['HS256'] });
 
   if (decoded?.type !== 'portal_access') {
     throw new AppError('Portal access token is invalid. Please authenticate again.', 401);
@@ -146,6 +146,7 @@ function requirePortalAccess(...allowedTypes) {
       const portalAccess = verifyPortalAccessToken(token);
 
       if (normalizedAllowedTypes.length && !normalizedAllowedTypes.includes(portalAccess.accessType)) {
+        console.warn(`[portal-access] Access forbidden. Path: ${req.originalUrl || req.url}. Allowed portals: ${JSON.stringify(normalizedAllowedTypes)}, Received: "${portalAccess.accessType}"`);
         const error = new AppError('This portal does not allow access to the requested action.', 403);
         error.code = 'PORTAL_ACCESS_FORBIDDEN';
         return next(error);

@@ -682,11 +682,6 @@ function App() {
     [toast],
   )
 
-  useEffect(() => {
-    // TEMP_DISABLED_ACCESS_PORTAL
-    clearPortalAccessSession()
-    setPortalAccess(null)
-  }, [])
 
   useEffect(() => {
     if (!currentUser || currentUser.role !== 'student' || !currentUser.mustChangePassword) {
@@ -1158,7 +1153,16 @@ function App() {
     const normalizedIdentifier = String(identifier || '').trim()
 
     try {
-      const user = await loginUser(normalizedIdentifier, password)
+      let user
+      if (portalAccess?.accessType === 'student') {
+        const result = await startStudentLogin({ identifier: normalizedIdentifier, password })
+        user = result.user
+        if (!user) {
+          throw new Error('Student login did not return user session details.')
+        }
+      } else {
+        user = await loginUser(normalizedIdentifier, password)
+      }
       setCurrentUser(user)
       toast.success({
         title: 'Login successful',
@@ -1168,7 +1172,7 @@ function App() {
     } catch (error) {
       const errorDetails = resolveApiError(error, {
         fallbackMessage: 'Unable to complete DwarPal sign-in. Please try again.',
-        authMode: 'login',
+        authMode: portalAccess?.accessType === 'student' ? 'student-login' : 'login',
       })
 
       if (['PORTAL_ACCESS_INVALID', 'PORTAL_ACCESS_REQUIRED'].includes(errorDetails.code)) {

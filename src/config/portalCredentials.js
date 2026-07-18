@@ -1,11 +1,11 @@
 export const PORTAL_CREDENTIALS = {
   student: {
-    id: '1234567890',
-    password: '12345',
+    id: 'STUDENT2026',
+    password: 'dwarpal-student-access',
   },
   faculty: {
-    id: '999',
-    password: '333',
+    id: 'GATEKEEPER2026',
+    password: 'dwarpal-admin-access',
   },
 }
 

@@ -5,11 +5,11 @@ const AppError = require('./appError');
 const WEBAUTHN_STATE_COOKIE = `${env.cookieName}_webauthn`;
 
 function signWebAuthnState(payload) {
-  if (!env.jwtSecret) {
-    throw new Error('JWT_SECRET is not configured. Add it to your backend .env file.');
+  if (!env.jwtSessionSecret) {
+    throw new Error('JWT_SESSION_SECRET is not configured. Add it to your backend .env file.');
   }
 
-  return jwt.sign(payload, env.jwtSecret, { expiresIn: '5m' });
+  return jwt.sign(payload, env.jwtSessionSecret, { expiresIn: '5m' });
 }
 
 function setWebAuthnStateCookie(res, payload) {
@@ -43,7 +43,7 @@ function readWebAuthnState(req, expectedFlow) {
   }
 
   try {
-    const state = jwt.verify(token, env.jwtSecret);
+    const state = jwt.verify(token, env.jwtSessionSecret, { algorithms: ['HS256'] });
 
     if (expectedFlow && state.flow !== expectedFlow) {
       throw new AppError('Biometric verification session is invalid. Please try again.', 401);

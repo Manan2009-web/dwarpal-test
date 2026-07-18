@@ -167,7 +167,8 @@ const env = {
   mongoDbName,
   enableInMemoryDb: parseBooleanEnv(process.env.ENABLE_IN_MEMORY_DB, false),
   autoBootstrapSystemAccounts,
-  jwtSecret: normalizeEnvString(process.env.JWT_SECRET),
+  jwtSessionSecret: normalizeEnvString(process.env.JWT_SESSION_SECRET),
+  jwtPortalSecret: normalizeEnvString(process.env.JWT_PORTAL_SECRET),
   jwtExpiresIn: normalizeEnvString(process.env.JWT_EXPIRES_IN) || '7d',
   bcryptSaltRounds: parsePositiveIntegerEnv(process.env.BCRYPT_SALT_ROUNDS, 10),
   cookieName: normalizeEnvString(process.env.COOKIE_NAME) || 'dwarpal_token',
@@ -198,11 +199,11 @@ const env = {
   ),
   temporaryCredentialSecret:
     normalizeEnvString(process.env.TEMPORARY_CREDENTIAL_SECRET) ||
-    normalizeEnvString(process.env.JWT_SECRET) ||
+    normalizeEnvString(process.env.JWT_SESSION_SECRET) ||
     'dwarpal-dev-temporary-credential-secret',
   otpSecret:
     normalizeEnvString(process.env.OTP_SECRET) ||
-    normalizeEnvString(process.env.JWT_SECRET) ||
+    normalizeEnvString(process.env.JWT_SESSION_SECRET) ||
     'dwarpal-dev-otp-secret',
   registerOtpExpiryMinutes: parsePositiveIntegerEnv(process.env.REGISTER_OTP_EXPIRY_MINUTES, 5),
   registerOtpResendCooldownSeconds: parsePositiveIntegerEnv(
@@ -271,7 +272,7 @@ const env = {
   vapidEmail: normalizeEnvString(process.env.VAPID_EMAIL) || 'mailto:dwarpalcode@gmail.com',
   qrSignSecret:
     normalizeEnvString(process.env.QR_SIGN_SECRET) ||
-    normalizeEnvString(process.env.JWT_SECRET) ||
+    normalizeEnvString(process.env.JWT_SESSION_SECRET) ||
     'dwarpal-dev-qr-signing-secret',
   envFilePath: resolvedEnvPath,
   defaultPhoneCountryCode: normalizeEnvString(process.env.DEFAULT_PHONE_COUNTRY_CODE) || '+91',
@@ -343,8 +344,12 @@ function validateStartupEnv() {
     errors.push('MONGO_URI and MONGODB_URI are both set with different values. Keep only one, preferably MONGO_URI.');
   }
 
-  if (!env.jwtSecret) {
-    errors.push('JWT_SECRET is required.');
+  if (!env.jwtSessionSecret) {
+    errors.push('JWT_SESSION_SECRET is required.');
+  }
+
+  if (!env.jwtPortalSecret) {
+    errors.push('JWT_PORTAL_SECRET is required.');
   }
 
   if (env.isProduction && !env.mongoUri) {

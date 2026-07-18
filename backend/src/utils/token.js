@@ -2,8 +2,8 @@ const jwt = require('jsonwebtoken');
 const env = require('../config/env');
 
 function createAccessToken(user) {
-  if (!env.jwtSecret) {
-    throw new Error('JWT_SECRET is not configured. Add it to your backend .env file.');
+  if (!env.jwtSessionSecret) {
+    throw new Error('JWT_SESSION_SECRET is not configured. Add it to your backend .env file.');
   }
 
   return jwt.sign(
@@ -12,7 +12,7 @@ function createAccessToken(user) {
       email: user.email,
       authMethod: user.authMethod || 'password'
     },
-    env.jwtSecret,
+    env.jwtSessionSecret,
     {
       subject: user._id.toString(),
       expiresIn: env.jwtExpiresIn

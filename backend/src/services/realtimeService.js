@@ -35,11 +35,11 @@ async function authenticateSocket(socket) {
     throw new Error('Authentication token is required for realtime updates.');
   }
 
-  if (!env.jwtSecret) {
-    throw new Error('JWT_SECRET is not configured.');
+  if (!env.jwtSessionSecret) {
+    throw new Error('JWT_SESSION_SECRET is not configured.');
   }
 
-  const decoded = jwt.verify(token, env.jwtSecret);
+  const decoded = jwt.verify(token, env.jwtSessionSecret, { algorithms: ['HS256'] });
   const userId = decoded.sub || decoded.id;
   const user = await User.findById(userId).select('_id role isActive');
 

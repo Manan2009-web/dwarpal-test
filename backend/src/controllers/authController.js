@@ -11,8 +11,6 @@ const {
 const authService = require('../services/authService');
 const emailVerificationService = require('../services/emailVerificationService');
 const passwordResetService = require('../services/passwordResetService');
-const registrationOtpService = require('../services/registrationOtpService');
-const studentAuthService = require('../services/studentAuthService');
 const pickUser = require('../utils/pickUser');
 const {
   createPortalAccessToken,
@@ -121,19 +119,6 @@ const resendRegisterOtp = asyncHandler(async (req, res) => {
 
 const portalAccess = asyncHandler(async (req, res) => {
   const accessType = normalizePortalAccessType(req.body?.accessType);
-
-  if (!accessType) {
-    throw new AppError('Access type must be either student or faculty.', 400);
-  }
-
-  // TEMP_DISABLED_ACCESS_PORTAL
-  return sendSuccess(res, {
-    message: `${accessType === 'student' ? 'Student' : 'Faculty'} portal access is temporarily bypassed.`,
-    data: {
-      accessType,
-      token: createPortalAccessToken(accessType)
-    }
-  });
 
   const credentials = getPortalAccessCredentials(accessType);
 

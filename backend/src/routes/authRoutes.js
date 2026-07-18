@@ -1,4 +1,5 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const { body } = require('express-validator');
 const { protect, requireVerifiedEmail } = require('../middleware/authMiddleware');
 const authorize = require('../middleware/authorize');
@@ -214,6 +215,19 @@ const biometricRateLimit = createRateLimiter({
     `Too many biometric authentication attempts. Please wait ${formatRetryWindow(result.retryAfterSeconds)} and try again.`,
   errorCode: 'AUTH_WEBAUTHN_RATE_LIMITED'
 });
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many requests from this IP, please try again after 15 minutes.'
+  }
+});
+
+router.use(authLimiter);
 
 router.post('/portal-access', portalAccessValidation, validateRequest, authController.portalAccess);
 router.post(

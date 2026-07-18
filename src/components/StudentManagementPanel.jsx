@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Download, KeyRound, PencilLine, Plus, ShieldCheck, Trash2, UserRoundPlus } from 'lucide-react'
+import { Eye, FileDown, GraduationCap, KeyRound, PencilLine, ShieldCheck, Trash2, UserPlus } from 'lucide-react'
 import {
   createAdminStudent,
   deleteAdminStudent,
@@ -446,12 +446,12 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
           </div>
           <div className="admin-inline-actions">
             <button type="button" className="admin-secondary-link" onClick={handleExportCredentials} disabled={exporting}>
-              <Download size={16} />
+              <FileDown size={16} strokeWidth={1.5} />
               <span>{exporting ? 'Exporting...' : 'Export Student Credentials'}</span>
             </button>
             {!isItAdmin ? (
               <button type="button" className="admin-primary-button inline" onClick={openCreateModal}>
-                <Plus size={16} />
+                <UserPlus size={16} strokeWidth={1.5} />
                 <span>Add New Student</span>
               </button>
             ) : null}
@@ -461,7 +461,7 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
         <div className="admin-stat-grid compact">
           <article className="admin-stat-card">
             <div className="admin-stat-icon">
-              <UserRoundPlus size={18} />
+              <GraduationCap size={22} strokeWidth={1.5} />
             </div>
             <div>
               <p>Total Students</p>
@@ -470,7 +470,7 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
           </article>
           <article className="admin-stat-card success">
             <div className="admin-stat-icon">
-              <ShieldCheck size={18} />
+              <Eye size={22} strokeWidth={1.5} />
             </div>
             <div>
               <p>Visible Rows</p>
@@ -479,7 +479,7 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
           </article>
           <article className="admin-stat-card warning">
             <div className="admin-stat-icon">
-              <KeyRound size={18} />
+              <KeyRound size={22} strokeWidth={1.5} />
             </div>
             <div>
               <p>Temp Credentials Ready</p>
@@ -599,11 +599,11 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
                     <td>
                       <div className="admin-inline-actions">
                         <button type="button" className="admin-text-button" onClick={() => openEditModal(student)}>
-                          <PencilLine size={15} />
+                          <PencilLine size={16} strokeWidth={1.5} />
                           <span>Edit</span>
                         </button>
                         <button type="button" className="admin-text-button danger" onClick={() => setDeleteTarget(student)}>
-                          <Trash2 size={15} />
+                          <Trash2 size={16} strokeWidth={1.5} />
                           <span>Delete</span>
                         </button>
                       </div>
@@ -668,7 +668,7 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
             <ActionButton type="button" tone="secondary" onClick={() => setModalOpen(false)} disabled={submitting}>
               Cancel
             </ActionButton>
-            <ActionButton type="submit" icon={isEditMode ? PencilLine : Plus} disabled={submitting} aria-busy={submitting}>
+            <ActionButton type="submit" icon={isEditMode ? PencilLine : UserPlus} disabled={submitting} aria-busy={submitting}>
               {submitting ? (isEditMode ? 'Saving changes...' : 'Creating student...') : isEditMode ? 'Save Changes' : 'Create Student'}
             </ActionButton>
           </div>

@@ -65,15 +65,15 @@ function maskEmail(email) {
 }
 
 function createStudentLoginChallengeToken(userId) {
-  if (!env.jwtSecret) {
-    throw new Error('JWT_SECRET is not configured. Add it to your backend .env file.');
+  if (!env.jwtSessionSecret) {
+    throw new Error('JWT_SESSION_SECRET is not configured. Add it to your backend .env file.');
   }
 
   return jwt.sign(
     {
       type: 'student_login_challenge'
     },
-    env.jwtSecret,
+    env.jwtSessionSecret,
     {
       subject: userId.toString(),
       expiresIn: `${env.studentLoginOtpExpiryMinutes}m`
@@ -87,7 +87,7 @@ function verifyStudentLoginChallengeToken(token) {
   }
 
   try {
-    const decoded = jwt.verify(String(token || '').trim(), env.jwtSecret);
+    const decoded = jwt.verify(String(token || '').trim(), env.jwtSessionSecret, { algorithms: ['HS256'] });
 
     if (decoded?.type !== 'student_login_challenge' || !decoded?.sub) {
       throw new Error('invalid');

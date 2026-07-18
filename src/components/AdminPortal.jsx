@@ -2,29 +2,37 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   BarChart3,
+  BookOpen,
+  BookUser,
   Building2,
-  CircleHelp,
+  CalendarClock,
   ChevronLeft,
   ChevronRight,
+  CircleHelp,
+  CircleUserRound,
   ClipboardList,
-  Download,
+  CornerDownLeft,
+  Eye,
+  FileDown,
   FileSpreadsheet,
   FileText,
+  FolderDown,
+  GraduationCap,
   History,
+  Hourglass,
   LayoutDashboard,
   LogOut,
-  Menu,
+  MapPin,
+  PanelLeftClose,
+  PanelLeftOpen,
   RefreshCw,
   Search,
-  Settings,
   ShieldCheck,
   SlidersHorizontal,
-  TrendingUp,
-  User,
-  Users,
-  UserPlus,
+  SlidersVertical,
+  SquareCheck,
   UserCheck,
-  UserRoundCog,
+  UserPlus,
   XCircle,
 } from 'lucide-react'
 import AppBrand from './AppBrand'
@@ -110,8 +118,8 @@ function getAdminNavItems(currentUser) {
   if (currentUser.role === 'it') {
     return [
       { key: 'students', label: 'Add Student', icon: UserPlus, to: '/admin/students' },
-      { key: 'student-history', label: 'Student Reg History', icon: History, to: '/admin/student-history' },
-      { key: 'settings', label: 'Settings', icon: Settings, to: '/admin/settings' }
+      { key: 'student-history', label: 'Student Reg History', icon: BookOpen, to: '/admin/student-history' },
+      { key: 'settings', label: 'Settings', icon: SlidersVertical, to: '/admin/settings' }
     ]
   }
 
@@ -120,8 +128,8 @@ function getAdminNavItems(currentUser) {
       { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, to: '/admin/dashboard' },
       { key: 'gatepasses', label: 'Gatepass Ops', icon: ClipboardList, to: '/admin/gatepasses' },
       { key: 'reports', label: 'Reports', icon: BarChart3, to: '/admin/reports' },
-      { key: 'students', label: 'Students', icon: Users, to: '/admin/students' },
-      { key: 'export', label: 'Export Center', icon: Download, to: '/admin/export' },
+      { key: 'students', label: 'Students', icon: GraduationCap, to: '/admin/students' },
+      { key: 'export', label: 'Export Center', icon: FolderDown, to: '/admin/export' },
     ]
   }
 
@@ -133,17 +141,17 @@ function getAdminNavItems(currentUser) {
 
   if (!isSecurity) {
     if (currentUser.role !== 'cao') {
-      items.push({ key: 'students', label: 'Students', icon: Users, to: '/admin/students' })
+      items.push({ key: 'students', label: 'Students', icon: GraduationCap, to: '/admin/students' })
     }
     items.push(
-      { key: 'faculty', label: 'Faculty', icon: UserRoundCog, to: '/admin/faculty' },
+      { key: 'faculty', label: 'Faculty', icon: BookUser, to: '/admin/faculty' },
       { key: 'coordinators', label: 'Coordinators', icon: UserCheck, to: '/admin/coordinators' },
-      { key: 'export', label: 'Export Center', icon: Download, to: '/admin/export' },
+      { key: 'export', label: 'Export Center', icon: FolderDown, to: '/admin/export' },
       { key: 'history', label: 'Export History', icon: History, to: '/admin/export/history' },
     )
   }
 
-  items.push({ key: 'settings', label: 'Settings', icon: Settings, to: '/admin/settings' })
+  items.push({ key: 'settings', label: 'Settings', icon: SlidersVertical, to: '/admin/settings' })
   return items
 }
 
@@ -253,7 +261,7 @@ function AdminSidebar({ currentUser, activeSection, isOpen, onLinkClick }) {
       </div>
       <div className="admin-user-chip">
         <div className="admin-user-chip-avatar">
-          <User size={18} />
+          <CircleUserRound size={18} strokeWidth={1.5} />
         </div>
         <div className="admin-user-chip-info">
           <strong>{currentUser.name}</strong>
@@ -268,7 +276,7 @@ function AdminSidebar({ currentUser, activeSection, isOpen, onLinkClick }) {
             className={`admin-nav-link ${activeSection === item.key ? 'active' : ''}`}
             onClick={onLinkClick}
           >
-            <item.icon size={18} />
+            <item.icon size={20} strokeWidth={1.5} />
             <span>{item.label}</span>
           </Link>
         ))}
@@ -280,7 +288,7 @@ function AdminSidebar({ currentUser, activeSection, isOpen, onLinkClick }) {
   )
 }
 
-function AdminHeader({ currentUser, title, subtitle, onRefresh, refreshing, onToggleSidebar, onOpenSupport, onLogout }) {
+function AdminHeader({ currentUser, title, subtitle, onRefresh, refreshing, onToggleSidebar, isSidebarOpen, onOpenSupport, onLogout }) {
   return (
     <header className="admin-header">
       <div className="admin-header-title-section" style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
@@ -293,7 +301,10 @@ function AdminHeader({ currentUser, title, subtitle, onRefresh, refreshing, onTo
           }}
           aria-label="Toggle sidebar menu"
         >
-          <Menu size={22} />
+          {isSidebarOpen
+            ? <PanelLeftClose size={20} strokeWidth={1.5} />
+            : <PanelLeftOpen size={20} strokeWidth={1.5} />
+          }
         </button>
         <div>
           <p className="admin-eyebrow">DwarPal Admin Portal</p>
@@ -310,7 +321,7 @@ function AdminHeader({ currentUser, title, subtitle, onRefresh, refreshing, onTo
             title="Help & Support"
             aria-label="Open support"
           >
-            <CircleHelp size={18} />
+            <CircleHelp size={18} strokeWidth={1.5} />
           </button>
         ) : null}
         
@@ -320,7 +331,7 @@ function AdminHeader({ currentUser, title, subtitle, onRefresh, refreshing, onTo
           title="User Dashboard"
           aria-label="User Dashboard"
         >
-          <LayoutDashboard size={18} />
+          <LayoutDashboard size={18} strokeWidth={1.5} />
         </Link>
 
         <button
@@ -330,7 +341,7 @@ function AdminHeader({ currentUser, title, subtitle, onRefresh, refreshing, onTo
           title="Logout"
           aria-label="Logout"
         >
-          <LogOut size={18} />
+          <LogOut size={18} strokeWidth={1.5} />
         </button>
 
         <div className="admin-header-divider" style={{ width: '1px', height: '24px', backgroundColor: 'var(--app-surface-border)', margin: '0 4px' }} />
@@ -343,11 +354,11 @@ function AdminHeader({ currentUser, title, subtitle, onRefresh, refreshing, onTo
           aria-label="Refresh admin data"
           title="Refresh Data"
         >
-          <RefreshCw size={18} className={refreshing ? 'spin' : ''} />
+          <RefreshCw size={18} strokeWidth={1.5} className={refreshing ? 'spin' : ''} />
         </button>
         <div className="admin-header-user">
           <div className="header-avatar">
-            <User size={16} />
+            <CircleUserRound size={16} strokeWidth={1.5} />
           </div>
           <div className="user-details">
             <strong>{currentUser.name}</strong>
@@ -362,7 +373,7 @@ function AdminHeader({ currentUser, title, subtitle, onRefresh, refreshing, onTo
 function StatCard({ label, value, icon: Icon, tone = '' }) {
   return (
     <article className={`admin-stat-card ${tone}`}>
-      <div className="admin-stat-icon">{Icon ? <Icon size={18} /> : null}</div>
+      <div className="admin-stat-icon">{Icon ? <Icon size={22} strokeWidth={1.5} /> : null}</div>
       <div>
         <p>{label}</p>
         <strong>{formatMetric(value)}</strong>
@@ -488,7 +499,7 @@ function ExportFilterPanel({ filters, options, onChange, onReset, lockedPartitio
 
       <details className="admin-filter-section" open>
         <summary>
-          <Search size={17} />
+          <Search size={16} strokeWidth={1.5} />
           Search fields
         </summary>
         <div className="admin-filter-grid">
@@ -516,7 +527,7 @@ function ExportFilterPanel({ filters, options, onChange, onReset, lockedPartitio
 
       <details className="admin-filter-section" open>
         <summary>
-          <SlidersHorizontal size={17} />
+          <SlidersHorizontal size={16} strokeWidth={1.5} />
           Academic and user scope
         </summary>
         <div className="admin-filter-grid">
@@ -705,14 +716,14 @@ function PreviewPanel({ preview, loading, error, selectedCount }) {
         </div>
       </div>
       <div className="admin-stat-grid compact">
-        <StatCard label="Students" value={userCounts.students} icon={Users} />
-        <StatCard label="Faculty" value={userCounts.faculty} icon={UserRoundCog} />
-        <StatCard label="Selected" value={selectedCount} icon={ShieldCheck} tone="info" />
-        <StatCard label="Pending" value={summary.totalPending} icon={History} tone="warning" />
+        <StatCard label="Students" value={userCounts.students} icon={GraduationCap} />
+        <StatCard label="Faculty" value={userCounts.faculty} icon={BookUser} />
+        <StatCard label="Selected" value={selectedCount} icon={SquareCheck} tone="info" />
+        <StatCard label="Pending" value={summary.totalPending} icon={Hourglass} tone="warning" />
       </div>
       {preview?.busiestDepartment ? (
         <div className="admin-insight-strip">
-          <Building2 size={18} />
+          <Building2 size={18} strokeWidth={1.5} />
           <span>
             Highest activity: <strong>{preview.busiestDepartment.department}</strong> with{' '}
             {formatMetric(preview.busiestDepartment.totalGatepasses)} gatepasses.
@@ -761,7 +772,7 @@ function RecordsPanel({
         <div className="admin-table-toolbar" style={{ flexWrap: 'wrap', gap: '1rem' }}>
           {activeSection === 'students' && onSearchChange && (
             <div className="admin-search-wrapper" style={{ position: 'relative', minWidth: '280px' }}>
-              <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--app-shell-muted)' }} />
+              <Search size={16} strokeWidth={1.5} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--app-shell-muted)' }} />
               <input
                 type="text"
                 placeholder="Search students..."
@@ -794,7 +805,7 @@ function RecordsPanel({
               onClick={() => onExport('selected')}
               disabled={!selectedCount || exportBusy}
             >
-              <Download size={16} />
+              <FileDown size={16} strokeWidth={1.5} />
               <span>{exportBusy ? 'Generating...' : `Export Selected ${formatLabel}`}</span>
             </button>
             <button type="button" className="admin-secondary-link" onClick={() => onExport('filtered')} disabled={exportBusy}>
@@ -894,13 +905,13 @@ function RecordsPanel({
           </div>
           <div className="admin-pager">
             <button type="button" className="admin-icon-button" onClick={() => onPageChange(meta.page - 1)} disabled={!meta.hasPrevPage}>
-              <ChevronLeft size={16} />
+              <ChevronLeft size={16} strokeWidth={1.5} />
             </button>
             <span>
               Page {meta.page || 1} of {meta.totalPages || 1}
             </span>
             <button type="button" className="admin-icon-button" onClick={() => onPageChange(meta.page + 1)} disabled={!meta.hasNextPage}>
-              <ChevronRight size={16} />
+              <ChevronRight size={16} strokeWidth={1.5} />
             </button>
           </div>
         </>
@@ -994,8 +1005,8 @@ function DashboardOverview({ preview, options, currentUser, onStudentClick }) {
   const card4 = isCoord
     ? { label: 'Rejected Passes', value: summary.totalRejected || 0, icon: XCircle, tone: 'danger' }
     : currentUser?.role === 'hod'
-      ? { label: 'Active Outside', value: activeCount, icon: SlidersHorizontal, tone: 'info' }
-      : { label: 'Faculty Leaves', value: summary.totalFacultyRequests || 0, icon: UserRoundCog, tone: 'info' }
+      ? { label: 'Active Outside', value: activeCount, icon: MapPin, tone: 'info' }
+      : { label: 'Faculty Leaves', value: summary.totalFacultyRequests || 0, icon: CalendarClock, tone: 'info' }
 
   const showLeaderboard = studentLeaderboard.length > 0 || isCoord || ['hod', 'principal', 'admin', 'cao'].includes(currentUser?.role)
 
@@ -1035,7 +1046,7 @@ function DashboardOverview({ preview, options, currentUser, onStudentClick }) {
       <div className="admin-stat-grid">
         <StatCard label="Total Gatepasses" value={totalCount} icon={ClipboardList} />
         <StatCard label="Approved Passes" value={approvedCount} icon={ShieldCheck} tone="success" />
-        <StatCard label="Pending Review" value={pendingCount} icon={History} tone="warning" />
+        <StatCard label="Pending Review" value={pendingCount} icon={Hourglass} tone="warning" />
         <StatCard label={card4.label} value={card4.value} icon={card4.icon} tone={card4.tone} />
       </div>
 
@@ -1051,7 +1062,7 @@ function DashboardOverview({ preview, options, currentUser, onStudentClick }) {
                 <span className="subtext">Students sorted by number of gatepasses taken. Click to inspect complete logs.</span>
               </div>
               <div className="admin-search-wrapper">
-                <Search size={16} className="search-icon" />
+                <Search size={16} strokeWidth={1.5} className="search-icon" />
                 <input
                   type="text"
                   placeholder="Search student or enrollment..."
@@ -1477,10 +1488,10 @@ function GatepassOpsPage({ preview }) {
           <div className="admin-stat-grid" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.75rem' }}>
             <StatCard label="Total" value={summary.totalGatepasses} icon={ClipboardList} />
             <StatCard label="Approved" value={summary.totalApproved} icon={ShieldCheck} tone="success" />
-            <StatCard label="Pending" value={summary.totalPending} icon={History} tone="warning" />
+            <StatCard label="Pending" value={summary.totalPending} icon={Hourglass} tone="warning" />
             <StatCard label="Rejected" value={summary.totalRejected} icon={XCircle} tone="danger" />
-            <StatCard label="Out" value={summary.totalOut} icon={ClipboardList} />
-            <StatCard label="Return" value={summary.totalReturned} icon={History} />
+            <StatCard label="Out" value={summary.totalOut} icon={MapPin} />
+            <StatCard label="Return" value={summary.totalReturned} icon={CornerDownLeft} />
           </div>
         </div>
         
@@ -1942,6 +1953,7 @@ export default function AdminPortal({ currentUser, onLogout, onOpenSupport = nul
           title={titleMap[activeSection] || 'Admin Portal'}
           subtitle="Compact college operations, scoped records, and audit-grade exports."
           refreshing={refreshBusy}
+          isSidebarOpen={sidebarOpen || !sidebarCollapsed}
           onToggleSidebar={() => {
             if (window.innerWidth > 1100) {
               setSidebarCollapsed((prev) => !prev)

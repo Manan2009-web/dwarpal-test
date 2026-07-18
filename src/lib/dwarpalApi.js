@@ -1747,12 +1747,22 @@ export async function startStudentLogin({ identifier = '', password = '', loginT
         },
   })
 
+  if (response?.data?.token) {
+    storeAuthToken(response.data.token)
+  }
+
+  const user = response?.data?.user ? toUiUser(response.data.user, { authMethod: 'password' }) : null
+  if (user) {
+    storeAuthUser(user)
+  }
+
   return {
     message: response?.message || 'OTP sent to the registered student email.',
     loginToken: response?.data?.loginToken || loginToken || '',
     maskedEmail: response?.data?.maskedEmail || '',
     cooldownSeconds: Number(response?.data?.cooldownSeconds || 45),
     expiresInSeconds: Number(response?.data?.expiresInSeconds || 300),
+    user,
   }
 }
 

@@ -1,20 +1,10 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion, useReducedMotion } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { KeyRound } from 'lucide-react'
 import SideRays from './ui/SideRays'
 import logo from '../assets/dwarpal_logo.png'
-
-const PORTAL_CREDENTIALS = {
-  student: {
-    code: 'STUDENT2026',
-    password: 'dwarpal-student-access',
-  },
-  other: {
-    code: 'GATEKEEPER2026',
-    password: 'dwarpal-admin-access',
-  },
-}
+import { requestPortalAccess } from '../lib/dwarpalApi'
 
 const cardVariants = {
   hidden: { opacity: 0, scale: 0.96, y: 15 },
@@ -45,62 +35,46 @@ const itemVariants = {
 
 export default function AccessPortal({ onAccessGranted }) {
   const navigate = useNavigate()
-  const reduceMotion = useReducedMotion()
   const [code, setCode] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isVerifying, setIsVerifying] = useState(false)
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
 
-    if (!code.trim() || !password.trim()) {
+    const trimmedCode = code.trim()
+    const trimmedPassword = password.trim()
+
+    if (!trimmedCode || !trimmedPassword) {
       setError('Please enter both Access Code and Portal Password.')
       return
     }
 
     setIsVerifying(true)
 
-    // Simulate validation check delay
-    setTimeout(() => {
-      const normalizedCode = code.trim().toUpperCase()
-      const enteredPassword = password.trim()
+    try {
+      const normalizedCode = trimmedCode.toUpperCase()
+      const accessType = normalizedCode === 'STUDENT2026' ? 'student' : 'faculty'
 
-      if (
-        normalizedCode === PORTAL_CREDENTIALS.student.code &&
-        enteredPassword === PORTAL_CREDENTIALS.student.password
-      ) {
-        if (typeof onAccessGranted === 'function') {
-          onAccessGranted({
-            token: 'simulated-student-token',
-            accessType: 'student',
-          })
-        }
-        setIsVerifying(false)
-        navigate('/login', { replace: true })
-      } else if (
-        normalizedCode === PORTAL_CREDENTIALS.other.code &&
-        enteredPassword === PORTAL_CREDENTIALS.other.password
-      ) {
-        if (typeof onAccessGranted === 'function') {
-          onAccessGranted({
-            token: 'simulated-other-token',
-            accessType: 'other',
-          })
-        }
-        setIsVerifying(false)
-        navigate('/login', { replace: true })
-      } else {
-        setError('Invalid credentials. Please verify your portal access keys.')
-        setIsVerifying(false)
+      const result = await requestPortalAccess(accessType, normalizedCode, trimmedPassword)
+      if (typeof onAccessGranted === 'function') {
+        onAccessGranted({
+          token: result.token,
+          accessType: result.accessType,
+        })
       }
-    }, 600)
+      navigate('/login', { replace: true })
+    } catch (err) {
+      setError(err?.message || 'Invalid credentials. Please verify your portal access keys.')
+    } finally {
+      setIsVerifying(false)
+    }
   }
 
   return (
     <div className="tw:relative tw:isolate tw:min-h-screen tw:w-full tw:flex tw:items-center tw:justify-center tw:bg-[#03060d] tw:font-sans tw:overflow-hidden tw:px-4">
-      {/* Full-Screen Animated Backdrop Effect */}
       <div className="tw:absolute tw:inset-0 tw:z-0 tw:pointer-events-none tw:w-full tw:h-full">
         <SideRays
           speed={2.5}
@@ -117,14 +91,12 @@ export default function AccessPortal({ onAccessGranted }) {
         />
       </div>
 
-      {/* Center Card (Glass UI) */}
       <motion.div
         variants={cardVariants}
         initial="hidden"
         animate="visible"
         className="tw:relative tw:z-10 tw:w-full tw:max-w-md tw:bg-white/10 tw:backdrop-blur-xl tw:border tw:border-white/20 tw:shadow-2xl tw:rounded-2xl tw:p-8"
       >
-        {/* Brand Logo & Header with clean spacing */}
         <motion.div variants={itemVariants} className="tw:flex tw:flex-col tw:items-center tw:text-center tw:mb-6">
           <img 
             src={logo} 

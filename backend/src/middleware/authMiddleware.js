@@ -39,14 +39,14 @@ const protect = asyncHandler(async (req, res, next) => {
     throw new AppError('Authentication token is required', 401);
   }
 
-  if (!env.jwtSecret) {
-    throw new AppError('JWT_SECRET is not configured', 500);
+  if (!env.jwtSessionSecret) {
+    throw new AppError('JWT_SESSION_SECRET is not configured', 500);
   }
 
   let decoded;
 
   try {
-    decoded = jwt.verify(token, env.jwtSecret);
+    decoded = jwt.verify(token, env.jwtSessionSecret, { algorithms: ['HS256'] });
   } catch (error) {
     if (source === 'cookie') {
       clearAuthCookie(res);
