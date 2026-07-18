@@ -48,7 +48,9 @@ function isPortalAccessConfigured(accessType) {
 
 function createPortalAccessToken(accessType) {
   if (!env.jwtPortalSecret) {
-    throw new Error('JWT_PORTAL_SECRET is not configured. Add it to your backend .env file.');
+    const err = new AppError('Portal access token signing is not configured on the server. Contact the administrator.', 503);
+    err.code = 'PORTAL_TOKEN_SIGNING_NOT_CONFIGURED';
+    throw err;
   }
 
   const normalizedAccessType = normalizePortalAccessType(accessType);
