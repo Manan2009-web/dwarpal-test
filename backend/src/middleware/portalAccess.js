@@ -1,13 +1,9 @@
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
 const jwt = require('jsonwebtoken');
 const env = require('../config/env');
 const AppError = require('../utils/appError');
 
 const PORTAL_ACCESS_HEADER = 'x-portal-access-token';
 const PORTAL_ACCESS_TYPES = Object.freeze(['student', 'faculty']);
-const PORTAL_CREDENTIALS_CONFIG_PATH = path.resolve(__dirname, '../../../src/config/portalCredentials.js');
 const TEMP_DISABLE_ACCESS_PORTAL = false;
 
 function normalizePortalAccessType(value) {
@@ -18,66 +14,25 @@ function normalizePortalAccessType(value) {
   return PORTAL_ACCESS_TYPES.includes(normalizedValue) ? normalizedValue : '';
 }
 
-function normalizePortalCredentialEntry(entry = {}) {
-  return {
-    accessId: String(entry?.id || '').trim(),
-    accessPassword: String(entry?.password || '')
-  };
-}
-
-function readPortalCredentialsMap() {
-  try {
-    const source = fs.readFileSync(PORTAL_CREDENTIALS_CONFIG_PATH, 'utf8');
-    const executableSource = `${source
-      .replace(/export\s+const\s+PORTAL_CREDENTIALS\s*=\s*/, 'const PORTAL_CREDENTIALS = ')
-      .replace(/export\s+default\s+PORTAL_CREDENTIALS\s*;?/g, '')}
-module.exports = { PORTAL_CREDENTIALS };`;
-    const context = {
-      module: { exports: {} },
-      exports: {}
-    };
-
-    vm.runInNewContext(executableSource, context, {
-      filename: PORTAL_CREDENTIALS_CONFIG_PATH
-    });
-
-    const portalCredentials = context.module.exports?.PORTAL_CREDENTIALS;
-
-    return portalCredentials && typeof portalCredentials === 'object' ? portalCredentials : {};
-  } catch (error) {
-    console.error('[portal-access] Unable to read shared portal credentials config.', {
-      configPath: PORTAL_CREDENTIALS_CONFIG_PATH,
-      error: error?.message || error
-    });
-
-    return {};
-  }
-}
-
 function getPortalAccessCredentials(accessType) {
   const normalizedAccessType = normalizePortalAccessType(accessType);
 
-  // 1. Try to read from the shared config file first (preferred for local development)
-  const portalCredentials = readPortalCredentialsMap();
-  const fileCredentials = normalizedAccessType ? normalizePortalCredentialEntry(portalCredentials[normalizedAccessType]) : null;
-
-  if (fileCredentials && fileCredentials.accessId && fileCredentials.accessPassword) {
-    return fileCredentials;
+  // Read credentials exclusively from environment variables.
+  // This is the only reliable source for Vercel (serverless) and any cloud deployment.
+  // Set STUDENT_PORTAL_ACCESS_ID, STUDENT_PORTAL_ACCESS_PASSWORD,
+  // FACULTY_PORTAL_ACCESS_ID, FACULTY_PORTAL_ACCESS_PASSWORD in your Vercel dashboard.
+  if (normalizedAccessType === 'student') {
+    return {
+      accessId: env.studentPortalAccessId || '',
+      accessPassword: env.studentPortalAccessPassword || ''
+    };
   }
 
-  // 2. Fall back to environment variables (for Vercel / Production where the config file is not deployed)
-  if (normalizedAccessType === 'student') {
-    const accessId = env.studentPortalAccessId;
-    const accessPassword = env.studentPortalAccessPassword;
-    if (accessId && accessPassword) {
-      return { accessId, accessPassword };
-    }
-  } else if (normalizedAccessType === 'faculty') {
-    const accessId = env.facultyPortalAccessId;
-    const accessPassword = env.facultyPortalAccessPassword;
-    if (accessId && accessPassword) {
-      return { accessId, accessPassword };
-    }
+  if (normalizedAccessType === 'faculty') {
+    return {
+      accessId: env.facultyPortalAccessId || '',
+      accessPassword: env.facultyPortalAccessPassword || ''
+    };
   }
 
   return {
