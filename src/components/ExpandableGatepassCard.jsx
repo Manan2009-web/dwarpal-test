@@ -201,6 +201,19 @@ const ExpandableGatepassCard = memo(function ExpandableGatepassCard({
           </div>
 
           <div className="expandable-gatepass-status">
+            {currentUserRole === 'student' && gatepass.status === 'Approved' && gatepass.qr?.available ? (
+              <button
+                type="button"
+                className="header-show-qr-btn"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onOpenQrPreview?.(gatepass)
+                }}
+              >
+                <QrCode size={13} />
+                <span>Show QR</span>
+              </button>
+            ) : null}
             <StatusBadge status={gatepass?.status} />
             <span className={`expandable-gatepass-chevron${expanded ? ' expanded' : ''}`} aria-hidden="true">
               <ChevronDown size={18} />
@@ -209,30 +222,12 @@ const ExpandableGatepassCard = memo(function ExpandableGatepassCard({
         </div>
 
         <div className="expandable-gatepass-summary-grid">
-          {summaryItems.map((item) => {
-            const isDateItem = item.label === 'Date'
-            const showQuickQr = isDateItem && currentUserRole === 'student' && gatepass.status === 'Approved' && gatepass.qr?.available
-
-            return (
-              <div key={`${displayGatepassId}-${item.label}`} className="gatepass-summary-row">
-                <span>{item.label}</span>
-                <strong>{item.value}</strong>
-                {showQuickQr ? (
-                  <button
-                    type="button"
-                    className="quick-show-qr-btn"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onOpenQrPreview?.(gatepass)
-                    }}
-                  >
-                    <QrCode size={13} />
-                    <span>Show QR</span>
-                  </button>
-                ) : null}
-              </div>
-            )
-          })}
+          {summaryItems.map((item) => (
+            <div key={`${displayGatepassId}-${item.label}`} className="gatepass-summary-row">
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+            </div>
+          ))}
         </div>
       </button>
 
