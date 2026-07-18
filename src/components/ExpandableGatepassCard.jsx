@@ -209,12 +209,30 @@ const ExpandableGatepassCard = memo(function ExpandableGatepassCard({
         </div>
 
         <div className="expandable-gatepass-summary-grid">
-          {summaryItems.map((item) => (
-            <div key={`${displayGatepassId}-${item.label}`} className="gatepass-summary-row">
-              <span>{item.label}</span>
-              <strong>{item.value}</strong>
-            </div>
-          ))}
+          {summaryItems.map((item) => {
+            const isDateItem = item.label === 'Date'
+            const showQuickQr = isDateItem && currentUserRole === 'student' && gatepass.status === 'Approved' && gatepass.qr?.available
+
+            return (
+              <div key={`${displayGatepassId}-${item.label}`} className="gatepass-summary-row">
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+                {showQuickQr ? (
+                  <button
+                    type="button"
+                    className="quick-show-qr-btn"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onOpenQrPreview?.(gatepass)
+                    }}
+                  >
+                    <QrCode size={13} />
+                    <span>Show QR</span>
+                  </button>
+                ) : null}
+              </div>
+            )
+          })}
         </div>
       </button>
 

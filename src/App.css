@@ -6648,96 +6648,32 @@ html, body, #root, .admin-shell {
   box-shadow: inset 0 -1px 0 var(--app-surface-border);
 }
 
-/* Active Gatepass QR banner for Student Dashboard */
-.active-gatepass-banner {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  padding: 1.15rem 1.4rem;
-  border-radius: 22px;
-  background: linear-gradient(135deg, #09131c 0%, #173549 100%);
-  border: 1px solid rgba(59, 130, 246, 0.22);
-  box-shadow: 0 8px 30px rgba(9, 26, 43, 0.25), 0 0 0 1px rgba(59, 130, 246, 0.05);
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  margin-bottom: 0.75rem;
-}
-.active-gatepass-banner:hover {
-  border-color: rgba(59, 130, 246, 0.45);
-  box-shadow: 0 12px 35px rgba(59, 130, 246, 0.18);
-  transform: translateY(-2px);
-}
-.active-gatepass-banner-content {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  min-width: 0;
-}
-.active-gatepass-banner-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: rgba(59, 130, 246, 0.12);
-  border: 1px solid rgba(59, 130, 246, 0.2);
-  color: #60a5fa;
-  flex-shrink: 0;
-}
-.pulse-qr-icon {
-  animation: pulseQr 2s infinite ease-in-out;
-}
-@keyframes pulseQr {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 0.8;
-  }
-  50% {
-    transform: scale(1.15);
-    opacity: 1;
-    filter: drop-shadow(0 0 6px rgba(96, 165, 250, 0.8));
-  }
-}
-.active-gatepass-banner-text {
-  min-width: 0;
-}
-.active-gatepass-banner-text strong {
-  display: block;
-  font-size: 1.05rem;
-  color: #ffffff;
-  font-family: 'Syne', 'Outfit', sans-serif;
-  font-weight: 700;
-  margin-bottom: 0.15rem;
-}
-.active-gatepass-banner-text p {
-  margin: 0;
-  font-size: 0.86rem;
-  color: #94a3b8;
-  text-overflow: ellipsis;
-  overflow: hidden;
-  white-space: nowrap;
-}
-.active-gatepass-banner-action-btn {
+/* Student card quick Show QR button */
+.quick-show-qr-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.65rem 1.15rem;
-  border-radius: 999px;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 99px;
+  border: 1px solid var(--app-accent, #2872a1);
+  background: rgba(40, 114, 161, 0.06);
+  color: var(--app-accent, #2872a1);
+  font-size: 0.75rem;
   font-weight: 700;
-  font-size: 0.86rem;
-  background: #3b82f6;
-  color: #ffffff;
-  border: none;
   cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-  white-space: nowrap;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(40, 114, 161, 0.05);
 }
-.active-gatepass-banner:hover .active-gatepass-banner-action-btn {
-  background: #2563eb;
-  transform: scale(1.03);
+.quick-show-qr-btn:hover {
+  background: var(--app-accent, #2872a1);
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(40, 114, 161, 0.2);
+}
+.quick-show-qr-btn:active {
+  transform: translateY(0);
 }
 
 /* Compact Scanner Launcher (Idle card) */
@@ -6805,7 +6741,7 @@ html, body, #root, .admin-shell {
 
 /* Scanner Modal Redesign */
 .scanner-modal-card {
-  background: linear-gradient(180deg, #09131c 0%, #05080e 100%) !important;
+  background: linear-gradient(180deg, #0f1b2d 0%, #0a1220 100%) !important;
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
   color: #f8fafc !important;
   box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6) !important;
@@ -6825,8 +6761,8 @@ html, body, #root, .admin-shell {
   max-width: 350px;
   aspect-ratio: 1;
   margin: 1.5rem auto !important;
-  border: 2px solid rgba(59, 130, 246, 0.25);
-  box-shadow: 0 0 30px rgba(59, 130, 246, 0.15);
+  border: 2px solid rgba(40, 114, 161, 0.3);
+  box-shadow: 0 0 30px rgba(40, 114, 161, 0.15);
   overflow: hidden;
   border-radius: 32px !important;
 }
@@ -6834,15 +6770,15 @@ html, body, #root, .admin-shell {
   width: 80% !important;
   height: 80% !important;
   border-radius: 24px;
-  box-shadow: 0 0 0 999px rgba(5, 8, 14, 0.62) !important;
+  box-shadow: 0 0 0 999px rgba(10, 18, 32, 0.62) !important;
 }
 .scan-line {
   position: absolute;
   left: 8%;
   right: 8%;
   height: 2px;
-  background: linear-gradient(90deg, transparent, #60a5fa, #3b82f6, #60a5fa, transparent);
-  box-shadow: 0 0 12px rgba(59, 130, 246, 0.8);
+  background: linear-gradient(90deg, transparent, var(--app-accent, #2872a1), var(--app-accent-strong, #1f5a80), var(--app-accent, #2872a1), transparent) !important;
+  box-shadow: 0 0 12px rgba(40, 114, 161, 0.8) !important;
   animation: scanMove 2.2s infinite ease-in-out;
   pointer-events: none;
   z-index: 10;
@@ -6864,7 +6800,7 @@ html, body, #root, .admin-shell {
   }
 }
 .scanner-modal-card .scanner-frame-corner {
-  border-color: #3b82f6 !important;
+  border-color: var(--app-accent, #2872a1) !important;
   animation: cornersPulse 2s infinite ease-in-out;
 }
 @keyframes cornersPulse {
@@ -6875,7 +6811,7 @@ html, body, #root, .admin-shell {
   50% {
     opacity: 1;
     transform: scale(1.03);
-    filter: drop-shadow(0 0 4px #3b82f6);
+    filter: drop-shadow(0 0 4px var(--app-accent, #2872a1));
   }
 }
 .scanner-modal-status {
@@ -6890,9 +6826,30 @@ html, body, #root, .admin-shell {
   color: #ffffff;
 }
 
+/* Dark mode overrides for buttons in Scanner Modal */
+.scanner-modal-card .action-button.primary {
+  background: linear-gradient(135deg, var(--app-accent, #2872a1), var(--app-accent-strong, #1f5a80)) !important;
+  border-color: rgba(31, 90, 128, 0.3) !important;
+  color: #ffffff !important;
+  box-shadow: var(--control-shadow) !important;
+}
+.scanner-modal-card .action-button.primary:hover {
+  background: linear-gradient(135deg, var(--app-accent-strong, #1f5a80), #16425d) !important;
+}
+.scanner-modal-card .action-button.secondary {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+}
+.scanner-modal-card .action-button.secondary:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
 /* Premium Gatepass QR Modal Redesign */
 .gatepass-qr-modal-card {
-  background: linear-gradient(135deg, #09131c 0%, #05080e 100%) !important;
+  background: linear-gradient(135deg, #0f1b2d 0%, #0a1220 100%) !important;
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
   color: #f8fafc !important;
   box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5) !important;
@@ -6915,34 +6872,6 @@ html, body, #root, .admin-shell {
 .gatepass-qr-modal-card .modal-header button:hover svg {
   color: #ffffff;
 }
-@keyframes qrScaleIn {
-  from {
-    opacity: 0;
-    transform: scale(0.9);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-/* Screenshot protection badge */
-.gatepass-qr-security-badge {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.65rem 0.95rem;
-  border-radius: 12px;
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.15);
-  color: #fca5a5;
-  font-size: 0.8rem;
-  margin-bottom: 1.5rem;
-}
-.gatepass-qr-security-badge .badge-icon {
-  color: #ef4444;
-  flex-shrink: 0;
-}
 
 /* Glowing frame stage */
 .gatepass-qr-stage-wrapper {
@@ -6951,12 +6880,13 @@ html, body, #root, .admin-shell {
   border-radius: 32px;
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow: 0 0 35px rgba(59, 130, 246, 0.12);
+  box-shadow: 0 0 35px rgba(40, 114, 161, 0.18);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   margin-bottom: 1.5rem;
+  margin-top: 1rem;
 }
 .gatepass-qr-live-indicator {
   position: absolute;
@@ -6966,8 +6896,8 @@ html, body, #root, .admin-shell {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  background: #09131c;
-  border: 1px solid rgba(59, 130, 246, 0.35);
+  background: #0f1b2d;
+  border: 1px solid rgba(40, 114, 161, 0.4);
   padding: 0.35rem 0.95rem;
   border-radius: 999px;
   font-size: 0.72rem;
@@ -6981,8 +6911,8 @@ html, body, #root, .admin-shell {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background-color: #3b82f6;
-  box-shadow: 0 0 8px #3b82f6;
+  background-color: var(--app-accent, #2872a1);
+  box-shadow: 0 0 8px var(--app-accent, #2872a1);
   animation: liveDotPulse 1.8s infinite ease-in-out;
 }
 @keyframes liveDotPulse {
@@ -6999,8 +6929,8 @@ html, body, #root, .admin-shell {
   background: #ffffff !important;
   padding: 1.25rem !important;
   border-radius: 24px !important;
-  border: 3px solid rgba(59, 130, 246, 0.25) !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2) !important;
+  border: 3px solid var(--app-accent, #2872a1) !important;
+  box-shadow: 0 8px 32px rgba(40, 114, 161, 0.25) !important;
 }
 .secure-qr-canvas-shell {
   background: #ffffff !important;
@@ -7018,8 +6948,8 @@ html, body, #root, .admin-shell {
   padding: 0.95rem;
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.03);
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid rgba(40, 114, 161, 0.15);
+  border-bottom: 1px solid rgba(40, 114, 161, 0.15);
   margin-bottom: 1.5rem;
 }
 .info-item {
@@ -7038,7 +6968,7 @@ html, body, #root, .admin-shell {
 .info-divider {
   width: 1px;
   height: 12px;
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(40, 114, 161, 0.2) !important;
 }
 .gatepass-qr-footer {
   border-top: 1px solid rgba(255, 255, 255, 0.05) !important;
@@ -7055,5 +6985,27 @@ html, body, #root, .admin-shell {
 .gatepass-qr-limit-note svg {
   color: #eab308;
 }
+
+/* Dark mode overrides for buttons in QR Modal */
+.gatepass-qr-modal-card .action-button.primary {
+  background: linear-gradient(135deg, var(--app-accent, #2872a1), var(--app-accent-strong, #1f5a80)) !important;
+  border-color: rgba(31, 90, 128, 0.3) !important;
+  color: #ffffff !important;
+  box-shadow: var(--control-shadow) !important;
+}
+.gatepass-qr-modal-card .action-button.primary:hover {
+  background: linear-gradient(135deg, var(--app-accent-strong, #1f5a80), #16425d) !important;
+}
+.gatepass-qr-modal-card .action-button.secondary {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+}
+.gatepass-qr-modal-card .action-button.secondary:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
 
 

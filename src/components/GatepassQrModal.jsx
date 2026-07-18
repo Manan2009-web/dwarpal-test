@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Eye, EyeOff, ShieldAlert } from 'lucide-react'
+import { AlertTriangle, Eye, EyeOff } from 'lucide-react'
 import { ActionButton, ModalForm, formatDateTime } from './ui'
 
 function SecureQrCanvas({ dataUrl, label, masked }) {
@@ -173,11 +173,6 @@ export default function GatepassQrModal({ gatepass, open, onClose }) {
       backdropClassName="gatepass-qr-modal-backdrop"
     >
       <div className="gatepass-qr-modal-content">
-        <div className="gatepass-qr-security-badge">
-          <ShieldAlert size={14} className="badge-icon" />
-          <span>Screenshot protection active. QR hides on tab blur.</span>
-        </div>
-
         <div className="gatepass-qr-stage-wrapper">
           <div className="gatepass-qr-live-indicator">
             <span className="live-indicator-dot" />
