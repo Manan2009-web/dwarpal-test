@@ -168,7 +168,9 @@ const env = {
   enableInMemoryDb: parseBooleanEnv(process.env.ENABLE_IN_MEMORY_DB, false),
   autoBootstrapSystemAccounts,
   jwtSessionSecret: normalizeEnvString(process.env.JWT_SESSION_SECRET),
-  jwtPortalSecret: normalizeEnvString(process.env.JWT_PORTAL_SECRET),
+  jwtPortalSecret:
+    normalizeEnvString(process.env.JWT_PORTAL_SECRET) ||
+    normalizeEnvString(process.env.JWT_SESSION_SECRET),
   jwtExpiresIn: normalizeEnvString(process.env.JWT_EXPIRES_IN) || '7d',
   bcryptSaltRounds: parsePositiveIntegerEnv(process.env.BCRYPT_SALT_ROUNDS, 10),
   cookieName: normalizeEnvString(process.env.COOKIE_NAME) || 'dwarpal_token',

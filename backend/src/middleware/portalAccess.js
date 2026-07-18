@@ -56,6 +56,23 @@ module.exports = { PORTAL_CREDENTIALS };`;
 
 function getPortalAccessCredentials(accessType) {
   const normalizedAccessType = normalizePortalAccessType(accessType);
+
+  // 1. Try to read from environment variables first (preferred for Vercel / Production)
+  if (normalizedAccessType === 'student') {
+    const accessId = env.studentPortalAccessId;
+    const accessPassword = env.studentPortalAccessPassword;
+    if (accessId && accessPassword) {
+      return { accessId, accessPassword };
+    }
+  } else if (normalizedAccessType === 'faculty') {
+    const accessId = env.facultyPortalAccessId;
+    const accessPassword = env.facultyPortalAccessPassword;
+    if (accessId && accessPassword) {
+      return { accessId, accessPassword };
+    }
+  }
+
+  // 2. Fallback to reading the shared portal credentials config file (for local development)
   const portalCredentials = readPortalCredentialsMap();
 
   if (normalizedAccessType) {
