@@ -381,7 +381,7 @@ function buildFacultyLeaveFilter(filters, actor) {
   return andFilter(...filterParts);
 }
 
-function buildUserFilter(filters, actor, role) {
+async function buildUserFilter(filters, actor, role) {
   const filterParts = [buildUserScopeFilter(actor, role)];
   const selectedStudentIds = getSelectedStudentIds(filters);
   const selectedFacultyIds = getSelectedFacultyIds(filters);
@@ -430,9 +430,9 @@ function buildUserFilter(filters, actor, role) {
   }
 
   if (filters.coordinatorOnly && !isStudentRole) {
-    filterParts.push({
-      $or: [{ isCoordinator: true }, { 'coordinatorAssignment.isCoordinator': true }, { 'coordinatorScope.isCoordinator': true }]
-    });
+    const Class = require('../models/Class');
+    const coordinatorIds = await Class.find({ coordinator_id: { $ne: null } }).distinct('coordinator_id');
+    filterParts.push({ _id: { $in: coordinatorIds } });
   }
 
   const nameRegex = regex(filters.name);
@@ -1088,9 +1088,9 @@ async function fetchReportDataset(actor, inputFilters = {}) {
   const facultyLeaveFilter = includeFacultyLeaves(filters.reportType, filters.recordPartition) && !isCoordinator(actor)
     ? buildFacultyLeaveFilter(filters, actor)
     : impossibleFilter();
-  const studentFilter = buildUserFilter(filters, actor, 'student');
+  const studentFilter = await buildUserFilter(filters, actor, 'student');
   const facultyFilter = !isCoordinator(actor)
-    ? buildUserFilter(filters, actor, getFacultyRoleFilter())
+    ? await buildUserFilter(filters, actor, getFacultyRoleFilter())
     : impossibleFilter();
   const gatepassPopulateFields = [
     {
@@ -1295,8 +1295,8 @@ async function getExportOptions(actor, query = {}) {
     coordinatorOnly: query.coordinatorOnly,
     personSearch: q
   });
-  const studentFilter = buildUserFilter(filters, actor, 'student');
-  const facultyFilter = buildUserFilter(filters, actor, getFacultyRoleFilter());
+  const studentFilter = await buildUserFilter(filters, actor, 'student');
+  const facultyFilter = await buildUserFilter(filters, actor, getFacultyRoleFilter());
   const [students, faculty] = await Promise.all([
     User.find(studentFilter)
       .select('fullName enrollmentNo department program semester')

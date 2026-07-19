@@ -121,6 +121,8 @@ import {
   verifyRegistrationOtp,
   verifyStudentLoginOtp,
   verifySession,
+  assignCoordinator,
+  resignCoordinator,
 } from './lib/dwarpalApi'
 import {
   beginBiometricAuthentication,
@@ -1717,7 +1719,24 @@ function App() {
     }
 
     try {
-      const updatedUser = await updateCurrentUserProfile(profileUpdates)
+      let updatedUser;
+      if (profileUpdates?.coordinatorAssignment) {
+        const { isCoordinator, program, department, semester } = profileUpdates.coordinatorAssignment;
+        if (isCoordinator) {
+          const apiResult = await assignCoordinator({ program, department, semester });
+          updatedUser = apiResult?.data?.user;
+        } else {
+          const prevAssignment = currentUser?.coordinatorAssignment || {};
+          const apiResult = await resignCoordinator({
+            program: prevAssignment.program || program,
+            department: prevAssignment.department || department,
+            semester: prevAssignment.semester || semester
+          });
+          updatedUser = apiResult?.data?.user;
+        }
+      } else {
+        updatedUser = await updateCurrentUserProfile(profileUpdates);
+      }
 
       if (updatedUser) {
         setCurrentUser(updatedUser)
@@ -1748,6 +1767,48 @@ function App() {
         ok: false,
         error: errorDetails.message,
         fieldErrors: errorDetails.fieldErrors,
+      }
+    }
+  }
+
+  async function handleResignCoordinator() {
+    if (!currentUser?.id) {
+      return { ok: false, error: 'Sign in again to resign.' }
+    }
+
+    const prevAssignment = currentUser?.coordinatorAssignment || {}
+    try {
+      const apiResult = await resignCoordinator({
+        program: prevAssignment.program,
+        department: prevAssignment.department,
+        semester: prevAssignment.semester
+      })
+
+      const updatedUser = apiResult?.data?.user;
+      if (updatedUser) {
+        setCurrentUser(updatedUser)
+      }
+
+      toast.success({
+        title: 'Resignation complete',
+        message: 'You have resigned as coordinator successfully.',
+      })
+
+      navigate('/user/dashboard', { replace: true })
+      return { ok: true }
+    } catch (error) {
+      const errorDetails = resolveApiError(error, {
+        fallbackMessage: 'Unable to resign as coordinator right now.',
+      })
+
+      toast.error({
+        title: 'Resignation failed',
+        message: errorDetails.message,
+      })
+
+      return {
+        ok: false,
+        error: errorDetails.message,
       }
     }
   }
@@ -1878,7 +1939,7 @@ function App() {
     return (
       <AdminRoute currentUser={currentUser} authReady={authReady}>
         <div className={requiresEmailVerification ? 'app-shell-lock-surface' : ''} aria-hidden={requiresEmailVerification}>
-          <AdminPortal currentUser={currentUser} onLogout={logout} onOpenSupport={() => setSupportModalOpen(true)} />
+          <AdminPortal currentUser={currentUser} onLogout={logout} onOpenSupport={() => setSupportModalOpen(true)} onResign={handleResignCoordinator} />
         </div>
         {/* TEMP_DISABLED_OTP */}
       </AdminRoute>

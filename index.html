@@ -5,6 +5,42 @@
     <meta http-equiv="Cache-Control" content="no-store, max-age=0, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
+    <!--
+    Content Security Policy (CSP) — OWASP A03 XSS Defence
+    ─────────────────────────────────────────────────────
+    default-src 'self'        : Block all unlisted resource types by default.
+    script-src  'self'        : Allow only same-origin scripts. The boot inline
+                 'unsafe-inline': script in this file is allowed; remove if you
+                                  move it to an external file with a hash/nonce.
+    style-src   'self' 'unsafe-inline': Needed for CSS-in-JS / Tailwind.
+    img-src     'self' data: blob: https:
+                              : Allow QR code data-URIs, blob object URLs,
+                                and HTTPS images (Firebase Storage, etc.).
+    connect-src 'self' https: wss:
+                              : Allow API calls + WebSocket to any HTTPS host.
+                                Tighten to specific origins in production.
+    font-src    'self' data:  : Allow self-hosted fonts + base64 data URIs.
+    frame-src   'none'        : Block all iframes (prevents clickjacking).
+    object-src  'none'        : Block Flash / plugin embeds.
+    base-uri    'self'        : Prevent base-tag injection attacks.
+    form-action 'self'        : All form submissions must go to same origin.
+    upgrade-insecure-requests : Automatically upgrade HTTP subresources to HTTPS.
+  -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="
+      default-src 'self';
+      script-src 'self' 'unsafe-inline';
+      style-src 'self' 'unsafe-inline';
+      img-src 'self' data: blob: https: http:;
+      connect-src 'self' https: http: wss: ws:;
+      font-src 'self' data:;
+      frame-src 'none';
+      object-src 'none';
+      base-uri 'self';
+      form-action 'self';
+    "
+    />
     <meta name="color-scheme" content="light" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#2872a1" />

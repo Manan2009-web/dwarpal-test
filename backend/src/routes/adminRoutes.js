@@ -17,9 +17,45 @@ const {
   scopeFilterMiddleware
 } = require('../middleware/adminAccess');
 
+const createRateLimiter = require('../middleware/rateLimit');
+const env = require('../config/env');
+const { ERROR_CODES } = require('../utils/appError');
+const AppError = require('../utils/appError');
+
 const router = express.Router();
 
-router.post('/seed-default-admins', adminController.seedDefaultAdmins);
+// ── Seed endpoint rate limiter: max 3 attempts per hour per IP ──────────────
+const seedRateLimit = createRateLimiter({
+  scope: 'admin:seed',
+  windowMs: 60 * 60 * 1000,
+  blockDurationMs: 60 * 60 * 1000,
+  max: 3,
+  errorCode: ERROR_CODES.ERR_RATE_LIMITED
+});
+
+/**
+ * Guard middleware for the seed endpoint.
+ * Requires the x-seed-admin-key header to match SEED_ADMIN_KEY in .env.
+ * If SEED_ADMIN_KEY is not set, the endpoint is disabled entirely.
+ */
+function requireSeedKey(req, res, next) {
+  const configuredKey = env.seedAdminKey;
+
+  if (!configuredKey) {
+    return next(new AppError('Admin seeding is disabled on this server.', 403, null, ERROR_CODES.ERR_FORBIDDEN));
+  }
+
+  const providedKey = String(req.headers['x-seed-admin-key'] || '').trim();
+
+  if (!providedKey || providedKey !== configuredKey) {
+    return next(new AppError('Invalid or missing seed admin key.', 401, null, ERROR_CODES.ERR_AUTH_FAILED));
+  }
+
+  return next();
+}
+
+router.post('/seed-default-admins', seedRateLimit, requireSeedKey, adminController.seedDefaultAdmins);
+
 router.get('/analytics', protect, requireVerifiedEmail, authorize('principal', 'hod', 'cao', 'admin'), adminController.getAnalytics);
 router.get('/users', protect, requireVerifiedEmail, authorize('principal', 'cao', 'admin'), adminController.listUsers);
 router.patch('/users/:id/status', protect, requireVerifiedEmail, authorize('principal', 'cao', 'admin'), updateUserStatusValidation, validateRequest, adminController.updateUserStatus);

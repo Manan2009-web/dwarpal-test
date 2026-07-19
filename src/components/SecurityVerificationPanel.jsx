@@ -9,6 +9,7 @@ import ManualGatepassLookup from './ManualGatepassLookup'
 import ScannerModal from './ScannerModal'
 import { useToast } from './ToastProvider'
 import { ActionButton, EmptyState, IdentityField, formatDateTime } from './ui'
+import { trimInput } from '../lib/sanitize'
 
 function readVerificationError(error, fallbackMessage) {
   if (error instanceof ApiError) {
@@ -249,12 +250,19 @@ export default function SecurityVerificationPanel({
   }
 
   async function handleVerifyById(nextGatepassId = gatepassId) {
-    const normalizedValue = String(nextGatepassId || '').trim()
+    const normalizedValue = trimInput(nextGatepassId)
 
     if (!normalizedValue) {
       setVerificationResult(null)
       setStatusMessage('')
       setError('Enter a Gatepass ID to continue.')
+      return
+    }
+
+    if (/[<>&"'`=]/.test(normalizedValue)) {
+      setVerificationResult(null)
+      setStatusMessage('')
+      setError('Gatepass ID contains invalid characters.')
       return
     }
 
@@ -278,12 +286,19 @@ export default function SecurityVerificationPanel({
   }
 
   async function handleManualVerify(nextValue = gatepassId) {
-    const normalizedValue = String(nextValue || '').trim()
+    const normalizedValue = trimInput(nextValue)
 
     if (!normalizedValue) {
       setVerificationResult(null)
       setStatusMessage('')
       setError('Enter a Gatepass ID or scan value to continue.')
+      return
+    }
+
+    if (/[<>&"'`=]/.test(normalizedValue)) {
+      setVerificationResult(null)
+      setStatusMessage('')
+      setError('Input contains invalid characters.')
       return
     }
 

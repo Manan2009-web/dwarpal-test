@@ -593,89 +593,6 @@ userSchema.pre('validate', function syncLegacyFields(next) {
     this.permissions = permissionsMap[this.role] || [];
   }
 
-  if (!this.coordinatorAssignment || typeof this.coordinatorAssignment !== 'object') {
-    this.coordinatorAssignment = {
-      isCoordinator: false,
-      program: null,
-      department: null,
-      semester: null
-    };
-  }
-
-  if (!this.coordinatorScope || typeof this.coordinatorScope !== 'object') {
-    this.coordinatorScope = {
-      isCoordinator: false,
-      program: null,
-      department: null,
-      semester: null,
-      division: '',
-      academicYear: '',
-      assignedClasses: []
-    };
-  }
-
-  const assignment = this.coordinatorAssignment;
-  const scope = this.coordinatorScope;
-  const hasCoordinatorRole = ['faculty', 'hod'].includes(this.role);
-  const requestedCoordinator = Boolean(this.isCoordinator || assignment.isCoordinator || scope.isCoordinator);
-
-  if (!hasCoordinatorRole || !requestedCoordinator) {
-    this.isCoordinator = false;
-    assignment.program = null;
-    assignment.department = null;
-    assignment.semester = null;
-    assignment.isCoordinator = false;
-    scope.isCoordinator = false;
-    scope.program = null;
-    scope.department = null;
-    scope.semester = null;
-    scope.division = '';
-    scope.academicYear = '';
-    scope.assignedClasses = [];
-  } else {
-    const normalizedProgram = normalizeProgram(scope.program || assignment.program) || null;
-    const normalizedDepartment = normalizeDepartment(scope.department || assignment.department) || null;
-    const normalizedSemester = Number(scope.semester || assignment.semester) || null;
-
-    if (!normalizedProgram || !normalizedDepartment || !SEMESTERS.includes(normalizedSemester)) {
-      this.isCoordinator = false;
-      assignment.isCoordinator = false;
-      assignment.program = null;
-      assignment.department = null;
-      assignment.semester = null;
-      scope.isCoordinator = false;
-      scope.program = null;
-      scope.department = null;
-      scope.semester = null;
-      scope.division = '';
-      scope.academicYear = '';
-      scope.assignedClasses = [];
-    } else {
-      this.isCoordinator = true;
-      assignment.isCoordinator = true;
-      assignment.program = normalizedProgram;
-      assignment.department = normalizedDepartment;
-      assignment.semester = normalizedSemester;
-      scope.isCoordinator = true;
-      scope.program = normalizedProgram;
-      scope.department = normalizedDepartment;
-      scope.semester = normalizedSemester;
-      scope.division = String(scope.division || '').trim();
-      scope.academicYear = String(scope.academicYear || '').trim();
-      scope.assignedClasses = Array.isArray(scope.assignedClasses)
-        ? scope.assignedClasses
-            .map((item) => ({
-              program: normalizeProgram(item.program || normalizedProgram) || normalizedProgram,
-              department: normalizeDepartment(item.department || normalizedDepartment) || normalizedDepartment,
-              semester: Number(item.semester || normalizedSemester) || normalizedSemester,
-              division: String(item.division || scope.division || '').trim(),
-              academicYear: String(item.academicYear || scope.academicYear || '').trim()
-            }))
-            .filter((item) => item.department && SEMESTERS.includes(item.semester))
-        : [];
-    }
-  }
-
   if (Array.isArray(this.permissions)) {
     this.permissions = Array.from(
       new Set(
@@ -696,6 +613,11 @@ userSchema.pre('validate', function syncLegacyFields(next) {
 
   this.hasBiometricCredentials = Array.isArray(this.webAuthnCredentials) && this.webAuthnCredentials.length > 0;
   syncEmailVerificationFields(this);
+
+  // ── Dynamic Coordinator Overhaul: Unset fields so they are never saved in users collection ──
+  this.isCoordinator = undefined;
+  this.coordinatorAssignment = undefined;
+  this.coordinatorScope = undefined;
 
   next();
 });
@@ -731,18 +653,109 @@ userSchema.methods.toPublicJSON = function toPublicJSON(req) {
 
 userSchema.index({ role: 1, isActive: 1, program: 1, department: 1 });
 userSchema.index({ role: 1, isActive: 1, gatepassApprovalEnabled: 1 });
-userSchema.index({
-  role: 1,
-  isActive: 1,
-  'coordinatorAssignment.isCoordinator': 1,
-  'coordinatorAssignment.program': 1,
-  'coordinatorAssignment.department': 1,
-  'coordinatorAssignment.semester': 1
-});
-userSchema.index({ role: 1, isActive: 1, isCoordinator: 1, 'coordinatorScope.department': 1 });
 userSchema.index({ permissions: 1, isActive: 1 });
 userSchema.index({ role: 1, createdAt: -1 });
 userSchema.index({ updatedAt: -1 });
 userSchema.index({ 'webAuthnCredentials.credentialId': 1 }, { unique: true, sparse: true });
+
+// ── Dynamic Coordinator Overhaul Hook logic ──────────────────────────────────
+function attachDynamicCoordinatorFields(doc, activeClasses) {
+  if (!doc) return;
+
+  if (activeClasses && activeClasses.length > 0) {
+    doc.isCoordinator = true;
+    const primaryClass = activeClasses[0];
+    doc.coordinatorAssignment = {
+      isCoordinator: true,
+      program: primaryClass.program,
+      department: primaryClass.department,
+      semester: primaryClass.semester
+    };
+    doc.coordinatorScope = {
+      isCoordinator: true,
+      program: primaryClass.program,
+      department: primaryClass.department,
+      semester: primaryClass.semester,
+      division: primaryClass.division || '',
+      academicYear: primaryClass.academicYear || '',
+      assignedClasses: activeClasses.map((c) => ({
+        program: c.program,
+        department: c.department,
+        semester: c.semester,
+        division: c.division || '',
+        academicYear: c.academicYear || ''
+      }))
+    };
+  } else {
+    doc.isCoordinator = false;
+    doc.coordinatorAssignment = {
+      isCoordinator: false,
+      program: null,
+      department: null,
+      semester: null
+    };
+    doc.coordinatorScope = {
+      isCoordinator: false,
+      program: null,
+      department: null,
+      semester: null,
+      division: '',
+      academicYear: '',
+      assignedClasses: []
+    };
+  }
+}
+
+async function populateCoordinatorForSingle(doc) {
+  if (!doc) return;
+  try {
+    const Class = mongoose.model('Class');
+    const activeClasses = await Class.find({ coordinator_id: doc._id });
+    attachDynamicCoordinatorFields(doc, activeClasses);
+  } catch (err) {
+    // Fallback if Class model is not loaded yet
+    attachDynamicCoordinatorFields(doc, []);
+  }
+}
+
+async function populateCoordinatorForMany(docs) {
+  if (!docs || docs.length === 0) return;
+  try {
+    const userIds = docs.map((doc) => doc._id);
+    const Class = mongoose.model('Class');
+    const classes = await Class.find({ coordinator_id: { $in: userIds } });
+
+    const classMap = {};
+    classes.forEach((c) => {
+      const uid = String(c.coordinator_id);
+      if (!classMap[uid]) classMap[uid] = [];
+      classMap[uid].push(c);
+    });
+
+    docs.forEach((doc) => {
+      const activeClasses = classMap[String(doc._id)] || [];
+      attachDynamicCoordinatorFields(doc, activeClasses);
+    });
+  } catch (err) {
+    docs.forEach((doc) => attachDynamicCoordinatorFields(doc, []));
+  }
+}
+
+// Register Mongoose hooks for dynamic query-time population
+userSchema.post('find', async function (docs) {
+  await populateCoordinatorForMany(docs);
+});
+
+userSchema.post('findOne', async function (doc) {
+  await populateCoordinatorForSingle(doc);
+});
+
+userSchema.post('findOneAndUpdate', async function (doc) {
+  await populateCoordinatorForSingle(doc);
+});
+
+userSchema.post('save', async function (doc) {
+  await populateCoordinatorForSingle(doc);
+});
 
 module.exports = mongoose.model('User', userSchema);

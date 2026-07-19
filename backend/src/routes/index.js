@@ -10,6 +10,7 @@ const debugRoutes = require('./debugRoutes');
 const notificationRoutes = require('./notificationRoutes');
 const publicRoutes = require('./publicRoutes');
 const visitorRoutes = require('./visitorRoutes');
+const coordinatorRoutes = require('./coordinatorRoutes');
 
 const router = express.Router();
 
@@ -22,6 +23,7 @@ router.use('/admin', adminRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/public', publicRoutes);
 router.use('/visitors', visitorRoutes);
+router.use('/coordinator', coordinatorRoutes);
 
 if (env.isDevelopment) {
   router.use('/debug', debugRoutes);

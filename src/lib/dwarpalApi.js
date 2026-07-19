@@ -3121,4 +3121,18 @@ export async function downloadAdminStudentCredentials(filters = {}) {
   }
 }
 
+export async function assignCoordinator(classDetails) {
+  return apiRequest('/coordinator/assign', {
+    method: 'POST',
+    body: classDetails
+  });
+}
+
+export async function resignCoordinator(classDetails) {
+  return apiRequest('/coordinator/resign', {
+    method: 'POST',
+    body: classDetails
+  });
+}
+
 export { ApiError }

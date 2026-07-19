@@ -288,7 +288,7 @@ function AdminSidebar({ currentUser, activeSection, isOpen, onLinkClick }) {
   )
 }
 
-function AdminHeader({ currentUser, title, subtitle, onRefresh, refreshing, onToggleSidebar, isSidebarOpen, onOpenSupport, onLogout }) {
+function AdminHeader({ currentUser, title, subtitle, onRefresh, refreshing, onToggleSidebar, isSidebarOpen, onOpenSupport, onLogout, onOpenResignModal }) {
   return (
     <header className="admin-header">
       <div className="admin-header-title-section" style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
@@ -313,6 +313,26 @@ function AdminHeader({ currentUser, title, subtitle, onRefresh, refreshing, onTo
         </div>
       </div>
       <div className="admin-header-actions">
+        {Boolean(currentUser?.isCoordinator || currentUser?.coordinatorAssignment?.isCoordinator || currentUser?.coordinatorScope?.isCoordinator) && onOpenResignModal ? (
+          <button
+            type="button"
+            className="action-button danger btn-resign-coord"
+            style={{ 
+              padding: '0.4rem 0.85rem', 
+              fontSize: '0.82rem', 
+              height: '32px', 
+              marginRight: '0.75rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 500
+            }}
+            onClick={onOpenResignModal}
+          >
+            Resign as Coordinator
+          </button>
+        ) : null}
+
         {onOpenSupport ? (
           <button
             type="button"
@@ -1678,7 +1698,7 @@ function ExportWorkspace({
   )
 }
 
-export default function AdminPortal({ currentUser, onLogout, onOpenSupport = null }) {
+export default function AdminPortal({ currentUser, onLogout, onOpenSupport = null, onResign = null }) {
   const location = useLocation()
   const navigate = useNavigate()
   const toast = useToast()
@@ -1686,6 +1706,22 @@ export default function AdminPortal({ currentUser, onLogout, onOpenSupport = nul
   const isCoord = useMemo(() => {
     return Boolean(currentUser.isCoordinator || currentUser.coordinatorAssignment?.isCoordinator || currentUser.coordinatorScope?.isCoordinator)
   }, [currentUser])
+
+  const [resignModalOpen, setResignModalOpen] = useState(false)
+  const [isResigning, setIsResigning] = useState(false)
+
+  async function handleConfirmResign() {
+    if (!onResign) return
+    setIsResigning(true)
+    try {
+      await onResign()
+      setResignModalOpen(false)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setIsResigning(false)
+    }
+  }
 
   useEffect(() => {
     if (isCoord && ['faculty', 'coordinators', 'settings', 'history'].includes(activeSection)) {
@@ -1970,6 +2006,7 @@ export default function AdminPortal({ currentUser, onLogout, onOpenSupport = nul
           }}
           onOpenSupport={onOpenSupport}
           onLogout={onLogout}
+          onOpenResignModal={() => setResignModalOpen(true)}
         />
 
         {activeSection === 'history' ? <HistoryPanel history={history} loading={historyLoading} onRefresh={loadHistory} /> : null}
@@ -2023,7 +2060,78 @@ export default function AdminPortal({ currentUser, onLogout, onOpenSupport = nul
             onClose={() => setSelectedStudentForModal(null)}
           />
         ) : null}
+
+        {resignModalOpen ? (
+          <ResignConfirmationModal
+            open={resignModalOpen}
+            onConfirm={handleConfirmResign}
+            onClose={() => setResignModalOpen(false)}
+            isResigning={isResigning}
+          />
+        ) : null}
       </main>
+    </div>
+  )
+}
+
+function ResignConfirmationModal({ open, onConfirm, onClose, isResigning }) {
+  if (!open) return null
+
+  return (
+    <div 
+      className="modal-overlay" 
+      style={{ 
+        position: 'fixed', 
+        inset: 0, 
+        background: 'rgba(15, 23, 42, 0.45)', 
+        backdropFilter: 'blur(4px)', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        zIndex: 9999, 
+        padding: '1rem' 
+      }} 
+      onClick={onClose}
+    >
+      <div 
+        className="modal-card" 
+        style={{ 
+          background: 'var(--app-surface-bg)', 
+          border: '1px solid var(--app-surface-border)', 
+          borderRadius: '12px', 
+          maxWidth: '440px', 
+          width: '100%', 
+          padding: '1.75rem', 
+          boxShadow: 'var(--shadow-lg)' 
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.75rem', marginTop: 0 }}>
+          Resign as Coordinator?
+        </h3>
+        <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '1.5rem' }}>
+          Are you sure you want to resign from your class coordinator assignment? 
+          You will lose all administrative access, and you will be redirected to the standard user view immediately.
+        </p>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+          <button 
+            type="button" 
+            className="action-button secondary" 
+            onClick={onClose}
+            disabled={isResigning}
+          >
+            Cancel
+          </button>
+          <button 
+            type="button" 
+            className="action-button danger" 
+            onClick={onConfirm}
+            disabled={isResigning}
+          >
+            {isResigning ? 'Resigning...' : 'Confirm Resignation'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

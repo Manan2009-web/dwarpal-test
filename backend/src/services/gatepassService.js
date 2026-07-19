@@ -617,25 +617,51 @@ async function resolveStudentCoordinatorUser(gatepass, requestedUserId = null) {
     ]);
   }
 
-  const coordinatorCandidates = await User.find({
-    role: 'faculty',
-    isActive: true,
-    'coordinatorAssignment.isCoordinator': true,
-    ...(requestedUserId ? { _id: requestedUserId } : {})
-  })
-    .select(
-      '_id fullName email role employeeId phone isActive coordinatorAssignment createdAt'
-    )
-    .sort({ createdAt: 1, _id: 1 });
+  const Class = require('../models/Class');
+  let matchedCoordinator = null;
 
-  const matchedCoordinator = coordinatorCandidates.find((candidate) => {
-    const assignment = candidate.coordinatorAssignment || {};
-    const candidateProgram = normalizeProgram(assignment.program);
-    const candidateDepartment = normalizeDepartment(assignment.department);
-    const candidateSemester = Number(assignment.semester) || null;
-
-    return candidateProgram === program && candidateDepartment === department && candidateSemester === semester;
+  const targetClass = await Class.findOne({
+    program,
+    department,
+    semester
   });
+
+  if (targetClass && targetClass.coordinator_id) {
+    matchedCoordinator = await User.findOne({
+      _id: targetClass.coordinator_id,
+      role: 'faculty',
+      isActive: true,
+      ...(requestedUserId ? { _id: requestedUserId } : {})
+    }).select(
+      '_id fullName email role employeeId phone isActive coordinatorAssignment coordinatorScope createdAt'
+    );
+
+    if (matchedCoordinator) {
+      // Dynamic injection of coordinatorAssignment for compatibility with other logic
+      matchedCoordinator.isCoordinator = true;
+      matchedCoordinator.coordinatorAssignment = {
+        isCoordinator: true,
+        program: targetClass.program,
+        department: targetClass.department,
+        semester: targetClass.semester
+      };
+      matchedCoordinator.coordinatorScope = {
+        isCoordinator: true,
+        program: targetClass.program,
+        department: targetClass.department,
+        semester: targetClass.semester,
+        division: targetClass.division || '',
+        academicYear: targetClass.academicYear || '',
+        assignedClasses: [{
+          program: targetClass.program,
+          department: targetClass.department,
+          semester: targetClass.semester,
+          division: targetClass.division || '',
+          academicYear: targetClass.academicYear || ''
+        }]
+      };
+    }
+  }
 
   if (!matchedCoordinator) {
     throw new AppError(

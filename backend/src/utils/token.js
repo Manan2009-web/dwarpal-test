@@ -1,3 +1,18 @@
+/**
+ * token.js — JWT creation and auth cookie helpers.
+ *
+ * SECURITY NOTES
+ *   httpOnly : true  — Prevents client-side JS (XSS) from reading the token.
+ *   secure   : true  — Cookie only transmitted over HTTPS (production only).
+ *   sameSite : 'lax' — Blocks cross-site request forgery while allowing
+ *                       top-level navigation to keep users logged in.
+ *   maxAge          — Enforces server-side expiry in the browser. Without this
+ *                     the cookie is a session cookie and never expires,
+ *                     meaning a stolen cookie is valid indefinitely.
+ */
+
+'use strict';
+
 const jwt = require('jsonwebtoken');
 const env = require('../config/env');
 
@@ -21,15 +36,14 @@ function createAccessToken(user) {
 }
 
 function setAuthCookie(res, token) {
-  // Compliance Rationale:
-  // - httpOnly: true prevents client-side scripting (XSS attacks) from reading the authentication token.
-  // - secure: env.isProduction ensures the cookie is only transmitted over secure HTTPS connections.
-  // - sameSite: 'lax' provides a strong defense against CSRF attacks while allowing top-level external links to keep users logged in.
   res.cookie(env.cookieName, token, {
     httpOnly: true,
     secure: env.isProduction,
     sameSite: 'lax',
-    path: '/'
+    path: '/',
+    // maxAge enforces browser-side expiry so a stolen cookie is not
+    // permanently valid. Value comes from COOKIE_MAX_AGE_MS (default 7 days).
+    maxAge: env.cookieMaxAgeMs || 7 * 24 * 60 * 60 * 1000
   });
 }
 

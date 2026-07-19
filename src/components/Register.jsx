@@ -4,6 +4,7 @@ import AppBrand from './AppBrand'
 import { DEPARTMENTS } from '../mockData'
 import { getApiErrorDetails, normalizePhoneNumberInput } from '../lib/dwarpalApi'
 import { Eye, EyeOff } from 'lucide-react'
+import { sanitizeName, trimInput, validateEmail, validatePasswordStrength } from '../lib/sanitize'
 
 export default function Register({ onRegister }) {
   const navigate = useNavigate()
@@ -79,13 +80,17 @@ export default function Register({ onRegister }) {
   const validateForm = () => {
     const errors = {}
 
-    if (!form.name.trim()) {
-      errors.name = 'Full Name is required'
+    const nameVal = sanitizeName(form.name)
+    if (!nameVal) {
+      errors.name = 'Full Name is required (letters and spaces only)'
+    } else if (nameVal.length < 2) {
+      errors.name = 'Full Name must be at least 2 characters long'
     }
 
-    if (!form.email.trim()) {
+    const emailVal = trimInput(form.email)
+    if (!emailVal) {
       errors.email = 'Email Address is required'
-    } else if (!/\S+@\S+\.\S+/.test(form.email)) {
+    } else if (!validateEmail(emailVal)) {
       errors.email = 'Please enter a valid email address'
     }
 
@@ -109,7 +114,7 @@ export default function Register({ onRegister }) {
       }
     }
 
-    if (!form.phone.trim()) {
+    if (!trimInput(form.phone)) {
       errors.phone = 'Phone Number is required'
     } else {
       const cleanPhone = normalizePhoneNumberInput(form.phone)
@@ -118,18 +123,26 @@ export default function Register({ onRegister }) {
       }
     }
 
-    if (!form.enrollment.trim()) {
+    const enrollmentVal = trimInput(form.enrollment)
+    if (!enrollmentVal) {
       errors.enrollment = 'Employee ID is required'
+    } else if (/[<>&"'`=]/.test(enrollmentVal)) {
+      errors.enrollment = 'Employee ID contains invalid characters'
     }
 
-    if (!form.password) {
+    const passwordVal = form.password
+    if (!passwordVal) {
       errors.password = 'Password is required'
-    } else if (form.password.length < 8) {
-      errors.password = 'Password must be at least 8 characters'
+    } else {
+      const strength = validatePasswordStrength(passwordVal)
+      if (!strength.valid) {
+        errors.password = strength.message
+      }
     }
 
     return errors
   }
+
 
   // Handle registration form submit
   const handleSubmit = async (e) => {
@@ -150,6 +163,9 @@ export default function Register({ onRegister }) {
     const cleanPhone = normalizePhoneNumberInput(form.phone)
     const payload = {
       ...form,
+      name: sanitizeName(form.name),
+      email: trimInput(form.email),
+      enrollment: trimInput(form.enrollment),
       phone: cleanPhone,
     }
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, Plus, Send, Trash2 } from 'lucide-react'
 import { ActionButton, ModalForm, SelectField } from './ui'
+import { sanitizeName, sanitizeText, trimInput } from '../lib/sanitize'
 
 const REQUIRED_FIELD_MESSAGE = 'Please fill this field'
 const ALL_STEP_TITLES = ['Faculty & Leave Details', 'Applicant Declaration', 'Short Leave Application']
@@ -487,22 +488,64 @@ export default function FacultyLeaveWizard({ open, currentUser, onClose, onSubmi
     setIsSubmitting(true)
     setSubmitError('')
 
-    // Only include shortLeave payload when the faculty selected 'Short Leave'
-    const shortLeavePayload = isShortLeave
-      ? {
-          ...form.shortLeave,
-          totalDurationMinutes: computedShortLeaveDuration,
-        }
-      : form.shortLeave // pass through unchanged so backend schema stays satisfied
+    // ── Build sanitized payload ──────────────────────────────────────────────
+    const sanitizedFacultyDetails = {
+      name: sanitizeName(form.facultyDetails.name),
+      employeeId: trimInput(form.facultyDetails.employeeId),
+      designation: sanitizeText(form.facultyDetails.designation, 120),
+      department: sanitizeText(form.facultyDetails.department, 120),
+      contactNumber: trimInput(form.facultyDetails.contactNumber),
+      emailId: trimInput(form.facultyDetails.emailId),
+    }
+
+    const sanitizedLeaveDetails = {
+      leaveType: form.leaveDetails.leaveType,
+      leaveTypeOther: sanitizeText(form.leaveDetails.leaveTypeOther, 120),
+      reason: sanitizeText(form.leaveDetails.reason, 1000),
+      leaveFrom: form.leaveDetails.leaveFrom,
+      leaveTo: form.leaveDetails.leaveTo,
+      totalDays: computedTotalDays,
+    }
+
+    const sanitizedWorkloadAdjustments = form.workloadAdjustments.map((row) => ({
+      date: row.date,
+      time: sanitizeText(row.time, 100),
+      subjectOrCourseCode: sanitizeText(row.subjectOrCourseCode, 150),
+      classOrSemester: sanitizeText(row.classOrSemester, 50),
+      adjustedFacultyName: sanitizeName(row.adjustedFacultyName),
+      adjustedFacultySignature: sanitizeText(row.adjustedFacultySignature, 120),
+    }))
+
+    const sanitizedDeclaration = {
+      confirmed: form.declaration.confirmed,
+      declarationDate: form.declaration.declarationDate,
+      digitalAcknowledgmentName: sanitizeName(form.declaration.digitalAcknowledgmentName),
+    }
+
+    const sanitizedShortLeave = {
+      staffMemberName: sanitizeName(form.shortLeave.staffMemberName),
+      designation: sanitizeText(form.shortLeave.designation, 120),
+      department: sanitizeText(form.shortLeave.department, 120),
+      instituteName: sanitizeText(form.shortLeave.instituteName, 150),
+      employeeId: trimInput(form.shortLeave.employeeId),
+      leaveDate: form.shortLeave.leaveDate,
+      requestedFrom: form.shortLeave.requestedFrom,
+      requestedTo: form.shortLeave.requestedTo,
+      totalDurationMinutes: computedShortLeaveDuration || form.shortLeave.totalDurationMinutes,
+      reason: sanitizeText(form.shortLeave.reason, 1000),
+      applicantConfirmed: form.shortLeave.applicantConfirmed,
+      applicationDate: form.shortLeave.applicationDate,
+      digitalSignatureName: sanitizeName(form.shortLeave.digitalSignatureName),
+    }
 
     const result = await onSubmit({
       requestKind: 'faculty_leave',
-      ...form,
-      leaveDetails: {
-        ...form.leaveDetails,
-        totalDays: computedTotalDays,
-      },
-      shortLeave: shortLeavePayload,
+      facultyDetails: sanitizedFacultyDetails,
+      leaveDetails: sanitizedLeaveDetails,
+      workloadAdjustments: sanitizedWorkloadAdjustments,
+      workloadDeclarations: form.workloadDeclarations,
+      declaration: sanitizedDeclaration,
+      shortLeave: sanitizedShortLeave,
     })
 
     setIsSubmitting(false)
