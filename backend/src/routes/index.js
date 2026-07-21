@@ -1,5 +1,6 @@
 const express = require('express');
 const env = require('../config/env');
+const dbConnectMiddleware = require('../middleware/dbConnectMiddleware');
 const authRoutes = require('./authRoutes');
 const userRoutes = require('./userRoutes');
 const gatepassRoutes = require('./gatepassRoutes');
@@ -13,6 +14,11 @@ const visitorRoutes = require('./visitorRoutes');
 const coordinatorRoutes = require('./coordinatorRoutes');
 
 const router = express.Router();
+
+// Ensure DB is connected before any API route handler runs.
+// This is critical for Vercel serverless — each function invocation
+// starts cold and needs an explicit connect before any Mongoose query.
+router.use(dbConnectMiddleware);
 
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
