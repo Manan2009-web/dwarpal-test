@@ -7,8 +7,8 @@ mongoose.set('strictQuery', true);
 // Force reliable public DNS resolvers for mongodb+srv lookups
 dns.setServers(['8.8.8.8', '1.1.1.1']);
 
-const MAX_CONNECTION_ATTEMPTS = 3;
-const CONNECTION_RETRY_DELAY_MS = 2000;
+const MAX_CONNECTION_ATTEMPTS = env.isProduction ? 1 : 3;
+const CONNECTION_RETRY_DELAY_MS = env.isProduction ? 0 : 2000;
 const READY_DATABASE_MODES = new Set(['external', 'in-memory']);
 const MONGODB_CONNECT_OPTIONS = {
   autoIndex: !env.isProduction,
