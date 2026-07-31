@@ -70,7 +70,7 @@ function canSecurityMarkIn(gatepass) {
   return Boolean(gatepass.canMarkIn ?? gatepass.returnTime ?? gatepass.expectedReturnTime)
 }
 
-function getNextSecurityAction(gatepass) {
+function getNextSecurityAction(gatepass, securityStation = 'campus') {
   if (!gatepass) {
     return null
   }
@@ -84,6 +84,10 @@ function getNextSecurityAction(gatepass) {
   }
 
   if (gatepass.status === 'Approved') {
+    const isCampusCleared = Boolean(gatepass.campusCleared || gatepass.security?.campusCleared)
+    if (securityStation === 'campus') {
+      return isCampusCleared ? null : 'campusClear'
+    }
     return 'markOut'
   }
 
@@ -96,7 +100,10 @@ function buildOptimisticGatepassAfterAction(gatepass, action) {
     ...(gatepass?.security || {}),
   }
 
-  if (action === 'markOut') {
+  if (action === 'campusClear') {
+    nextSecurity.campusCleared = true
+    nextSecurity.campusClearedAt = now
+  } else if (action === 'markOut') {
     nextSecurity.checkedOutAt = nextSecurity.checkedOutAt || now
   } else if (action === 'markIn') {
     nextSecurity.checkedInAt = nextSecurity.checkedInAt || now
@@ -104,8 +111,10 @@ function buildOptimisticGatepassAfterAction(gatepass, action) {
 
   return {
     ...gatepass,
+    campusCleared: action === 'campusClear' ? true : Boolean(gatepass.campusCleared || nextSecurity.campusCleared),
+    campusClearedAt: action === 'campusClear' ? now : (gatepass.campusClearedAt || nextSecurity.campusClearedAt || null),
     canMarkIn: canSecurityMarkIn(gatepass),
-    status: action === 'markOut' ? 'Out' : 'Returned',
+    status: action === 'markOut' ? 'Out' : action === 'markIn' ? 'Returned' : gatepass.status,
     updatedAt: now,
     security: nextSecurity,
   }
@@ -146,6 +155,7 @@ export default function SecurityVerificationPanel({
   onVerifyQr,
   onGatepassAction,
   onOpenQrPreview,
+  securityStation = 'campus',
 }) {
   const toast = useToast()
   const manualInputRef = useRef(null)
@@ -161,6 +171,13 @@ export default function SecurityVerificationPanel({
   const actionButton = useMemo(() => {
     if (!verificationResult?.valid || !verificationResult?.nextAction) {
       return null
+    }
+
+    if (verificationResult.nextAction === 'campusClear') {
+      return {
+        label: isActionLoading ? 'Clearing Campus...' : 'Campus Clear',
+        tone: 'primary',
+      }
     }
 
     if (verificationResult.nextAction === 'markOut') {
@@ -204,6 +221,12 @@ export default function SecurityVerificationPanel({
       },
       { label: 'Workflow Stage', value: getWorkflowLabel(gatepass) },
       { label: 'Approval Status', value: gatepass.status || 'Pending' },
+      {
+        label: 'Campus Clearance',
+        value: gatepass.campusCleared || gatepass.security?.campusCleared
+          ? formatVerificationValue(gatepass.campusClearedAt || gatepass.security?.campusClearedAt, 'Campus Cleared')
+          : 'Pending Campus Clearance',
+      },
       { label: 'Handled By', value: gatepass.approvedBy || 'Awaiting approval' },
       { label: 'Vehicle Number', value: gatepass.vehicleNumber || 'Not provided' },
       { label: 'Destination', value: gatepass.destination || gatepass.instituteName || 'Not provided' },
@@ -375,11 +398,13 @@ export default function SecurityVerificationPanel({
 
       const updatedGatepass =
         actionResult.request || buildOptimisticGatepassAfterAction(verificationResult.gatepass, verificationResult.nextAction)
-      const nextAction = getNextSecurityAction(updatedGatepass)
+      const nextAction = getNextSecurityAction(updatedGatepass, securityStation)
       const actionMessage =
-        verificationResult.nextAction === 'markOut'
-          ? 'Gatepass marked OUT successfully.'
-          : 'Gatepass marked as returned successfully.'
+        verificationResult.nextAction === 'campusClear'
+          ? 'Campus clearance recorded successfully by Campus Security.'
+          : verificationResult.nextAction === 'markOut'
+            ? 'Gatepass marked OUT successfully.'
+            : 'Gatepass marked as returned successfully.'
 
       setVerificationResult({
         valid: Boolean(nextAction),

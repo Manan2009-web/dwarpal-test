@@ -2768,10 +2768,33 @@ async function getSecurityReadyGatepasses(actor, query = {}) {
   return getPendingGatepassesForRole(actor, query);
 }
 
+async function campusClearGatepass(gatepassId, actor, payload, requestMeta) {
+  const gatepass = await getAccessibleGatepass(gatepassId, actor);
+
+  if (actor.role !== 'security') {
+    throw new AppError('Only security can give campus clearance to approved gatepasses', 403);
+  }
+
+  if (!APPROVED_GATEPASS_STATUSES.includes(gatepass.status)) {
+    throw new AppError('Only approved gatepasses can receive campus clearance', 400);
+  }
+
+  gatepass.securityAction = {
+    ...(gatepass.securityAction ? (typeof gatepass.securityAction.toObject === 'function' ? gatepass.securityAction.toObject() : gatepass.securityAction) : {}),
+    campusCleared: true,
+    campusClearedAt: new Date(),
+    campusClearedBy: actor._id,
+  };
+  await gatepass.save();
+
+  return formatGatepassForUser(gatepass, actor);
+}
+
 module.exports = {
   approveGatepass,
   canGatepassBeMarkedIn,
   cancelGatepass,
+  campusClearGatepass,
   checkInGatepass,
   checkOutGatepass,
   createGatepass,

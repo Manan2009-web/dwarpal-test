@@ -58,6 +58,8 @@ router.post('/:id/forward-to-coordinator', authorize('hod'), forwardGatepassVali
 router.post('/:id/approve', authorize('principal', 'hod', 'cao', 'faculty'), approveGatepassValidation, validateRequest, gatepassController.approveGatepass);
 router.post('/:id/reject', authorize('principal', 'hod', 'cao', 'faculty'), rejectGatepassValidation, validateRequest, gatepassController.rejectGatepass);
 router.post('/:id/check-out', authorize('security'), securityActionValidation, validateRequest, gatepassController.checkOutGatepass);
+router.patch('/:id/campus-clear', authorize('security'), validateRequest, gatepassController.campusClearGatepass);
+router.post('/:id/campus-clear', authorize('security'), validateRequest, gatepassController.campusClearGatepass);
 router.post('/:id/check-in', authorize('security'), securityActionValidation, validateRequest, gatepassController.checkInGatepass);
 router.patch('/:id/cancel', authorize('student', 'faculty'), cancelGatepassValidation, validateRequest, gatepassController.cancelGatepass);
 router.put('/:id', authorize('student', 'faculty'), updateGatepassValidation, validateRequest, gatepassController.updateGatepass);

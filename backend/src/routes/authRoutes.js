@@ -372,6 +372,7 @@ router.post('/logout', authController.logout);
 router.get('/me', protect, authController.getMe);
 router.get('/verify', protect, authController.verify);
 router.patch('/change-password', protect, requireVerifiedEmail, changePasswordValidation, validateRequest, authController.changePassword);
+router.post('/change-password', protect, changePasswordValidation, validateRequest, authController.changePassword);
 router.get('/webauthn/devices', protect, requireVerifiedEmail, authController.getWebAuthnDevices);
 router.delete(
   '/webauthn/devices/:deviceId',

@@ -7,10 +7,12 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
+  Fingerprint,
+  KeyRound,
   QrCode,
   ScanLine,
   Send,
-  KeyRound,
+  Settings,
   ShieldCheck,
   UserPlus2,
   XCircle,
@@ -40,6 +42,8 @@ import NotificationPermissionPrompt, {
 import PreferencesPanel from './components/PreferencesPanel'
 import PrivacyPreferencesBanner from './components/PrivacyPreferencesBanner'
 import PasswordInput from './components/PasswordInput'
+import PasswordResetPanel from './components/PasswordResetPanel'
+import NewStudentWelcomeModal from './components/NewStudentWelcomeModal'
 
 const LegalDocs = lazy(() => import('./components/LegalDocs'))
 const SupportPage = lazy(() => import('./components/SupportPage'))
@@ -225,17 +229,22 @@ function hasAdminPortalAccess(user) {
 function getLandingPathForUser(user) {
   if (!user) return '/login'
 
-  if (hasAdminPortalAccess(user)) {
-    return '/admin/dashboard'
-  }
-
   const role = normalizeRole(user.role)
 
   if (role === 'student' || role === 'faculty') {
     return '/user/dashboard'
   }
 
-  return getDashboardPathForRole(role)
+  const roleDashboard = getDashboardPathForRole(role)
+  if (roleDashboard) {
+    return roleDashboard
+  }
+
+  if (hasAdminPortalAccess(user)) {
+    return '/admin/dashboard'
+  }
+
+  return '/user/dashboard'
 }
 
 function logBootstrapDebug(event, details) {
@@ -311,6 +320,14 @@ function getActionToastMeta(request, action) {
       tone: 'info',
       title: `${requestLabel} sent to coordinator`,
       message: `${requestLabel} was sent to the class coordinator for semester review.`,
+    }
+  }
+
+  if (action === 'campusClear') {
+    return {
+      tone: 'success',
+      title: `${requestLabel} Campus Cleared`,
+      message: `${requestLabel} received campus clearance from Campus Security (Bouncer).`,
     }
   }
 
@@ -639,8 +656,6 @@ function App() {
 
   const clearSession = useCallback(() => {
     clearStoredAuthToken()
-    clearPortalAccessSession() // TEMP_DISABLED_ACCESS_PORTAL
-    setPortalAccess(null)
     setStudentPasswordPromptOpen(false)
     setSupportModalOpen(false)
     setCurrentUser(null)
@@ -1963,13 +1978,15 @@ function App() {
       <Routes>
         <Route
           path="/"
-          element={<DefaultRoute currentUser={currentUser} authReady={authReady} />}
+          element={<DefaultRoute currentUser={currentUser} authReady={authReady} portalAccess={portalAccess} />}
         />
         <Route
           path="/access-portal"
           element={
             currentUser ? (
               <Navigate to={getLandingPathForUser(currentUser)} replace />
+            ) : portalAccess ? (
+              <Navigate to="/login" replace />
             ) : (
               <AccessPortal onAccessGranted={savePortalAccess} />
             )
@@ -2017,7 +2034,7 @@ function App() {
         <Route path="/hod/dashboard" element={renderAppShellRoute('hod')} />
         <Route path="/security/dashboard" element={renderAppShellRoute('security')} />
         <Route path="/cao/dashboard" element={renderAppShellRoute('cao')} />
-        <Route path="*" element={<DefaultRoute currentUser={currentUser} authReady={authReady} />} />
+        <Route path="*" element={<DefaultRoute currentUser={currentUser} authReady={authReady} portalAccess={portalAccess} />} />
       </Routes>
       <FeatureBoundary label="Privacy preferences banner">
         <PrivacyPreferencesBanner
@@ -2107,6 +2124,7 @@ function DefaultRoute({ currentUser, authReady }) {
   if (authReady && currentUser) {
     return <Navigate to={getLandingPathForUser(currentUser)} replace />
   }
+
   return <LandingPage />
 }
 
@@ -3699,6 +3717,93 @@ function CoordinatorAssignmentPanel({ currentUser, onUpdateCurrentUserProfile })
   )
 }
 
+function ProfileSettingsTabs({
+  currentUser,
+  cookieConsent,
+  notificationPermissionState,
+  notificationsSupported,
+  onManageCookiePreferences,
+  onOpenNotificationPrompt,
+  onCurrentUserPatch,
+  onUpdateCurrentUserProfile,
+  initialActiveTab = null,
+}) {
+  const [activeTab, setActiveTab] = useState(
+    initialActiveTab || (currentUser?.isTemporaryPassword || currentUser?.isNewStudent ? 'password' : null)
+  )
+
+  return (
+    <div className="profile-settings-tabs-container">
+      <div className="profile-tabs-bar">
+        <button
+          type="button"
+          onClick={() => setActiveTab(activeTab === 'preferences' ? null : 'preferences')}
+          className={`profile-tab-btn ${activeTab === 'preferences' ? 'active' : ''}`}
+          title="Notification & App Preferences"
+        >
+          <Settings size={16} />
+          <span>Preferences</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab(activeTab === 'biometrics' ? null : 'biometrics')}
+          className={`profile-tab-btn ${activeTab === 'biometrics' ? 'active' : ''}`}
+          title="Biometrics & Passkeys"
+        >
+          <Fingerprint size={16} />
+          <span>Biometrics</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab(activeTab === 'password' ? null : 'password')}
+          className={`profile-tab-btn ${activeTab === 'password' ? 'active' : ''}`}
+          title="Change Account Password"
+        >
+          <KeyRound size={16} />
+          <span>Change Password</span>
+        </button>
+      </div>
+
+      {activeTab === 'preferences' ? (
+        <FeatureBoundary label="Preferences panel">
+          <PreferencesPanel
+            cookieConsent={cookieConsent}
+            notificationPermissionState={notificationPermissionState}
+            notificationsSupported={notificationsSupported}
+            onManageCookies={onManageCookiePreferences}
+            onManageNotifications={onOpenNotificationPrompt}
+          />
+        </FeatureBoundary>
+      ) : null}
+
+      {activeTab === 'biometrics' ? (
+        <BiometricSettingsPanel currentUser={currentUser} onCurrentUserPatch={onCurrentUserPatch} />
+      ) : null}
+
+      {activeTab === 'password' ? (
+        <PasswordResetPanel currentUser={currentUser} onCurrentUserPatch={onCurrentUserPatch} />
+      ) : null}
+
+      {currentUser.role === 'principal' || currentUser.role === 'hod' ? (
+        <GatepassAvailabilityPanel
+          currentUser={currentUser}
+          onUpdateCurrentUserProfile={onUpdateCurrentUserProfile}
+          locationLabel="profile"
+        />
+      ) : null}
+
+      {['faculty', 'hod'].includes(currentUser.role) ? (
+        <CoordinatorAssignmentPanel
+          currentUser={currentUser}
+          onUpdateCurrentUserProfile={onUpdateCurrentUserProfile}
+        />
+      ) : null}
+    </div>
+  )
+}
+
 function AppShell({
   currentUser,
   summary,
@@ -3749,8 +3854,33 @@ function AppShell({
   const [qrPreviewGatepass, setQrPreviewGatepass] = useState(null)
   const notificationWrapperRef = useRef(null)
   const hasSyncedInitialWorkspaceQueryRef = useRef(false)
+  const [profileInitialTab, setProfileInitialTab] = useState(null)
+  const [showNewStudentWelcome, setShowNewStudentWelcome] = useState(false)
+
+  useEffect(() => {
+    if (
+      currentUser?.role === 'student' &&
+      (currentUser?.isNewStudent || currentUser?.isTemporaryPassword || currentUser?.mustResetPassword) &&
+      !sessionStorage.getItem(`dwarpal_dismissed_welcome_${currentUser?.id || currentUser?.enrollment || 'student'}`)
+    ) {
+      setShowNewStudentWelcome(true)
+    }
+  }, [currentUser])
+
+  function handleNavigateToProfileReset() {
+    sessionStorage.setItem(`dwarpal_dismissed_welcome_${currentUser?.id || currentUser?.enrollment || 'student'}`, 'true')
+    setShowNewStudentWelcome(false)
+    setProfileInitialTab('password')
+    navigate('/app/profile')
+  }
+
+  function handleDismissWelcomeModal() {
+    sessionStorage.setItem(`dwarpal_dismissed_welcome_${currentUser?.id || currentUser?.enrollment || 'student'}`, 'true')
+    setShowNewStudentWelcome(false)
+  }
+
   const hasOpenModal =
-    modalOpen || Boolean(rejectRequest) || Boolean(qrPreviewGatepass) || notificationPromptOpen
+    modalOpen || Boolean(rejectRequest) || Boolean(qrPreviewGatepass) || notificationPromptOpen || showNewStudentWelcome
 
   useEffect(() => {
     const debounceId = window.setTimeout(() => {
@@ -4094,32 +4224,26 @@ function AppShell({
 
           {currentPage === 'profile' ? (
             <ProfileCard currentUser={currentUser} onLogout={handleLogout}>
-              <>
-                <FeatureBoundary label="Preferences panel">
-                  <PreferencesPanel
-                    cookieConsent={cookieConsent}
-                    notificationPermissionState={notificationPermissionState}
-                    notificationsSupported={notificationsSupported}
-                    onManageCookies={onManageCookiePreferences}
-                    onManageNotifications={onOpenNotificationPrompt}
-                  />
-                </FeatureBoundary>
-                {currentUser.role === 'principal' || currentUser.role === 'hod' ? (
-                  <GatepassAvailabilityPanel
-                    currentUser={currentUser}
-                    onUpdateCurrentUserProfile={onUpdateCurrentUserProfile}
-                    locationLabel="profile"
-                  />
-                ) : null}
-                {['faculty', 'hod'].includes(currentUser.role) ? (
-                  <CoordinatorAssignmentPanel
-                    currentUser={currentUser}
-                    onUpdateCurrentUserProfile={onUpdateCurrentUserProfile}
-                  />
-                ) : null}
-                <BiometricSettingsPanel currentUser={currentUser} onCurrentUserPatch={onCurrentUserPatch} />
-              </>
+              <ProfileSettingsTabs
+                currentUser={currentUser}
+                cookieConsent={cookieConsent}
+                notificationPermissionState={notificationPermissionState}
+                notificationsSupported={notificationsSupported}
+                onManageCookiePreferences={onManageCookiePreferences}
+                onOpenNotificationPrompt={onOpenNotificationPrompt}
+                onCurrentUserPatch={onCurrentUserPatch}
+                onUpdateCurrentUserProfile={onUpdateCurrentUserProfile}
+                initialActiveTab={profileInitialTab}
+              />
             </ProfileCard>
+          ) : null}
+
+          {showNewStudentWelcome ? (
+            <NewStudentWelcomeModal
+              currentUser={currentUser}
+              onNavigateToProfileReset={handleNavigateToProfileReset}
+              onClose={handleDismissWelcomeModal}
+            />
           ) : null}
 
           {currentPage === 'notifications' ? (
@@ -4320,14 +4444,16 @@ function DashboardPage({
   const isRequester = currentUser.role === 'student' || currentUser.role === 'faculty'
   const summaryCards = getSummaryCards(currentUser.role, stats)
   const [expandedGatepassId, setExpandedGatepassId] = useState('')
+  const [securityStation, setSecurityStation] = useState('campus')
+
   const gatepassCards = useMemo(
     () =>
       gatepasses.map((gatepass) => ({
         gatepass,
         highlighted: matchesGatepassReference(gatepass, focusReference),
-        actions: getAvailableActions(currentUser.role, gatepass, onGatepassAction),
+        actions: getAvailableActions(currentUser.role, gatepass, onGatepassAction, securityStation),
       })),
-    [currentUser.role, focusReference, gatepasses, onGatepassAction],
+    [currentUser.role, focusReference, gatepasses, onGatepassAction, securityStation],
   )
   const emptyStateTitle = currentUser.role === 'student' ? 'No gatepasses found' : 'No requests found'
   const emptyStateDescription =
@@ -4418,11 +4544,33 @@ function DashboardPage({
       ) : null}
 
       {currentUser.role === 'security' ? (
+        <div className="workspace-card security-station-card">
+          <div className="security-station-group">
+            <span className="security-station-label">🛡️ Security Station:</span>
+            <select
+              value={securityStation}
+              onChange={(e) => setSecurityStation(e.target.value)}
+              className="security-station-select"
+            >
+              <option value="campus">Campus Security (Bouncer / Internal Clearance)</option>
+              <option value="gate">Gate Security (Main Gate / Exit Verification)</option>
+            </select>
+          </div>
+          <div className="security-station-note">
+            {securityStation === 'campus'
+              ? '📍 Station 1: Campus Security clears approved gatepasses for exit'
+              : '📍 Station 2: Main Gate verifies QR code & marks OUT / Return'}
+          </div>
+        </div>
+      ) : null}
+
+      {currentUser.role === 'security' ? (
         <SecurityVerificationPanel
           onVerifyById={verifyGatepassById}
           onVerifyQr={verifyGatepassQr}
           onGatepassAction={onGatepassAction}
           onOpenQrPreview={onOpenQrPreview}
+          securityStation={securityStation}
         />
       ) : null}
 
@@ -5016,7 +5164,7 @@ function canSecurityMarkIn(gatepass) {
   return Boolean(gatepass.canMarkIn ?? gatepass.returnTime ?? gatepass.expectedReturnTime)
 }
 
-function getAvailableActions(role, gatepass, onGatepassAction) {
+function getAvailableActions(role, gatepass, onGatepassAction, securityStation = 'campus') {
   function handleAction(action) {
     return async () => {
       await onGatepassAction(gatepass, action)
@@ -5025,12 +5173,19 @@ function getAvailableActions(role, gatepass, onGatepassAction) {
 
   if (gatepass.requestKind === 'faculty_leave') {
     if (role === 'security') {
-      if (gatepass.status === 'Approved') {
-        return [{ label: 'Mark Out', tone: 'security-out', onClick: handleAction('markOut') }]
-      }
+      const isCampusCleared = Boolean(gatepass.campusCleared || gatepass.security?.campusCleared)
+      if (securityStation === 'campus') {
+        if (gatepass.status === 'Approved' && !isCampusCleared) {
+          return [{ label: 'Campus Clear', tone: 'primary', onClick: handleAction('campusClear') }]
+        }
+      } else {
+        if (gatepass.status === 'Approved') {
+          return [{ label: 'Mark Out', tone: 'security-out', onClick: handleAction('markOut') }]
+        }
 
-      if (gatepass.status === 'Out' && canSecurityMarkIn(gatepass)) {
-        return [{ label: 'Mark Return', tone: 'secondary', onClick: handleAction('markIn') }]
+        if (gatepass.status === 'Out' && canSecurityMarkIn(gatepass)) {
+          return [{ label: 'Mark Return', tone: 'secondary', onClick: handleAction('markIn') }]
+        }
       }
     }
 
@@ -5089,11 +5244,18 @@ function getAvailableActions(role, gatepass, onGatepassAction) {
   }
 
   if (role === 'security') {
-    if (gatepass.status === 'Approved') {
-      return [{ label: 'Mark Out', tone: 'security-out', onClick: handleAction('markOut') }]
-    }
-    if (gatepass.status === 'Out' && canSecurityMarkIn(gatepass)) {
-      return [{ label: 'Mark Return', tone: 'secondary', onClick: handleAction('markIn') }]
+    const isCampusCleared = Boolean(gatepass.campusCleared || gatepass.security?.campusCleared)
+    if (securityStation === 'campus') {
+      if (gatepass.status === 'Approved' && !isCampusCleared) {
+        return [{ label: 'Campus Clear', tone: 'primary', onClick: handleAction('campusClear') }]
+      }
+    } else {
+      if (gatepass.status === 'Approved') {
+        return [{ label: 'Mark Out', tone: 'security-out', onClick: handleAction('markOut') }]
+      }
+      if (gatepass.status === 'Out' && canSecurityMarkIn(gatepass)) {
+        return [{ label: 'Mark Return', tone: 'secondary', onClick: handleAction('markIn') }]
+      }
     }
   }
 

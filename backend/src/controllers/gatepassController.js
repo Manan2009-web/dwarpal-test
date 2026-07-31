@@ -309,9 +309,23 @@ const handleCaoAction = asyncHandler(async (req, res) => {
   });
 });
 
+const campusClearGatepass = asyncHandler(async (req, res) => {
+  const gatepass = await gatepassService.campusClearGatepass(
+    req.params.id,
+    req.user,
+    req.body,
+    getRequestMeta(req)
+  );
+  return sendSuccess(res, {
+    message: 'Gatepass cleared by campus security',
+    data: gatepass
+  });
+});
+
 module.exports = {
   approveGatepass,
   cancelGatepass,
+  campusClearGatepass,
   checkInGatepass,
   checkOutGatepass,
   createGatepass,
