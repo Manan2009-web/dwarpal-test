@@ -238,6 +238,10 @@ const env = {
   smtpGreetingTimeoutMs: parsePositiveIntegerEnv(process.env.SMTP_GREETING_TIMEOUT_MS, 10000),
   smtpSocketTimeoutMs: parsePositiveIntegerEnv(process.env.SMTP_SOCKET_TIMEOUT_MS, 10000),
   smtpOperationTimeoutMs: parsePositiveIntegerEnv(process.env.SMTP_OPERATION_TIMEOUT_MS, 10000),
+  // Optional DKIM signing — leave blank to skip; set all three to enable
+  dkimDomainName: normalizeEnvString(process.env.DKIM_DOMAIN_NAME),
+  dkimKeySelector: normalizeEnvString(process.env.DKIM_KEY_SELECTOR),
+  dkimPrivateKey: normalizeEnvString(process.env.DKIM_PRIVATE_KEY).replace(/\\n/g, '\n'),
   firebaseProjectId: normalizeEnvString(process.env.FIREBASE_PROJECT_ID),
   firebaseClientEmail: normalizeEnvString(process.env.FIREBASE_CLIENT_EMAIL),
   firebasePrivateKey: normalizeEnvString(process.env.FIREBASE_PRIVATE_KEY).replace(/\\n/g, '\n'),

@@ -332,6 +332,18 @@ export default function RegisterForm({
                   disabled={isSubmitting}
                 />
               ) : null}
+
+              {form.role === 'chairman' ? (
+                <FormField
+                  id="register-chairman-level"
+                  label="Chairman Governance Level"
+                  value={form.authorityLevel}
+                  onChange={(val) => updateFormField('authorityLevel', val)}
+                  placeholder="Enter governance level (e.g. Board Chairman)"
+                  error={fieldErrors.authorityLevel}
+                  disabled={isSubmitting}
+                />
+              ) : null}
             </div>
 
             {!isStudentRole ? (

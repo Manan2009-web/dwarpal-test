@@ -271,6 +271,18 @@ function sanitizeFiltersForStorage(input = {}) {
   }, {});
 }
 
+function normalizeStringList(value) {
+  if (!value) return [];
+  const list = Array.isArray(value) ? value : String(value).split(',');
+  return list.map((item) => trim(item)).filter(Boolean);
+}
+
+function normalizeNumberList(value) {
+  if (!value) return [];
+  const list = Array.isArray(value) ? value : String(value).split(',');
+  return list.map((item) => Number(item)).filter((num) => !Number.isNaN(num));
+}
+
 function parseReportFilters(input = {}) {
   const reportType = normalizeReportType(input.reportType);
   const { from, to } = resolveDateRange(input);
@@ -278,6 +290,16 @@ function parseReportFilters(input = {}) {
   const department = normalizeDepartment(input.department) || normalizeScalar(input.department);
   const program = normalizeProgram(input.program) || normalizeScalar(input.program);
   const semester = Number(input.semester || input.classSemester) || null;
+
+  const departments = normalizeStringList(input.departments || (department ? [department] : []));
+  const programs = normalizeStringList(input.programs || (program ? [program] : []));
+  const semesters = normalizeNumberList(input.semesters || (semester ? [semester] : []));
+  const passTypes = normalizeStringList(input.passTypes || input.passType || (input.gatepassType ? [input.gatepassType] : []));
+  const statuses = normalizeStringList(input.statuses || (input.status && input.status !== 'all' ? [input.status] : []));
+  const dateField = normalizeScalar(input.dateField || input.dateType || 'outDate');
+  const presenceState = normalizeScalar(input.presenceState || input.presence || 'all');
+  const includeFacultyLeave = normalizeBoolean(input.includeFacultyLeave || input.includeFacultyLeaves);
+
   const division = normalizeScalar(input.division || input.class || input.classDivision);
   const academicYear = normalizeScalar(input.academicYear);
   const studentId = toObjectId(input.studentId || input.student || input.personId);
@@ -298,20 +320,28 @@ function parseReportFilters(input = {}) {
     recordPartition: normalizeRecordPartition(input.recordPartition || input.partition || input.userType),
     detailLevel: normalizeDetailLevel(input.detailLevel),
     datePreset: normalizeScalar(input.datePreset || input.preset || input.period || 'custom'),
+    dateField,
     from,
     to,
     createdFrom,
     createdTo,
     department,
+    departments,
     program,
+    programs,
     semester,
+    semesters,
+    passTypes,
+    statuses,
+    presenceState,
+    includeFacultyLeave,
     division,
     academicYear,
     studentId,
     facultyId,
     selectedStudentIds,
     selectedFacultyIds,
-    personSearch: normalizeScalar(input.personSearch || input.q),
+    personSearch: normalizeScalar(input.personSearch || input.q || input.search),
     name: normalizeScalar(input.name),
     enrollmentNo: normalizeScalar(input.enrollmentNo || input.enrollment || input.enrollmentNumber),
     employeeId: normalizeScalar(input.employeeId || input.employee || input.employeeNumber),

@@ -1,4 +1,5 @@
 const ExportHistory = require('../models/ExportHistory');
+const AuditLog = require('../models/AuditLog');
 const asyncHandler = require('../utils/asyncHandler');
 const { sendSuccess } = require('../utils/apiResponse');
 const { getPagination, buildPaginationMeta } = require('../utils/pagination');
@@ -95,6 +96,22 @@ async function sendExport(req, res, format) {
     fileName = buildExportFileName({ reportType: dataset.filters.reportType, format, filters: dataset.filters, generatedAt });
     const buffer = format === 'pdf' ? await generatePdfBuffer(dataset) : await generateExcelBuffer(dataset);
     await markHistorySuccess(history, dataset.recordCount, fileName);
+
+    await AuditLog.create({
+      actor: req.user._id,
+      resourceType: 'ReportExport',
+      action: req.user.role === 'chairman' ? 'CHAIRMAN_EXPORT' : 'REPORT_EXPORT',
+      message: `Exported ${dataset.recordCount} records as ${format.toUpperCase()} (${fileName})`,
+      metadata: {
+        format,
+        fileName,
+        recordCount: dataset.recordCount,
+        filters: publicFilterSummary(dataset.filters || filters),
+        role: req.user.role
+      },
+      ipAddress: req.ip || '',
+      userAgent: req.get('user-agent') || ''
+    }).catch(() => {});
 
     res.setHeader(
       'Content-Type',

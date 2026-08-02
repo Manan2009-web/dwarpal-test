@@ -227,10 +227,32 @@
 
 .admin-shell.sidebar-collapsed .admin-sidebar-brand {
   padding: 0.35rem 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.admin-shell.sidebar-collapsed .admin-sidebar-brand .brand {
+  justify-content: center;
+  width: 100%;
+  gap: 0 !important;
 }
 
 .admin-shell.sidebar-collapsed .brand-title {
   display: none !important;
+  opacity: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  visibility: hidden !important;
+}
+
+.admin-shell.sidebar-collapsed .brand-logo {
+  height: 32px !important;
+  width: 32px !important;
+  max-width: 100% !important;
+  object-fit: contain !important;
+  margin: 0 auto !important;
 }
 
 .admin-shell.sidebar-collapsed .admin-user-chip {
@@ -7281,6 +7303,77 @@ html, body, #root, .admin-shell {
   background: #ecfdf5;
   border: 1px solid #a7f3d0;
   color: #065f46;
+}
+
+/* Header Availability Toggle Button */
+.header-availability-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+  height: 32px;
+}
+
+.header-availability-btn.available {
+  background-color: #f0fdf4;
+  color: #16a34a;
+  border-color: #bbf7d0;
+}
+
+.header-availability-btn.available:hover:not(:disabled) {
+  background-color: #dcfce7;
+  border-color: #86efac;
+}
+
+.header-availability-btn.busy {
+  background-color: #fef2f2;
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+.header-availability-btn.busy:hover:not(:disabled) {
+  background-color: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.header-availability-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.header-availability-btn .availability-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  box-shadow: 0 0 0 2px currentColor;
+}
+
+.header-availability-btn.available .availability-dot {
+  background-color: #16a34a;
+  animation: pulse-green 2s infinite;
+}
+
+.header-availability-btn.busy .availability-dot {
+  background-color: #dc2626;
+}
+
+@keyframes pulse-green {
+  0% {
+    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 5px rgba(22, 163, 74, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0);
+  }
 }
 
 

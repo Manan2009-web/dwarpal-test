@@ -24,6 +24,7 @@ import LandingPage from './components/LandingPage'
 import LoadingPage from './components/LoadingPage'
 import AccessPortal from './components/AccessPortal'
 import AdminPortal from './components/AdminPortal'
+import ChairmanPortal from './components/ChairmanPortal'
 import SupportModal from './components/SupportModal'
 import AuthPage from './components/auth/AuthPage'
 import LoginForm from './components/auth/LoginForm'
@@ -166,6 +167,7 @@ const ROLE_DASHBOARD_PATHS = {
   cao: '/cao/dashboard',
   admin: '/admin/dashboard',
   it: '/admin/dashboard',
+  chairman: '/chairman',
 }
 
 const DEFAULT_WORKSPACE_REQUEST_OPTIONS = {
@@ -230,6 +232,10 @@ function getLandingPathForUser(user) {
   if (!user) return '/login'
 
   const role = normalizeRole(user.role)
+
+  if (role === 'chairman') {
+    return '/chairman'
+  }
 
   if (role === 'student' || role === 'faculty') {
     return '/user/dashboard'
@@ -1969,6 +1975,16 @@ function App() {
     )
   }
 
+  function renderChairmanRoute() {
+    return (
+      <ChairmanRoute currentUser={currentUser} authReady={authReady}>
+        <div className={requiresEmailVerification ? 'app-shell-lock-surface' : ''} aria-hidden={requiresEmailVerification}>
+          <ChairmanPortal currentUser={currentUser} onLogout={logout} onOpenSupport={() => setSupportModalOpen(true)} />
+        </div>
+      </ChairmanRoute>
+    )
+  }
+
   if (introLoading) {
     return <LoadingPage onFinished={() => setIntroLoading(false)} />
   }
@@ -2028,6 +2044,8 @@ function App() {
         />
         <Route path="/user/:page" element={renderUserRoute()} />
         <Route path="/admin/*" element={renderAdminRoute()} />
+        <Route path="/chairman/*" element={renderChairmanRoute()} />
+        <Route path="/chairman" element={renderChairmanRoute()} />
         <Route path="/student/dashboard" element={renderAppShellRoute('student')} />
         <Route path="/faculty/dashboard" element={renderAppShellRoute('faculty')} />
         <Route path="/principal/dashboard" element={renderAppShellRoute('principal')} />
@@ -2080,6 +2098,20 @@ function AdminRoute({ currentUser, authReady, children }) {
 
   if (!hasAdminPortalAccess(currentUser)) {
     return <Navigate to={getDashboardPathForRole(currentUser.role)} replace />
+  }
+
+  return children
+}
+
+function ChairmanRoute({ currentUser, authReady, children }) {
+  useRouteGuardDebug('chairman-panel', authReady, currentUser)
+
+  if (!authReady) return <AuthBootstrapScreen />
+  if (!currentUser) return <Navigate to="/login" replace />
+
+  const role = normalizeRole(currentUser.role)
+  if (!['chairman', 'it', 'admin'].includes(role)) {
+    return <Navigate to={getLandingPathForUser(currentUser)} replace />
   }
 
   return children
@@ -3469,6 +3501,52 @@ function createCoordinatorAssignmentForm(currentUser) {
   }
 }
 
+function HeaderAvailabilityToggle({ currentUser, onToggle }) {
+  const [isSaving, setIsSaving] = useState(false)
+  const approvalEnabled = currentUser?.gatepassApprovalEnabled !== false
+  const roleLabel = currentUser?.role === 'principal' ? 'Principal' : 'HOD'
+
+  async function handleToggle() {
+    if (isSaving) return
+    setIsSaving(true)
+    try {
+      const nextValue = !approvalEnabled
+      await onToggle(
+        { gatepassApprovalEnabled: nextValue },
+        {
+          successTitle: nextValue ? 'Availability Enabled' : 'Availability Disabled',
+          successMessage: nextValue
+            ? `Student requests will route to you first.`
+            : `Student requests will bypass you temporarily.`,
+          errorTitle: 'Unable to update availability',
+          fallbackErrorMessage: 'DwarPal could not update your availability right now.',
+        }
+      )
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleToggle}
+      disabled={isSaving}
+      className={`header-availability-btn ${approvalEnabled ? 'available' : 'busy'}`}
+      title={
+        approvalEnabled
+          ? `You are Available. Student requests route to you first. Click to change.`
+          : `You are Busy/On leave. Student requests bypass you. Click to change.`
+      }
+    >
+      <span className="availability-dot" />
+      <span className="availability-text">{isSaving ? '...' : approvalEnabled ? 'Available' : 'Busy'}</span>
+    </button>
+  )
+}
+
 function GatepassAvailabilityPanel({
   currentUser,
   onUpdateCurrentUserProfile,
@@ -4173,27 +4251,35 @@ function AppShell({
           onToggleNav={() => setNavOpen((prev) => !prev)}
           navOpen={navOpen}
           actions={
-            <div className="notification-wrapper" ref={notificationWrapperRef}>
-              <button
-                type="button"
-                className={`icon-button notification-toggle ${notificationsOpen ? 'active' : ''}`}
-                onClick={() => setNotificationsOpen((previous) => !previous)}
-                aria-label="Open notifications"
-                aria-expanded={notificationsOpen}
-              >
-                <Bell size={18} />
-                {unreadCount ? <span className="notification-dot">{unreadCount > 99 ? '99+' : unreadCount}</span> : null}
-              </button>
-              <NotificationCenterPanel
-                open={notificationsOpen}
-                notifications={notifications}
-                unreadCount={unreadCount}
-                loading={notificationsLoading}
-                socketConnected={socketConnected}
-                onOpenNotification={handleOpenNotification}
-                onMarkNotificationRead={handleMarkNotificationRead}
-                onMarkAllRead={handleMarkAllNotificationsRead}
-              />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              {['principal', 'hod'].includes(currentUser?.role) ? (
+                <HeaderAvailabilityToggle
+                  currentUser={currentUser}
+                  onToggle={onUpdateCurrentUserProfile}
+                />
+              ) : null}
+              <div className="notification-wrapper" ref={notificationWrapperRef}>
+                <button
+                  type="button"
+                  className={`icon-button notification-toggle ${notificationsOpen ? 'active' : ''}`}
+                  onClick={() => setNotificationsOpen((previous) => !previous)}
+                  aria-label="Open notifications"
+                  aria-expanded={notificationsOpen}
+                >
+                  <Bell size={18} />
+                  {unreadCount ? <span className="notification-dot">{unreadCount > 99 ? '99+' : unreadCount}</span> : null}
+                </button>
+                <NotificationCenterPanel
+                  open={notificationsOpen}
+                  notifications={notifications}
+                  unreadCount={unreadCount}
+                  loading={notificationsLoading}
+                  socketConnected={socketConnected}
+                  onOpenNotification={handleOpenNotification}
+                  onMarkNotificationRead={handleMarkNotificationRead}
+                  onMarkAllRead={handleMarkAllNotificationsRead}
+                />
+              </div>
             </div>
           }
         />
@@ -4534,14 +4620,7 @@ function DashboardPage({
         ))}
       </section>
 
-      {currentUser.role === 'principal' || currentUser.role === 'hod' ? (
-        <GatepassAvailabilityPanel
-          currentUser={currentUser}
-          onUpdateCurrentUserProfile={onUpdateCurrentUserProfile}
-          locationLabel="dashboard"
-          compact
-        />
-      ) : null}
+
 
       {currentUser.role === 'security' ? (
         <div className="workspace-card security-station-card">

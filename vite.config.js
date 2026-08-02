@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
+import basicSsl from '@vitejs/plugin-basic-ssl'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
@@ -21,7 +22,7 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
-    plugins: [react()],
+    plugins: [react(), basicSsl()],
     build: {
       rollupOptions: {
         output: {
@@ -57,6 +58,7 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       strictPort: true,
       cors: true,
+      https: true,
       headers: noStoreHeaders,
       hmr: {
         clientPort: 5173,
@@ -84,6 +86,8 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port: 4173,
       strictPort: true,
+      https: true,
     },
   }
 })
+

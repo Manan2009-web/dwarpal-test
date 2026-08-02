@@ -55,6 +55,13 @@ export const ROLE_META = {
     accent: 'var(--accent-admin)',
     idLabel: 'Employee ID',
   },
+  chairman: {
+    title: 'Chairman',
+    shortTitle: 'Chairman',
+    panelTitle: 'Chairman Reporting Panel',
+    accent: 'var(--accent-cao)',
+    idLabel: 'Employee ID',
+  },
 }
 
 export const STATUS_COLORS = {
@@ -69,7 +76,7 @@ export const STATUS_COLORS = {
   Cancelled: 'rejected',
 }
 
-export const ROLE_OPTIONS = ['student', 'faculty', 'hod', 'cao', 'principal', 'security', 'admin', 'it']
+export const ROLE_OPTIONS = ['student', 'faculty', 'hod', 'cao', 'principal', 'security', 'admin', 'it', 'chairman']
 
 export const PUBLIC_ROLE_OPTIONS = ROLE_OPTIONS.filter((role) => role !== 'student')
 

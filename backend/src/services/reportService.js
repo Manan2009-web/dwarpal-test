@@ -115,7 +115,11 @@ function includeGatepasses(reportType, partition = 'mixed') {
   return !['leave_report', 'load_adjustment_report', 'individual_faculty_history'].includes(reportType);
 }
 
-function includeFacultyLeaves(reportType, partition = 'mixed') {
+function includeFacultyLeaves(reportType, partition = 'mixed', filters = {}) {
+  if (filters && filters.includeFacultyLeave) {
+    return true;
+  }
+
   if (partition === 'students') {
     return false;
   }
@@ -163,10 +167,24 @@ function buildGatepassFilter(filters, actor) {
     filterParts.push({ status: { $in: ['checked_out_by_security', 'completed'] } });
   }
 
-  filterParts.push(dateMatch('outDate', filters));
+  const targetDateField =
+    filters.dateField === 'expectedReturnTime' || filters.dateField === 'return'
+      ? 'expectedReturnTime'
+      : filters.dateField === 'createdAt' || filters.dateField === 'created'
+        ? 'createdAt'
+        : 'outDate';
+
+  filterParts.push(dateMatch(targetDateField, filters));
   filterParts.push(createdDateMatch('createdAt', filters));
 
-  if (filters.department) {
+  if (filters.departments && filters.departments.length) {
+    filterParts.push({
+      $or: [
+        { 'routingSnapshot.department': { $in: filters.departments } },
+        { 'applicantSnapshot.department': { $in: filters.departments } }
+      ]
+    });
+  } else if (filters.department) {
     filterParts.push({
       $or: [
         { 'routingSnapshot.department': filters.department },
@@ -175,16 +193,70 @@ function buildGatepassFilter(filters, actor) {
     });
   }
 
-  if (filters.program) {
+  if (filters.programs && filters.programs.length) {
+    filterParts.push({
+      $or: [
+        { 'routingSnapshot.program': { $in: filters.programs } },
+        { 'applicantSnapshot.program': { $in: filters.programs } }
+      ]
+    });
+  } else if (filters.program) {
     filterParts.push({
       $or: [{ 'routingSnapshot.program': filters.program }, { 'applicantSnapshot.program': filters.program }]
     });
   }
 
-  if (filters.semester) {
+  if (filters.semesters && filters.semesters.length) {
+    filterParts.push({
+      $or: [
+        { 'routingSnapshot.semester': { $in: filters.semesters } },
+        { 'applicantSnapshot.semester': { $in: filters.semesters } }
+      ]
+    });
+  } else if (filters.semester) {
     filterParts.push({
       $or: [{ 'routingSnapshot.semester': filters.semester }, { 'applicantSnapshot.semester': filters.semester }]
     });
+  }
+
+  if (filters.passTypes && filters.passTypes.length) {
+    const passTypeRegexes = filters.passTypes.map((pt) => new RegExp(pt, 'i'));
+    filterParts.push({
+      $or: [
+        { reasonCategory: { $in: passTypeRegexes } },
+        { reason: { $in: passTypeRegexes } }
+      ]
+    });
+  }
+
+  if (filters.statuses && filters.statuses.length) {
+    filterParts.push({ status: { $in: filters.statuses } });
+  } else if (filters.status) {
+    filterParts.push(getStatusBucketFilter(filters.status, true));
+  }
+
+  if (filters.presenceState === 'checked_out') {
+    filterParts.push({ status: 'checked_out_by_security' });
+  } else if (filters.presenceState === 'completed' || filters.presenceState === 'returned') {
+    filterParts.push({ status: 'completed' });
+  } else if (filters.presenceState === 'on_campus') {
+    filterParts.push({ status: { $ne: 'checked_out_by_security' } });
+  }
+
+  if (filters.personSearch) {
+    const searchRx = regex(filters.personSearch);
+    if (searchRx) {
+      filterParts.push({
+        $or: [
+          { gatepassId: searchRx },
+          { 'applicantSnapshot.fullName': searchRx },
+          { 'applicantSnapshot.enrollmentNo': searchRx },
+          { 'applicantSnapshot.employeeId': searchRx },
+          { vehicleNumber: searchRx },
+          { reason: searchRx }
+        ]
+      });
+    }
   }
 
   if (filters.division) {
@@ -206,10 +278,6 @@ function buildGatepassFilter(filters, actor) {
 
   if (filters.roleType && ['student', 'faculty'].includes(filters.roleType)) {
     filterParts.push({ applicantType: filters.roleType });
-  }
-
-  if (filters.status) {
-    filterParts.push(getStatusBucketFilter(filters.status, true));
   }
 
   if (filters.vehicleMode === 'vehicle') {

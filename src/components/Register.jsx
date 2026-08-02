@@ -346,6 +346,7 @@ export default function Register({ onRegister }) {
                 <option value="security">Security</option>
                 <option value="principal">Principal</option>
                 <option value="it">IT Admin</option>
+                <option value="chairman">Chairman</option>
               </select>
             </div>
             {fieldErrors.role && <p className="field-error">{fieldErrors.role}</p>}

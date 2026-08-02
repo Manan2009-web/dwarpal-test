@@ -218,7 +218,21 @@ function getTransporter() {
       auth: {
         user: env.smtpUser,
         pass: env.smtpPass
-      }
+      },
+      // Pool connections for better performance and trust scores
+      pool: true,
+      maxConnections: 3,
+      maxMessages: 100,
+      // Use DKIM signing if configured
+      ...(env.dkimDomainName && env.dkimKeySelector && env.dkimPrivateKey
+        ? {
+            dkim: {
+              domainName: env.dkimDomainName,
+              keySelector: env.dkimKeySelector,
+              privateKey: env.dkimPrivateKey,
+            },
+          }
+        : {}),
     });
   }
 
@@ -286,8 +300,39 @@ function buildOtpEmailTemplate({
   };
 }
 
+/**
+ * Build RFC-compliant email headers that improve inbox deliverability.
+ * These headers signal to spam filters that this is a legitimate transactional email.
+ */
+function buildDeliveryHeaders(to, context) {
+  const fromEmail = getEffectiveFromEmail();
+  const messageId = `<${Date.now()}.${Math.random().toString(36).slice(2)}.${context}@dwarpal.app>`;
+
+  return {
+    // Unique message identifier — prevents duplicate detection
+    'Message-ID': messageId,
+
+    // Reply-To keeps replies from bouncing back to the Gmail alias
+    'Reply-To': fromEmail,
+
+    // Identifies sender software — trusted by spam filters
+    'X-Mailer': 'DwarPal Transactional Mail 1.0',
+
+    // Transactional mail — signals NOT a bulk campaign
+    'Precedence': 'transactional',
+
+    // Normal priority (not bulk)
+    'X-Priority': '3',
+
+    // List-Unsubscribe: required for inbox placement on Gmail/Outlook for bulk/transactional
+    'List-Unsubscribe': `<mailto:${fromEmail}?subject=unsubscribe>`,
+    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+  };
+}
+
 async function sendMail({ to, subject, html, text, context = 'otp' }) {
   const mailer = getTransporter();
+  const headers = buildDeliveryHeaders(to, context);
 
   try {
     return await withOperationTimeout(
@@ -296,7 +341,10 @@ async function sendMail({ to, subject, html, text, context = 'otp' }) {
         to,
         subject,
         html,
-        text
+        text,
+        headers,
+        // Encoding: ensure proper UTF-8 and quoted-printable encoding
+        encoding: 'quoted-printable',
       }),
       env.smtpOperationTimeoutMs
     );
@@ -391,9 +439,10 @@ async function sendVerificationOtpEmail({ email, name, otp, expiryMinutes = env.
 
   return sendMail({
     to: email,
-    subject: 'DwarPal verification OTP',
+    subject: 'Your DwarPal account verification code',
     html: template.html,
-    text: template.text
+    text: template.text,
+    context: 'registration-verification'
   });
 }
 
@@ -409,9 +458,10 @@ async function sendPasswordResetOtpEmail({ email, name, otp, expiryMinutes = env
 
   return sendMail({
     to: email,
-    subject: 'DwarPal password reset OTP',
+    subject: 'Reset your DwarPal password',
     html: template.html,
-    text: template.text
+    text: template.text,
+    context: 'password-reset'
   });
 }
 
@@ -439,9 +489,10 @@ async function sendStudentLoginOtpEmail({ email, name, otp, expiryMinutes = env.
 
   return sendMail({
     to: email,
-    subject: 'DwarPal student login OTP',
+    subject: 'Your DwarPal sign-in code',
     html: template.html,
-    text: template.text
+    text: template.text,
+    context: 'student-login'
   });
 }
 
