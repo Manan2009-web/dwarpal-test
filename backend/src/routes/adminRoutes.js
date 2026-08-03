@@ -61,6 +61,7 @@ router.get('/users', protect, requireVerifiedEmail, authorize('principal', 'cao'
 router.patch('/users/:id/status', protect, requireVerifiedEmail, authorize('principal', 'cao', 'admin'), updateUserStatusValidation, validateRequest, adminController.updateUserStatus);
 router.get('/students/export-credentials', protect, requireVerifiedEmail, authorize('it', 'admin'), adminController.exportStudentCredentials);
 router.get('/students', protect, requireVerifiedEmail, authorize('it', 'admin'), adminController.listStudents);
+router.post('/students/bulk', protect, requireVerifiedEmail, authorize('it', 'admin'), adminController.bulkCreateStudents);
 router.post('/students', protect, requireVerifiedEmail, authorize('it', 'admin'), adminStudentCreateValidation, validateRequest, adminController.createStudent);
 router.put('/students/:id', protect, requireVerifiedEmail, authorize('it', 'admin'), adminStudentUpdateValidation, validateRequest, adminController.updateStudent);
 router.delete('/students/:id', protect, requireVerifiedEmail, authorize('it', 'admin'), adminStudentDeleteValidation, validateRequest, adminController.deleteStudent);

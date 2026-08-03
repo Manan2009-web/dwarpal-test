@@ -22,6 +22,10 @@ function isSmtpConfigured() {
   return Boolean(env.smtpHost && env.smtpPort && env.smtpUser && env.smtpPass && getEffectiveFromEmail());
 }
 
+function isEmailConfigured() {
+  return isSmtpConfigured() || Boolean(env.resendApiKey && (env.emailFrom || env.smtpFromEmail));
+}
+
 function normalizeEmailAddress(value) {
   const normalizedValue = String(value || '').trim().toLowerCase();
   return normalizedValue.includes('@') ? normalizedValue : '';
@@ -330,7 +334,54 @@ function buildDeliveryHeaders(to, context) {
   };
 }
 
+function getFromAddressString() {
+  const address = env.emailFrom || getEffectiveFromEmail() || 'onboarding@resend.dev';
+  const name = String(env.smtpFromName || 'DwarPal').trim();
+  return name ? `${name} <${address}>` : address;
+}
+
+async function sendViaResend({ to, subject, text, html }) {
+  const fromAddress = getFromAddressString();
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.resendApiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      from: fromAddress,
+      to: [String(to || '').trim()],
+      subject,
+      text,
+      html,
+      reply_to: fromAddress
+    })
+  });
+
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(payload?.message || payload?.error?.message || `Resend API returned status ${response.status}`);
+  }
+
+  return {
+    mode: 'resend',
+    providerResponse: payload
+  };
+}
+
 async function sendMail({ to, subject, html, text, context = 'otp' }) {
+  if (env.resendApiKey) {
+    try {
+      console.info(`[email] Attempting to send email via Resend API to ${maskEmail(to)}`);
+      const res = await sendViaResend({ to, subject, text, html });
+      console.info(`[email] Resend delivery succeeded for ${maskEmail(to)}`);
+      return res;
+    } catch (error) {
+      console.warn(`[email] Resend API failed: ${error.message}. Falling back to SMTP.`, { to: maskEmail(to) });
+    }
+  }
+
   const mailer = getTransporter();
   const headers = buildDeliveryHeaders(to, context);
 
@@ -497,9 +548,9 @@ async function sendStudentLoginOtpEmail({ email, name, otp, expiryMinutes = env.
 }
 
 async function sendStudentOnboardingEmail({ email, fullName, enrollmentNo, temporaryPassword, collegeName }) {
-  if (!isSmtpConfigured()) {
-    console.info('[email] SMTP not configured — skipping student onboarding email.', { to: maskEmail(email) });
-    return { skipped: true, reason: 'smtp_not_configured' };
+  if (!isEmailConfigured()) {
+    console.info('[email] Email sending not configured — skipping student onboarding email.', { to: maskEmail(email) });
+    return { skipped: true, reason: 'email_not_configured' };
   }
 
   const safeFullName   = escapeHtml(fullName || 'Student');
@@ -636,14 +687,14 @@ async function sendStudentOnboardingEmail({ email, fullName, enrollmentNo, tempo
     `Access Password    : dwarpal-student-access`,
     `Student Portal     : ${loginUrl}`,
     '',
-    'IMPORTANT: You must change your password on your first login.',
+    'Note: You will need to choose a new password when you log in for the first time.',
     '',
     'If you did not expect this email, contact your institution admin.'
   ].join('\n');
 
   return sendMail({
     to: email,
-    subject: `Welcome to DwarPal — Your Student Login Credentials`,
+    subject: `Your DwarPal account is ready`,
     html,
     text,
     context: 'student-onboarding'
@@ -651,9 +702,9 @@ async function sendStudentOnboardingEmail({ email, fullName, enrollmentNo, tempo
 }
 
 async function sendStaffWelcomeEmail({ email, fullName, role, collegeName }) {
-  if (!isSmtpConfigured()) {
-    console.info('[email] SMTP not configured — skipping staff welcome email.', { to: maskEmail(email) });
-    return { skipped: true, reason: 'smtp_not_configured' };
+  if (!isEmailConfigured()) {
+    console.info('[email] Email sending not configured — skipping staff welcome email.', { to: maskEmail(email) });
+    return { skipped: true, reason: 'email_not_configured' };
   }
 
   const safeFullName    = escapeHtml(fullName || 'Team Member');

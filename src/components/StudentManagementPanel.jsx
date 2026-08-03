@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Eye, FileDown, GraduationCap, KeyRound, PencilLine, ShieldCheck, Trash2, UserPlus } from 'lucide-react'
+import { useEffect, useMemo, useState, useRef } from 'react'
+import { Eye, FileDown, GraduationCap, KeyRound, PencilLine, ShieldCheck, Trash2, UserPlus, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, RefreshCw, X, AlertOctagon } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import {
   createAdminStudent,
+  bulkCreateAdminStudents,
   deleteAdminStudent,
   downloadAdminStudentCredentials,
   fetchAdminStudents,
@@ -178,6 +180,413 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const [exporting, setExporting] = useState(false)
+
+  // Bulk upload states
+  const [activeTab, setActiveTab] = useState('single') // 'single' | 'bulk'
+  const [bulkStudents, setBulkStudents] = useState([])
+  const [bulkFile, setBulkFile] = useState(null)
+  const [bulkLoading, setBulkLoading] = useState(false)
+  const [bulkResult, setBulkResult] = useState(null)
+  const [dragOver, setDragOver] = useState(false)
+  const fileInputRef = useRef(null)
+
+  function generateRandomPassword() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+    let password = '';
+    const uppers = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const lowers = 'abcdefghijklmnopqrstuvwxyz';
+    const numbers = '0123456789';
+    const specials = '!@#$%^&*';
+    
+    password += uppers[Math.floor(Math.random() * uppers.length)];
+    password += lowers[Math.floor(Math.random() * lowers.length)];
+    password += numbers[Math.floor(Math.random() * numbers.length)];
+    password += specials[Math.floor(Math.random() * specials.length)];
+    
+    for (let i = 4; i < 10; i++) {
+      password += chars[Math.floor(Math.random() * chars.length)];
+    }
+    
+    return password.split('').sort(() => 0.5 - Math.random()).join('');
+  }
+
+  function downloadExcelTemplate() {
+    try {
+      const workbook = XLSX.utils.book_new();
+      const headers = [
+        {
+          'Full Name': 'John Doe',
+          'Email': 'johndoe@example.com',
+          'Enrollment Number': 'EN12345678',
+          'Phone Number': '9876543210',
+          'Program': 'Diploma',
+          'Department': 'Computer Engineering',
+          'Semester': '6'
+        }
+      ];
+      const sheet = XLSX.utils.json_to_sheet(headers);
+      XLSX.utils.book_append_sheet(workbook, sheet, 'Student Template');
+      XLSX.writeFile(workbook, 'dwarpal_student_template.xlsx');
+      toast.success({
+        title: 'Template Downloaded',
+        message: 'Fill this sheet and upload it.'
+      });
+    } catch (err) {
+      toast.error({
+        title: 'Template Download Failed',
+        message: err.message || 'Unable to generate template.'
+      });
+    }
+  }
+
+  // Clean string helper
+  function cleanString(val) {
+    return String(val || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9&]/g, '')
+      .replace(/\s+/g, '');
+  }
+
+  // Maps of exact aliases to canonical values
+  const PROGRAM_ALIASES = {
+    'Diploma Engineering': ['diploma', 'dip', 'diplomaengg', 'diplomaeng', 'di'],
+    'Degree Engineering': ['degree', 'btech', 'be', 'degreeengineering', 'degreeengg', 'degreeeng', 'b.tech', 'b.e', 'b tech', 'b e'],
+    'Management Studies': ['mba', 'bba', 'management', 'managementstudies', 'businessadministration', 'bms', 'pgdm'],
+    'Pharmacy': ['bpharm', 'bpharmacy', 'mpharm', 'mpharmacy', 'pharmacy', 'pharma', 'b.pharm', 'dpharm'],
+    'Computer Applications': ['ca', 'mca', 'bca', 'computerapplications', 'computerapplication'],
+    'Science': ['science', 'bsc', 'msc', 'b.sc', 'm.sc'],
+    'Commerce': ['commerce', 'bcom', 'mcom', 'b.com', 'm.com'],
+    'Arts': ['arts', 'ba', 'ma', 'b.a', 'm.a']
+  };
+
+  const DEPT_ALIASES = {
+    'Computer Engineering': ['comp', 'computer', 'cs', 'cse', 'computerengg', 'computereng', 'computerengineering', 'computerscience', 'compeng', 'compengg', 'compsci'],
+    'Information Technology': ['it', 'informationtechnology', 'infotech', 'informationtech'],
+    'Mechanical Engineering': ['mech', 'mechanical', 'mechengg', 'mecheng', 'mechanicalengg', 'mechanicalengineering'],
+    'Civil Engineering': ['civil', 'civilengg', 'civileng', 'civilengineering'],
+    'Electrical Engineering': ['elec', 'electrical', 'ee', 'electricalengg', 'electricaleng', 'electricalengineering'],
+    'Electronics & Communication': ['ec', 'electronics', 'electronicsandcommunication', 'electronicscommunication', 'ece', 'electronicscommunicationengineering', 'electronicscommunicationengg', 'electronics&communication', 'electronics&communicationengg'],
+    'Artificial Intelligence': ['ai', 'artificialintelligence', 'artificialintelligenceengineering', 'aiengg', 'aieng'],
+    'Data Science': ['ds', 'datascience', 'datascienceengineering']
+  };
+
+  // Levenshtein distance
+  function getLevenshteinDistance(a, b) {
+    const tmp = [];
+    let i, j;
+    for (i = 0; i <= a.length; i++) {
+      tmp[i] = [i];
+    }
+    for (j = 0; j <= b.length; j++) {
+      tmp[0][j] = j;
+    }
+    for (i = 1; i <= a.length; i++) {
+      for (j = 1; j <= b.length; j++) {
+        tmp[i][j] = Math.min(
+          tmp[i - 1][j] + 1,
+          tmp[i][j - 1] + 1,
+          tmp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
+        );
+      }
+    }
+    return tmp[a.length][b.length];
+  }
+
+  function getSimilarity(a, b) {
+    const maxLength = Math.max(a.length, b.length);
+    if (maxLength === 0) return 1.0;
+    return 1.0 - getLevenshteinDistance(a, b) / maxLength;
+  }
+
+  function resolveValue(rawValue, canonicalList, aliasMap) {
+    const input = String(rawValue || '').trim();
+    if (!input) return { canonical: '', original: '', isAutoCorrected: false, error: 'Value is required' };
+
+    const cleanedInput = cleanString(input);
+
+    // 1. Check exact match in canonical list
+    for (const canonical of canonicalList) {
+      if (cleanString(canonical) === cleanedInput) {
+        return { canonical, original: input, isAutoCorrected: false };
+      }
+    }
+
+    // 2. Check exact matches in aliases
+    for (const canonical of canonicalList) {
+      const aliases = aliasMap[canonical] || [];
+      for (const alias of aliases) {
+        if (cleanString(alias) === cleanedInput) {
+          return { canonical, original: input, isAutoCorrected: true, correctedFrom: alias };
+        }
+      }
+    }
+
+    // 3. Substring match
+    const substringCandidates = [];
+    for (const canonical of canonicalList) {
+      const cleanedCanonical = cleanString(canonical);
+      if (cleanedInput.length >= 3 && (cleanedCanonical.includes(cleanedInput) || cleanedInput.includes(cleanedCanonical))) {
+        substringCandidates.push({ canonical, score: Math.min(cleanedInput.length, cleanedCanonical.length) / Math.max(cleanedInput.length, cleanedCanonical.length) });
+      }
+      const aliases = aliasMap[canonical] || [];
+      for (const alias of aliases) {
+        const cleanedAlias = cleanString(alias);
+        if (cleanedInput.length >= 3 && (cleanedAlias.includes(cleanedInput) || cleanedInput.includes(cleanedAlias))) {
+          substringCandidates.push({ canonical, score: Math.min(cleanedInput.length, cleanedAlias.length) / Math.max(cleanedInput.length, cleanedAlias.length) });
+        }
+      }
+    }
+
+    substringCandidates.sort((a, b) => b.score - a.score);
+    if (substringCandidates.length > 0 && substringCandidates[0].score >= 0.8) {
+      if (substringCandidates.length === 1 || (substringCandidates[0].score - substringCandidates[1].score >= 0.15)) {
+        return { canonical: substringCandidates[0].canonical, original: input, isAutoCorrected: true };
+      }
+    }
+
+    // 4. Fuzzy match Levenshtein
+    const fuzzyCandidates = [];
+    for (const canonical of canonicalList) {
+      const cleanedCanonical = cleanString(canonical);
+      const score = getSimilarity(cleanedInput, cleanedCanonical);
+      fuzzyCandidates.push({ canonical, score });
+
+      const aliases = aliasMap[canonical] || [];
+      for (const alias of aliases) {
+        const cleanedAlias = cleanString(alias);
+        const score = getSimilarity(cleanedInput, cleanedAlias);
+        fuzzyCandidates.push({ canonical, score });
+      }
+    }
+
+    fuzzyCandidates.sort((a, b) => b.score - a.score);
+
+    if (fuzzyCandidates.length > 0 && fuzzyCandidates[0].score >= 0.8) {
+      if (fuzzyCandidates.length === 1 || (fuzzyCandidates[0].score - fuzzyCandidates[1].score >= 0.15)) {
+        return { canonical: fuzzyCandidates[0].canonical, original: input, isAutoCorrected: true };
+      }
+    }
+
+    return { canonical: '', original: input, isAutoCorrected: false, error: `Value "${input}" could not be matched confidently.` };
+  }
+
+  function parseExcelFile(file) {
+    if (!file) return;
+    
+    const name = file.name || '';
+    const ext = name.split('.').pop().toLowerCase();
+    if (!['xlsx', 'xls', 'csv'].includes(ext)) {
+      toast.error({
+        title: 'Invalid file format',
+        message: 'Please upload an Excel (.xlsx, .xls) or CSV (.csv) file.'
+      });
+      return;
+    }
+    
+    setBulkFile(file);
+    setBulkLoading(true);
+    setBulkResult(null);
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet);
+        
+        if (!rows.length) {
+          throw new Error('The uploaded file is empty.');
+        }
+        
+        const keys = Object.keys(rows[0]);
+        const aliasesMap = {
+          fullName: ['fullname', 'name', 'studentname', 'fullName', 'full name', 'student name'],
+          email: ['email', 'emailaddress', 'mail', 'email address', 'email id', 'emailid'],
+          enrollmentNo: ['enrollmentno', 'enrollmentnumber', 'enrollment', 'enrollment no', 'enrollment number', 'enroll no', 'enrollno'],
+          phone: ['phone', 'phonenumber', 'contact', 'phone number', 'contact number', 'mobile', 'mobile number'],
+          program: ['program', 'course', 'degree', 'stream'],
+          department: ['department', 'branch', 'dept', 'specialization'],
+          semester: ['semester', 'sem', 'current semester', 'current sem']
+        };
+        
+        const mapHeaders = (rawRow) => {
+          const rowKeys = Object.keys(rawRow);
+          const getVal = (aliases) => {
+            const match = rowKeys.find(k => aliases.includes(String(k).toLowerCase().trim()));
+            return match ? String(rawRow[match]).trim() : '';
+          };
+          
+          return {
+            fullName: getVal(aliasesMap.fullName),
+            email: getVal(aliasesMap.email),
+            enrollmentNo: getVal(aliasesMap.enrollmentNo),
+            phone: getVal(aliasesMap.phone),
+            program: getVal(aliasesMap.program),
+            department: getVal(aliasesMap.department),
+            semester: getVal(aliasesMap.semester)
+          };
+        };
+        
+        const fileEmails = new Set();
+        const filePhones = new Set();
+        const fileEnrollments = new Set();
+        
+         const mapped = rows.map((row, idx) => {
+          const rawStudent = mapHeaders(row);
+          
+          const resolvedProgram = resolveValue(rawStudent.program, PROGRAM_OPTIONS, PROGRAM_ALIASES);
+          const resolvedDept = resolveValue(rawStudent.department, ROUTING_DEPARTMENTS, DEPT_ALIASES);
+
+          const student = {
+            ...rawStudent,
+            program: resolvedProgram.canonical || rawStudent.program,
+            department: resolvedDept.canonical || rawStudent.department,
+            temporaryPassword: generateRandomPassword(),
+            rowNumber: idx + 2,
+            originalProgram: rawStudent.program,
+            originalDepartment: rawStudent.department,
+            programAutoCorrected: resolvedProgram.isAutoCorrected,
+            deptAutoCorrected: resolvedDept.isAutoCorrected
+          };
+          
+          const errors = [];
+          if (!student.fullName) errors.push('Full Name is required');
+          if (!student.email) errors.push('Email is required');
+          if (!student.enrollmentNo) errors.push('Enrollment Number is required');
+          if (!student.phone) errors.push('Phone Number is required');
+          if (!student.semester) errors.push('Semester is required');
+          
+          if (!resolvedProgram.canonical) {
+            errors.push(resolvedProgram.error || 'Program is required');
+          }
+          if (!resolvedDept.canonical) {
+            errors.push(resolvedDept.error || 'Department is required');
+          }
+          if (student.semester && !SEMESTER_OPTIONS.map(String).includes(String(student.semester))) {
+            errors.push('Semester must be 1 to 8');
+          }
+          
+          const emailLower = student.email.toLowerCase();
+          const enrollmentLower = student.enrollmentNo.toLowerCase();
+          
+          if (student.email) {
+            if (fileEmails.has(emailLower)) {
+              errors.push(`Duplicate email "${student.email}" in file`);
+            } else {
+              fileEmails.add(emailLower);
+            }
+          }
+          if (student.phone) {
+            if (filePhones.has(student.phone)) {
+              errors.push(`Duplicate phone number "${student.phone}" in file`);
+            } else {
+              filePhones.add(student.phone);
+            }
+          }
+          if (student.enrollmentNo) {
+            if (fileEnrollments.has(enrollmentLower)) {
+              errors.push(`Duplicate enrollment number "${student.enrollmentNo}" in file`);
+            } else {
+              fileEnrollments.add(enrollmentLower);
+            }
+          }
+          
+          student.validationErrors = errors;
+          return student;
+        });
+        
+        setBulkStudents(mapped);
+        toast.success({
+          title: 'File parsed',
+          message: `Found ${mapped.length} student records in the file.`
+        });
+      } catch (err) {
+        toast.error({
+          title: 'File parsing failed',
+          message: err.message || 'Make sure sheet contains headers and correct format.'
+        });
+        setBulkFile(null);
+        setBulkStudents([]);
+      } finally {
+        setBulkLoading(false);
+      }
+    };
+    reader.onerror = () => {
+      toast.error({
+        title: 'Error reading file',
+        message: 'Could not load the file from disk.'
+      });
+      setBulkLoading(false);
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  async function handleBulkSubmit(event) {
+    if (event) event.preventDefault();
+    if (bulkLoading || !bulkStudents.length) return;
+    
+    const hasErrors = bulkStudents.some(s => s.validationErrors && s.validationErrors.length > 0);
+    if (hasErrors) {
+      toast.error({
+        title: 'Cannot submit',
+        message: 'Please resolve the validation errors in the list before registering.'
+      });
+      return;
+    }
+    
+    setBulkLoading(true);
+    try {
+      const result = await bulkCreateAdminStudents(bulkStudents);
+      setBulkResult(result);
+      setBulkStudents([]);
+      setBulkFile(null);
+      setReloadKey((prev) => prev + 1);
+      
+      const addedCount = result?.added?.length || 0;
+      const dupCount = result?.duplicates?.length || 0;
+      const errCount = result?.errors?.length || 0;
+      
+      if (addedCount > 0) {
+        toast.success({
+          title: 'Bulk registration complete',
+          message: `Successfully registered ${addedCount} student(s).`
+        });
+      } else {
+        toast.warn({
+          title: 'No students registered',
+          message: 'No new students were registered (all entries skipped or invalid).'
+        });
+      }
+    } catch (err) {
+      toast.error({
+        title: 'Registration failed',
+        message: getApiErrorMessage(err, 'Unable to register bulk students right now.')
+      });
+    } finally {
+      setBulkLoading(false);
+    }
+  }
+
+  function handleDragOver(e) {
+    e.preventDefault();
+    setDragOver(true);
+  }
+
+  function handleDragLeave(e) {
+    e.preventDefault();
+    setDragOver(false);
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    setDragOver(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      parseExcelFile(e.dataTransfer.files[0]);
+    }
+  }
 
   useEffect(() => {
     const debounceId = window.setTimeout(() => {
@@ -379,55 +788,339 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
   if (currentUser?.role === 'it' && activeSection === 'students') {
     return (
       <>
-        <section className="admin-wide-panel student-management-panel" style={{ maxWidth: '800px', margin: '0 auto' }}>
-          <div className="admin-panel-heading" style={{ marginBottom: '1.5rem' }}>
+        <section className="admin-wide-panel student-management-panel" style={{ maxWidth: activeTab === 'bulk' ? '1000px' : '800px', margin: '0 auto', transition: 'max-width 0.2s' }}>
+          <div className="admin-panel-heading" style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
               <p className="admin-eyebrow">IT Student Management</p>
-              <h2>Register New Student</h2>
-              <span>Input student details below to generate temporary credentials and create the account.</span>
+              <h2>Register New Students</h2>
+              <span>Choose between individual student registration or bulk Excel upload.</span>
             </div>
-          </div>
-
-          {submitError ? (
-            <div className="admin-alert danger" style={{ padding: '0.85rem', marginBottom: '1.25rem', borderRadius: '8px', background: 'var(--danger-soft)', color: 'var(--danger)', fontSize: '0.85rem' }}>
-              {submitError}
-            </div>
-          ) : null}
-
-          <form onSubmit={handleSubmit}>
-            <StudentFormFields
-              form={form}
-              fieldErrors={fieldErrors}
-              onChange={updateFormField}
-              isEditMode={false}
-              programOptions={options.programs}
-              departmentOptions={options.departments}
-              semesterOptions={options.semesters}
-            />
             
-            <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+            {activeTab === 'bulk' && (
               <button
                 type="button"
                 className="admin-secondary-link"
-                onClick={() => {
-                  setForm(createEmptyForm(options))
-                  setFieldErrors({})
-                  setSubmitError('')
+                onClick={downloadExcelTemplate}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: 'var(--app-surface-accent-soft)', color: 'var(--app-text-accent)', border: '1px dashed var(--app-surface-border)', padding: '0.65rem 1.25rem', borderRadius: '10px', fontWeight: '500', cursor: 'pointer', transition: 'all 0.2s' }}
+              >
+                <FileSpreadsheet size={16} />
+                <span>Download Template</span>
+              </button>
+            )}
+          </div>
+
+          {/* Tab Switcher */}
+          <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--app-surface-border)', marginBottom: '1.5rem', paddingBottom: '0.5rem' }}>
+            <button
+              type="button"
+              onClick={() => setActiveTab('single')}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: '0.5rem 1rem',
+                fontWeight: '600',
+                color: activeTab === 'single' ? 'var(--app-text-accent)' : 'var(--app-text-muted)',
+                borderBottom: activeTab === 'single' ? '2px solid var(--app-text-accent)' : 'none',
+                cursor: 'pointer'
+              }}
+            >
+              Single Student Form
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('bulk')}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: '0.5rem 1rem',
+                fontWeight: '600',
+                color: activeTab === 'bulk' ? 'var(--app-text-accent)' : 'var(--app-text-muted)',
+                borderBottom: activeTab === 'bulk' ? '2px solid var(--app-text-accent)' : 'none',
+                cursor: 'pointer'
+              }}
+            >
+              Bulk Excel Upload
+            </button>
+          </div>
+
+          {activeTab === 'single' ? (
+            <>
+              {submitError ? (
+                <div className="admin-alert danger" style={{ padding: '0.85rem', marginBottom: '1.25rem', borderRadius: '8px', background: 'var(--danger-soft)', color: 'var(--danger)', fontSize: '0.85rem' }}>
+                  {submitError}
+                </div>
+              ) : null}
+
+              <form onSubmit={handleSubmit}>
+                <StudentFormFields
+                  form={form}
+                  fieldErrors={fieldErrors}
+                  onChange={updateFormField}
+                  isEditMode={false}
+                  programOptions={options.programs}
+                  departmentOptions={options.departments}
+                  semesterOptions={options.semesters}
+                />
+                
+                <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                  <button
+                    type="button"
+                    className="admin-secondary-link"
+                    onClick={() => {
+                      setForm(createEmptyForm(options))
+                      setFieldErrors({})
+                      setSubmitError('')
+                    }}
+                    style={{ border: '1px solid var(--app-surface-border)', padding: '0.6rem 1.2rem', borderRadius: '8px' }}
+                  >
+                    Clear Form
+                  </button>
+                  <button
+                    type="submit"
+                    className="admin-primary-button inline"
+                    disabled={submitting}
+                    style={{ padding: '0.6rem 1.5rem' }}
+                  >
+                    {submitting ? 'Creating...' : 'Register Student'}
+                  </button>
+                </div>
+              </form>
+            </>
+          ) : (
+            <>
+              {bulkResult && (
+                <div style={{ marginBottom: '1.5rem', background: 'rgba(30, 64, 175, 0.05)', border: '1px solid var(--app-surface-border)', borderRadius: '16px', padding: '1.5rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '700', color: 'var(--app-text)' }}>Bulk Processing Summary</h3>
+                    <button
+                      type="button"
+                      onClick={() => setBulkResult(null)}
+                      style={{ background: 'none', border: 'none', color: 'var(--app-text-muted)', cursor: 'pointer', padding: '0.25rem' }}
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                  
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1.25rem' }}>
+                    <div style={{ padding: '1rem', background: 'rgba(34, 197, 94, 0.08)', borderRadius: '12px', border: '1px solid rgba(34, 197, 94, 0.15)', textAlign: 'center' }}>
+                      <p style={{ margin: 0, fontSize: '1.8rem', fontWeight: '800', color: '#22c55e' }}>{bulkResult.added?.length || 0}</p>
+                      <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: '600', color: 'var(--app-text-muted)', textTransform: 'uppercase' }}>Registered</p>
+                    </div>
+                    <div style={{ padding: '1rem', background: 'rgba(234, 179, 8, 0.08)', borderRadius: '12px', border: '1px solid rgba(234, 179, 8, 0.15)', textAlign: 'center' }}>
+                      <p style={{ margin: 0, fontSize: '1.8rem', fontWeight: '800', color: '#eab308' }}>{bulkResult.duplicates?.length || 0}</p>
+                      <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: '600', color: 'var(--app-text-muted)', textTransform: 'uppercase' }}>Duplicates Skipped</p>
+                    </div>
+                    <div style={{ padding: '1rem', background: 'rgba(239, 68, 68, 0.08)', borderRadius: '12px', border: '1px solid rgba(239, 68, 68, 0.15)', textAlign: 'center' }}>
+                      <p style={{ margin: 0, fontSize: '1.8rem', fontWeight: '800', color: '#ef4444' }}>{bulkResult.errors?.length || 0}</p>
+                      <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: '600', color: 'var(--app-text-muted)', textTransform: 'uppercase' }}>Errors</p>
+                    </div>
+                  </div>
+                  
+                  {bulkResult.duplicates?.length > 0 && (
+                    <div style={{ marginBottom: '0.75rem' }}>
+                      <p style={{ margin: '0 0 0.25rem', fontSize: '0.85rem', fontWeight: '600', color: '#eab308' }}>Skipped Duplicates (Students Already Exist):</p>
+                      <div style={{ maxHeight: '120px', overflowY: 'auto', fontSize: '0.8rem', background: 'var(--app-surface)', borderRadius: '8px', padding: '0.5rem 0.75rem', border: '1px solid var(--app-surface-border)' }}>
+                        <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>
+                          {bulkResult.duplicates.map((dup, i) => (
+                            <li key={i} style={{ marginBottom: '0.2rem' }}>
+                              <strong>{dup.fullName}</strong> ({dup.enrollmentNo}) - <span style={{ color: 'var(--app-text-muted)' }}>{dup.reason}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {bulkResult.errors?.length > 0 && (
+                    <div>
+                      <p style={{ margin: '0 0 0.25rem', fontSize: '0.85rem', fontWeight: '600', color: '#ef4444' }}>Rows with Errors:</p>
+                      <div style={{ maxHeight: '120px', overflowY: 'auto', fontSize: '0.8rem', background: 'var(--app-surface)', borderRadius: '8px', padding: '0.5rem 0.75rem', border: '1px solid var(--app-surface-border)' }}>
+                        <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>
+                          {bulkResult.errors.map((err, i) => (
+                            <li key={i} style={{ marginBottom: '0.2rem' }}>
+                              Row {err.row} ({err.name}): <span style={{ color: 'var(--danger)' }}>{err.message}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Drag and Drop Zone */}
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  border: dragOver ? '2px dashed var(--app-text-accent)' : '2px dashed var(--app-surface-border)',
+                  background: dragOver ? 'rgba(30, 64, 175, 0.04)' : 'var(--app-surface)',
+                  borderRadius: '16px',
+                  padding: '2.5rem 1.5rem',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  marginBottom: '1.5rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.75rem'
                 }}
-                style={{ border: '1px solid var(--app-surface-border)', padding: '0.6rem 1.2rem', borderRadius: '8px' }}
               >
-                Clear Form
-              </button>
-              <button
-                type="submit"
-                className="admin-primary-button inline"
-                disabled={submitting}
-                style={{ padding: '0.6rem 1.5rem' }}
-              >
-                {submitting ? 'Creating...' : 'Register Student'}
-              </button>
-            </div>
-          </form>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      parseExcelFile(e.target.files[0]);
+                    }
+                  }}
+                  style={{ display: 'none' }}
+                  accept=".xlsx,.xls,.csv"
+                />
+                
+                {bulkLoading ? (
+                  <>
+                    <RefreshCw size={36} className="animate-spin" style={{ color: 'var(--app-text-accent)' }} />
+                    <h4 style={{ margin: 0, fontWeight: '600' }}>Parsing your sheet...</h4>
+                    <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--app-text-muted)' }}>Reading data and generating random passwords</p>
+                  </>
+                ) : bulkFile ? (
+                  <>
+                    <CheckCircle2 size={36} style={{ color: 'var(--success)' }} />
+                    <h4 style={{ margin: 0, fontWeight: '600', color: 'var(--success)' }}>File Selected: {bulkFile.name}</h4>
+                    <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--app-text-muted)' }}>{(bulkFile.size / 1024).toFixed(1)} KB — Click or drag to change file</p>
+                  </>
+                ) : (
+                  <>
+                    <Upload size={36} style={{ color: 'var(--app-text-muted)' }} />
+                    <h4 style={{ margin: 0, fontWeight: '600' }}>Drag & Drop Excel or CSV File Here</h4>
+                    <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--app-text-muted)' }}>Or click to select a file from your device</p>
+                  </>
+                )}
+              </div>
+
+              {/* Parsed Preview Table */}
+              {bulkStudents.length > 0 && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                    <h4 style={{ margin: 0, fontWeight: '600' }}>Parsed Records Preview ({bulkStudents.length} rows)</h4>
+                    <span style={{ fontSize: '0.8rem', color: bulkStudents.some(s => s.validationErrors.length > 0) ? 'var(--danger)' : 'var(--success)', fontWeight: '600' }}>
+                      {bulkStudents.some(s => s.validationErrors.length > 0) ? '⚠️ Please resolve validation errors' : '✅ Ready to submit'}
+                    </span>
+                  </div>
+                  
+                  <div style={{ overflowX: 'auto', maxHeight: '350px', border: '1px solid var(--app-surface-border)', borderRadius: '12px', marginBottom: '1.5rem', background: 'var(--app-surface)' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
+                      <thead style={{ background: 'rgba(30, 64, 175, 0.03)', position: 'sticky', top: 0, zIndex: 1, borderBottom: '1px solid var(--app-surface-border)' }}>
+                        <tr>
+                          <th style={{ padding: '0.75rem 1rem' }}>Row</th>
+                          <th style={{ padding: '0.75rem 1rem' }}>Name</th>
+                          <th style={{ padding: '0.75rem 1rem' }}>Enrollment</th>
+                          <th style={{ padding: '0.75rem 1rem' }}>Email / Phone</th>
+                          <th style={{ padding: '0.75rem 1rem' }}>Academic Scope</th>
+                          <th style={{ padding: '0.75rem 1rem' }}>Generated Password</th>
+                          <th style={{ padding: '0.75rem 1rem' }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bulkStudents.map((student, idx) => {
+                          const hasErr = student.validationErrors.length > 0;
+                          return (
+                            <tr key={idx} style={{ borderBottom: '1px solid var(--app-surface-border)', background: hasErr ? 'rgba(239, 68, 68, 0.02)' : 'inherit' }}>
+                              <td style={{ padding: '0.75rem 1rem', color: 'var(--app-text-muted)' }}>{student.rowNumber}</td>
+                              <td style={{ padding: '0.75rem 1rem', fontWeight: '500' }}>{student.fullName || <span style={{color:'var(--danger)'}}>(missing)</span>}</td>
+                              <td style={{ padding: '0.75rem 1rem', fontFamily: 'monospace' }}>{student.enrollmentNo || <span style={{color:'var(--danger)'}}>(missing)</span>}</td>
+                              <td style={{ padding: '0.75rem 1rem' }}>
+                                <div style={{ fontWeight: '500' }}>{student.email || <span style={{color:'var(--danger)'}}>(missing)</span>}</div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--app-text-muted)' }}>{student.phone || <span style={{color:'var(--danger)'}}>(missing)</span>}</div>
+                              </td>
+                              <td style={{ padding: '0.75rem 1rem' }}>
+                                <div style={{ fontWeight: '500' }}>
+                                  {student.program}
+                                  {student.programAutoCorrected && (
+                                    <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--app-text-accent)', fontWeight: 'normal', fontStyle: 'italic' }}>
+                                      (auto-corrected from "{student.originalProgram}")
+                                    </span>
+                                  )}
+                                </div>
+                                <div style={{ fontWeight: '500', marginTop: '0.25rem' }}>
+                                  {student.department}
+                                  {student.deptAutoCorrected && (
+                                    <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--app-text-accent)', fontWeight: 'normal', fontStyle: 'italic' }}>
+                                      (auto-corrected from "{student.originalDepartment}")
+                                    </span>
+                                  )}
+                                </div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--app-text-muted)', marginTop: '0.25rem' }}>Semester {student.semester}</div>
+                              </td>
+                              <td style={{ padding: '0.75rem 1rem', fontFamily: 'monospace', color: 'var(--app-text-accent)', fontWeight: '600' }}>
+                                {student.temporaryPassword}
+                              </td>
+                              <td style={{ padding: '0.75rem 1rem' }}>
+                                {hasErr ? (
+                                  <div title={student.validationErrors.join(', ')} style={{ color: 'var(--danger)', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.75rem' }}>
+                                    <AlertTriangle size={14} />
+                                    <span>Error</span>
+                                  </div>
+                                ) : (
+                                  <div style={{ color: 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.75rem' }}>
+                                    <CheckCircle2 size={14} />
+                                    <span>Ready</span>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  {bulkStudents.some(s => s.validationErrors.length > 0) && (
+                    <div style={{ display: 'flex', gap: '0.5rem', background: 'rgba(239, 68, 68, 0.04)', border: '1px solid rgba(239, 68, 68, 0.08)', padding: '0.85rem 1rem', borderRadius: '10px', marginBottom: '1.5rem', color: 'var(--danger)', fontSize: '0.8rem', alignItems: 'flex-start' }}>
+                      <AlertOctagon size={16} style={{ flexShrink: 0, marginTop: '0.1rem' }} />
+                      <div>
+                        <p style={{ margin: '0 0 0.25rem', fontWeight: '600' }}>Please fix the errors below in your Excel sheet:</p>
+                        <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>
+                          {bulkStudents.filter(s => s.validationErrors.length > 0).map((s, idx) => (
+                            <li key={idx} style={{ marginBottom: '0.15rem' }}>Row {s.rowNumber} ({s.fullName || 'Unnamed'}): {s.validationErrors.join(', ')}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                    <button
+                      type="button"
+                      className="admin-secondary-link"
+                      onClick={() => {
+                        setBulkStudents([]);
+                        setBulkFile(null);
+                        setBulkResult(null);
+                      }}
+                      style={{ border: '1px solid var(--app-surface-border)', padding: '0.6rem 1.2rem', borderRadius: '8px' }}
+                    >
+                      Clear List
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-primary-button inline"
+                      disabled={bulkLoading || bulkStudents.some(s => s.validationErrors.length > 0)}
+                      onClick={handleBulkSubmit}
+                      style={{ padding: '0.6rem 1.5rem' }}
+                    >
+                      {bulkLoading ? 'Creating Accounts...' : 'Register All Students'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </section>
       </>
     )

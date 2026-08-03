@@ -63,6 +63,16 @@ const createStudent = asyncHandler(async (req, res) => {
   });
 });
 
+const bulkCreateStudents = asyncHandler(async (req, res) => {
+  const result = await studentManagementService.bulkCreateStudents(req.body, req.user, getRequestMeta(req));
+
+  return sendSuccess(res, {
+    statusCode: 200,
+    message: 'Bulk student creation processed.',
+    data: result
+  });
+});
+
 const listStudents = asyncHandler(async (req, res) => {
   const result = await studentManagementService.listStudents(req.query);
 
@@ -105,6 +115,7 @@ const exportStudentCredentials = asyncHandler(async (req, res) => {
 
 module.exports = {
   createStudent,
+  bulkCreateStudents,
   deleteStudent,
   exportStudentCredentials,
   getAnalytics,

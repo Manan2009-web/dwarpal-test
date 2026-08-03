@@ -3077,6 +3077,15 @@ export async function createAdminStudent(student = {}) {
   return payload?.data || null
 }
 
+export async function bulkCreateAdminStudents(students = []) {
+  const payload = await apiRequest('/admin/students/bulk', {
+    method: 'POST',
+    body: students.map(buildAdminStudentPayload),
+  })
+
+  return payload?.data || null
+}
+
 export async function updateAdminStudent(studentId, student = {}) {
   const payload = await apiRequest(`/admin/students/${studentId}`, {
     method: 'PUT',

@@ -227,6 +227,7 @@ const env = {
     5
   ),
   emailFrom: normalizeEnvString(process.env.EMAIL_FROM),
+  resendApiKey: normalizeEnvString(process.env.RESEND_API_KEY),
   smtpHost: normalizeEnvString(process.env.SMTP_HOST),
   smtpPort: parsePositiveIntegerEnv(process.env.SMTP_PORT, 587),
   smtpUser: normalizeEnvString(process.env.SMTP_USER).toLowerCase(),
