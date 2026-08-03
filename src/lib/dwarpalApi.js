@@ -111,20 +111,26 @@ let lastBackendWarmupAt = 0
 
 const APPROVED_GATEPASS_STATUSES = new Set([
   'approved_final',
+  'approved_by_cao',
+  'approved_by_principal',
   'approved_by_hod',
   'approved_by_coordinator',
-  'approved_by_cao',
+  'approved_by_chairman',
 ])
 const REJECTED_GATEPASS_STATUSES = new Set([
   'rejected_by_principal',
   'rejected_by_hod',
   'rejected_by_coordinator',
   'rejected_by_cao',
+  'rejected_by_campus_security',
+  'rejected_by_chairman',
 ])
 const PENDING_GATEPASS_STATUSES = new Set([
   'pending_principal',
   'forwarded_to_hod',
   'forwarded_to_coordinator',
+  'forwarded_to_campus_security',
+  'forwarded_to_chairman',
   'pending_cao',
 ])
 const GENERIC_API_MESSAGES = new Set(['Validation error', 'Please review the highlighted fields.', 'Request failed.'])
@@ -674,7 +680,7 @@ export function getApiErrorDetails(error, fallbackMessage = 'Request failed.') {
   const resolvedMessage = getApiErrorMessage(error, fallbackMessage)
 
   return {
-    code: payload?.code || error?.code || '',
+    code: payload?.code || payload?.errorCode || error?.code || '',
     errors: normalizedErrors,
     fieldErrors,
     message: resolvedMessage || fallbackMessage,
@@ -1414,7 +1420,9 @@ export function toUiGatepass(gatepass) {
     returnTime: returnTime || null,
     canMarkIn: Boolean(gatepass.canMarkIn ?? returnTime),
     status: getDisplayStatus(gatepass.status),
+    rawStatus: gatepass.status,
     stage: getCurrentStage(gatepass),
+    rawApprovalLevel: gatepass.currentApprovalLevel,
     submittedAt: gatepass.createdAt,
     updatedAt: gatepass.updatedAt || gatepass.createdAt,
     approvedBy: gatepass.approvedBy || 'Awaiting approval',
@@ -2532,10 +2540,11 @@ async function fetchWorkspaceRequests(role, signal, requestOptions = {}) {
         statusParam: buildFacultyStatusQuery(normalizedRequestOptions.statusFilter, normalizedRole),
       }),
       fetchWorkspaceSourceWindow({
-        endpoint: '/gatepasses/pending/coordinator',
+        endpoint: '/gatepasses',
         signal,
         mapper: toUiGatepass,
         requestOptions: normalizedRequestOptions,
+        extraParams: { applicantType: 'student' },
         statusParam: buildGatepassStatusQuery(normalizedRequestOptions.statusFilter, normalizedRole),
         swallowUnauthorized: true,
       }),

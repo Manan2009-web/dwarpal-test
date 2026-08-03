@@ -318,6 +318,12 @@ function buildGatepassScopeFilter(user) {
     };
   }
 
+  if (role === 'campus_security') {
+    return {
+      status: { $in: BOUNCER_VISIBLE_STATUSES }
+    };
+  }
+
   return impossibleFilter();
 }
 

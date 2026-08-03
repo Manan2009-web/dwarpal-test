@@ -286,7 +286,7 @@ const env = {
   httpRequestTimeoutMs: parsePositiveIntegerEnv(process.env.HTTP_REQUEST_TIMEOUT_MS, 30000),
   httpHeadersTimeoutMs: parsePositiveIntegerEnv(process.env.HTTP_HEADERS_TIMEOUT_MS, 35000),
   httpKeepAliveTimeoutMs: parsePositiveIntegerEnv(process.env.HTTP_KEEP_ALIVE_TIMEOUT_MS, 5000),
-  gatepassEscalationTimeoutMinutes: parsePositiveIntegerEnv(process.env.GATEPASS_ESCALATION_TIMEOUT_MINUTES, 5),
+  gatepassEscalationTimeoutMinutes: parsePositiveIntegerEnv(process.env.GATEPASS_ESCALATION_TIMEOUT_MINUTES, 2),
   gatepassEscalationSweepIntervalMs: parsePositiveIntegerEnv(process.env.GATEPASS_ESCALATION_SWEEP_INTERVAL_MS, 60000)
 };
 

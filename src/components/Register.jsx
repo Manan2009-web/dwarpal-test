@@ -344,6 +344,7 @@ export default function Register({ onRegister }) {
                 <option value="hod">HOD</option>
                 <option value="cao">CAO</option>
                 <option value="security">Security</option>
+                <option value="campus_security">Campus Security (Bouncer)</option>
                 <option value="principal">Principal</option>
                 <option value="it">IT Admin</option>
                 <option value="chairman">Chairman</option>

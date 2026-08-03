@@ -80,13 +80,13 @@ function verifyPortalAccessToken(token) {
   const decoded = jwt.verify(token, env.jwtPortalSecret, { algorithms: ['HS256'] });
 
   if (decoded?.type !== 'portal_access') {
-    throw new AppError('Portal access token is invalid. Please authenticate again.', 401);
+    throw new AppError('Portal access token is invalid. Please authenticate again.', 401, null, 'ERR_PORTAL_INVALID');
   }
 
   const accessType = normalizePortalAccessType(decoded.accessType);
 
   if (!accessType) {
-    throw new AppError('Portal access token is invalid. Please authenticate again.', 401);
+    throw new AppError('Portal access token is invalid. Please authenticate again.', 401, null, 'ERR_PORTAL_INVALID');
   }
 
   return {
@@ -112,7 +112,7 @@ function requirePortalAccess(...allowedTypes) {
     const token = readPortalAccessToken(req);
 
     if (!token) {
-      const error = new AppError('Portal access is required before continuing.', 401);
+      const error = new AppError('Portal access is required before continuing.', 401, null, 'ERR_PORTAL_REQUIRED');
       error.code = 'PORTAL_ACCESS_REQUIRED';
       return next(error);
     }
@@ -130,10 +130,18 @@ function requirePortalAccess(...allowedTypes) {
       req.portalAccess = portalAccess;
       return next();
     } catch (error) {
-      const portalError =
-        error instanceof AppError
-          ? error
-          : new AppError('Portal access token is invalid or expired. Please authenticate again.', 401);
+      let portalError;
+      if (error instanceof AppError) {
+        portalError = error;
+        portalError.publicErrorCode = portalError.publicErrorCode || 'ERR_PORTAL_INVALID';
+      } else {
+        portalError = new AppError('Portal access token is invalid or expired. Please authenticate again.', 401, null, 'ERR_PORTAL_INVALID');
+      }
+
+      if (portalError.publicErrorCode === 'ERR_AUTH_FAILED') {
+        portalError.publicErrorCode = 'ERR_PORTAL_INVALID';
+      }
+
       portalError.code = portalError.code || 'PORTAL_ACCESS_INVALID';
       return next(portalError);
     }

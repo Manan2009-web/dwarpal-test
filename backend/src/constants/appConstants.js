@@ -37,11 +37,12 @@ const ROLES = Object.freeze([
   'security',
   'admin',
   'it',
-  'chairman'
+  'chairman',
+  'campus_security'
 ]);
 
 const PUBLIC_REGISTRATION_ROLES = Object.freeze(ROLES.filter((role) => role !== 'student'));
-const ADMIN_ROLES = Object.freeze(['principal', 'hod', 'cao', 'security', 'admin', 'it', 'chairman']);
+const ADMIN_ROLES = Object.freeze(['principal', 'hod', 'cao', 'security', 'admin', 'it', 'chairman', 'campus_security']);
 const SEMESTERS = Object.freeze([1, 2, 3, 4, 5, 6, 7, 8]);
 const FACULTY_LEAVE_TYPES = Object.freeze([
   'Academic On Duty',
@@ -149,11 +150,17 @@ const STUDENT_GATEPASS_STATUSES = Object.freeze([
   'pending_principal',
   'forwarded_to_hod',
   'forwarded_to_coordinator',
+  'forwarded_to_campus_security',
+  'forwarded_to_chairman',
+  'approved_by_principal',
   'approved_by_hod',
   'approved_by_coordinator',
+  'approved_by_chairman',
   'rejected_by_principal',
   'rejected_by_hod',
   'rejected_by_coordinator',
+  'rejected_by_campus_security',
+  'rejected_by_chairman',
   'approved_final',
   'checked_out_by_security',
   'completed'
@@ -179,8 +186,6 @@ const GATEPASS_STATUSES = Object.freeze([
 
 const APPROVED_GATEPASS_STATUSES = Object.freeze([
   'approved_final',
-  'approved_by_hod',
-  'approved_by_coordinator',
   'approved_by_cao'
 ]);
 
@@ -188,7 +193,17 @@ const PENDING_GATEPASS_STATUSES = Object.freeze([
   'pending_principal',
   'forwarded_to_hod',
   'forwarded_to_coordinator',
+  'forwarded_to_campus_security',
+  'forwarded_to_chairman',
   'pending_cao'
+]);
+
+const BOUNCER_VISIBLE_STATUSES = Object.freeze([
+  'approved_by_principal',
+  'approved_by_hod',
+  'approved_by_coordinator',
+  'approved_by_chairman',
+  'forwarded_to_campus_security'
 ]);
 
 const SECURITY_VISIBLE_STATUSES = Object.freeze([
@@ -210,7 +225,9 @@ const APPROVAL_LEVELS = Object.freeze([
   'hod',
   'coordinator',
   'cao',
+  'campus_security',
   'security',
+  'chairman',
   'completed',
   'cancelled'
 ]);
@@ -272,5 +289,6 @@ module.exports = {
   TIME_REGEX,
   VEHICLE_NUMBER_REGEX,
   normalizeDepartment,
-  normalizeProgram
+  normalizeProgram,
+  BOUNCER_VISIBLE_STATUSES
 };

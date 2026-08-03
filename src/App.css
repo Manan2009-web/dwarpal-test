@@ -4725,6 +4725,23 @@ button {
   color: var(--app-shell-muted);
 }
 
+.gatepass-request-chip.timer-chip {
+  border-color: rgba(220, 38, 38, 0.25);
+  background: rgba(220, 38, 38, 0.08);
+  color: #ef4444;
+  font-weight: 900;
+  animation: pulse-timer 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-timer {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
 .expandable-gatepass-subtitle {
   margin: 0;
   color: var(--app-shell-muted);

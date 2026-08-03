@@ -106,6 +106,7 @@ function errorHandler(err, req, res, next) {
     success: false,
     message: error.message || 'An unexpected error occurred.',
     errorCode: error.publicErrorCode || ERROR_CODES.ERR_INTERNAL,
+    code: error.code || error.publicErrorCode || ERROR_CODES.ERR_INTERNAL,
     correlationId,                         // lets users report a traceable ID
     timestamp: new Date().toISOString()
   };

@@ -164,6 +164,7 @@ const ROLE_DASHBOARD_PATHS = {
   principal: '/principal/dashboard',
   hod: '/hod/dashboard',
   security: '/security/dashboard',
+  campus_security: '/security/dashboard',
   cao: '/cao/dashboard',
   admin: '/admin/dashboard',
   it: '/admin/dashboard',
@@ -217,7 +218,7 @@ function hasAdminPortalAccess(user) {
   const role = normalizeRole(user.role)
   const permissions = Array.isArray(user.permissions) ? user.permissions : []
 
-  if (['principal', 'hod', 'cao', 'security', 'admin', 'it'].includes(role)) {
+  if (['principal', 'hod', 'cao', 'security', 'campus_security', 'admin', 'it'].includes(role)) {
     return true
   }
 
@@ -913,6 +914,17 @@ function App() {
         }
 
         if (error.status === 401) {
+          if (
+            [
+              'PORTAL_ACCESS_INVALID',
+              'PORTAL_ACCESS_REQUIRED',
+              'ERR_PORTAL_INVALID',
+              'ERR_PORTAL_REQUIRED',
+            ].includes(errorDetails.code)
+          ) {
+            return errorDetails
+          }
+
           if (authMode === 'student-login') {
             return {
               ...errorDetails,
@@ -1156,7 +1168,15 @@ function App() {
       const resolvedMessage =
         errorDetails.code === 'PORTAL_ACCESS_DENIED' ? 'Invalid access ID or password.' : errorDetails.message
 
-      if (['PORTAL_ACCESS_INVALID', 'PORTAL_ACCESS_DENIED', 'PORTAL_ACCESS_REQUIRED'].includes(errorDetails.code)) {
+      if (
+        [
+          'PORTAL_ACCESS_INVALID',
+          'PORTAL_ACCESS_DENIED',
+          'PORTAL_ACCESS_REQUIRED',
+          'ERR_PORTAL_INVALID',
+          'ERR_PORTAL_REQUIRED',
+        ].includes(errorDetails.code)
+      ) {
         savePortalAccess(null)
       }
 
@@ -1198,7 +1218,14 @@ function App() {
         authMode: portalAccess?.accessType === 'student' ? 'student-login' : 'login',
       })
 
-      if (['PORTAL_ACCESS_INVALID', 'PORTAL_ACCESS_REQUIRED'].includes(errorDetails.code)) {
+      if (
+        [
+          'PORTAL_ACCESS_INVALID',
+          'PORTAL_ACCESS_REQUIRED',
+          'ERR_PORTAL_INVALID',
+          'ERR_PORTAL_REQUIRED',
+        ].includes(errorDetails.code)
+      ) {
         savePortalAccess(null)
       }
 
@@ -1236,7 +1263,14 @@ function App() {
         authMode: 'student-login',
       })
 
-      if (['PORTAL_ACCESS_INVALID', 'PORTAL_ACCESS_REQUIRED'].includes(errorDetails.code)) {
+      if (
+        [
+          'PORTAL_ACCESS_INVALID',
+          'PORTAL_ACCESS_REQUIRED',
+          'ERR_PORTAL_INVALID',
+          'ERR_PORTAL_REQUIRED',
+        ].includes(errorDetails.code)
+      ) {
         savePortalAccess(null)
       }
 
@@ -1277,7 +1311,14 @@ function App() {
         authMode: 'student-login',
       })
 
-      if (['PORTAL_ACCESS_INVALID', 'PORTAL_ACCESS_REQUIRED'].includes(errorDetails.code)) {
+      if (
+        [
+          'PORTAL_ACCESS_INVALID',
+          'PORTAL_ACCESS_REQUIRED',
+          'ERR_PORTAL_INVALID',
+          'ERR_PORTAL_REQUIRED',
+        ].includes(errorDetails.code)
+      ) {
         savePortalAccess(null)
       }
 
@@ -2124,6 +2165,9 @@ function RoleDashboardRoute({ currentUser, authReady, expectedRole, children }) 
   if (!currentUser) return <Navigate to="/login" replace />
 
   const normalizedCurrentRole = normalizeRole(currentUser.role)
+  if (expectedRole === 'security' && (normalizedCurrentRole === 'security' || normalizedCurrentRole === 'campus_security')) {
+    return children
+  }
   if (normalizedCurrentRole !== expectedRole) {
     return <Navigate to={getLandingPathForUser(currentUser)} replace />
   }
@@ -4532,6 +4576,14 @@ function DashboardPage({
   const [expandedGatepassId, setExpandedGatepassId] = useState('')
   const [securityStation, setSecurityStation] = useState('campus')
 
+  useEffect(() => {
+    if (currentUser?.role === 'security') {
+      setSecurityStation('gate')
+    } else if (currentUser?.role === 'campus_security') {
+      setSecurityStation('campus')
+    }
+  }, [currentUser?.role])
+
   const gatepassCards = useMemo(
     () =>
       gatepasses.map((gatepass) => ({
@@ -4621,27 +4673,6 @@ function DashboardPage({
       </section>
 
 
-
-      {currentUser.role === 'security' ? (
-        <div className="workspace-card security-station-card">
-          <div className="security-station-group">
-            <span className="security-station-label">🛡️ Security Station:</span>
-            <select
-              value={securityStation}
-              onChange={(e) => setSecurityStation(e.target.value)}
-              className="security-station-select"
-            >
-              <option value="campus">Campus Security (Bouncer / Internal Clearance)</option>
-              <option value="gate">Gate Security (Main Gate / Exit Verification)</option>
-            </select>
-          </div>
-          <div className="security-station-note">
-            {securityStation === 'campus'
-              ? '📍 Station 1: Campus Security clears approved gatepasses for exit'
-              : '📍 Station 2: Main Gate verifies QR code & marks OUT / Return'}
-          </div>
-        </div>
-      ) : null}
 
       {currentUser.role === 'security' ? (
         <SecurityVerificationPanel
@@ -5322,6 +5353,33 @@ function getAvailableActions(role, gatepass, onGatepassAction, securityStation =
     ]
   }
 
+  if (role === 'chairman') {
+    const isChairmanStage = (gatepass.rawStatus || gatepass.status) === 'forwarded_to_chairman'
+    if (isChairmanStage) {
+      return [
+        { label: 'Approve', tone: 'success', onClick: handleAction('approve') },
+        { label: 'Reject', tone: 'danger', onClick: handleAction('reject') },
+      ]
+    }
+  }
+
+  if (role === 'campus_security') {
+    const isBouncerStage = [
+      'approved_by_principal',
+      'approved_by_hod',
+      'approved_by_coordinator',
+      'approved_by_chairman',
+      'forwarded_to_campus_security'
+    ].includes(gatepass.rawStatus || gatepass.status)
+
+    if (isBouncerStage) {
+      return [
+        { label: 'Verify & Tick', tone: 'success', onClick: handleAction('approve') },
+        { label: 'Reject', tone: 'danger', onClick: handleAction('reject') }
+      ]
+    }
+  }
+
   if (role === 'security') {
     const isCampusCleared = Boolean(gatepass.campusCleared || gatepass.security?.campusCleared)
     if (securityStation === 'campus') {
@@ -5375,6 +5433,8 @@ function getListTitle(user) {
   if (user?.role === 'principal') return 'Principal review queue'
   if (user?.role === 'hod') return 'HOD review queue'
   if (user?.role === 'cao') return 'CAO review queue'
+  if (user?.role === 'campus_security') return 'Campus Security (Bouncer) clearance queue'
+  if (user?.role === 'chairman') return 'Chairman review queue'
   if (user?.role === 'security') return 'Security verification queue'
   return 'Gatepass history'
 }

@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, useState, useEffect } from 'react'
 import {
   Check,
   ChevronDown,
@@ -167,6 +167,42 @@ const ExpandableGatepassCard = memo(function ExpandableGatepassCard({
   onOpenQrPreview,
   onToggle,
 }) {
+  const [timeLeft, setTimeLeft] = useState('')
+
+  useEffect(() => {
+    const raw = gatepass.rawStatus || gatepass.status
+    const isEscalatable = [
+      'pending_principal',
+      'forwarded_to_hod',
+      'forwarded_to_coordinator',
+      'forwarded_to_campus_security'
+    ].includes(raw)
+
+    if (!isEscalatable || !gatepass.updatedAt) {
+      setTimeLeft('')
+      return
+    }
+
+    const interval = setInterval(() => {
+      const updatedAtTime = new Date(gatepass.updatedAt).getTime()
+      const limitMs = 2 * 60 * 1000 // 2 minutes escalation
+      const elapsed = Date.now() - updatedAtTime
+      const remaining = limitMs - elapsed
+
+      if (remaining <= 0) {
+        setTimeLeft('Forwarded')
+        clearInterval(interval)
+      } else {
+        const secs = Math.floor(remaining / 1000)
+        const mins = Math.floor(secs / 60)
+        const displaySecs = String(secs % 60).padStart(2, '0')
+        setTimeLeft(`${mins}:${displaySecs}`)
+      }
+    }, 500)
+
+    return () => clearInterval(interval)
+  }, [gatepass.rawStatus, gatepass.status, gatepass.updatedAt])
+
   const summaryItems = buildSummaryItems(gatepass, currentUserRole)
   const detailItems = buildDetailItems(gatepass, currentUserRole)
   const displayGatepassId = getGatepassIdentifier(gatepass)
@@ -191,6 +227,11 @@ const ExpandableGatepassCard = memo(function ExpandableGatepassCard({
             <div className="expandable-gatepass-badges">
               <span className="gatepass-request-chip">{requestTypeLabel}</span>
               <span className="gatepass-request-chip subtle">{reviewerRole} view</span>
+              {timeLeft && (
+                <span className="gatepass-request-chip timer-chip">
+                  ⌛ {timeLeft}
+                </span>
+              )}
             </div>
             <h3>{truncateText(gatepass?.reason, 96)}</h3>
             <p className="expandable-gatepass-subtitle">

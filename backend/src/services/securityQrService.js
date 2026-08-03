@@ -119,9 +119,19 @@ function buildGatepassSecurityVerificationResult(gatepass) {
   }
 
   if (!APPROVED_GATEPASS_STATUSES.includes(gatepass.status) && gatepass.status !== 'checked_out_by_security') {
+    const isBouncerPendingStatus = [
+      'approved_by_principal',
+      'approved_by_hod',
+      'approved_by_coordinator',
+      'approved_by_chairman',
+      'forwarded_to_campus_security'
+    ].includes(gatepass.status);
+
     return {
       valid: false,
-      message: `Gatepass is in ${gatepass.status} state and cannot be verified right now.`,
+      message: isBouncerPendingStatus
+        ? 'Gatepass QR cannot be scanned. Awaiting Campus Security (Bouncer) clearance tick.'
+        : `Gatepass is in ${gatepass.status} state and cannot be verified right now.`,
       gatepass: mapGatepassListItem(gatepass),
       nextAction: null
     };

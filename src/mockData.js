@@ -62,6 +62,13 @@ export const ROLE_META = {
     accent: 'var(--accent-cao)',
     idLabel: 'Employee ID',
   },
+  campus_security: {
+    title: 'Campus Security',
+    shortTitle: 'Bouncer',
+    panelTitle: 'Campus Security Dashboard',
+    accent: 'var(--accent-security)',
+    idLabel: 'Employee ID',
+  },
 }
 
 export const STATUS_COLORS = {
@@ -76,7 +83,7 @@ export const STATUS_COLORS = {
   Cancelled: 'rejected',
 }
 
-export const ROLE_OPTIONS = ['student', 'faculty', 'hod', 'cao', 'principal', 'security', 'admin', 'it', 'chairman']
+export const ROLE_OPTIONS = ['student', 'faculty', 'hod', 'cao', 'principal', 'security', 'admin', 'it', 'chairman', 'campus_security']
 
 export const PUBLIC_ROLE_OPTIONS = ROLE_OPTIONS.filter((role) => role !== 'student')
 
