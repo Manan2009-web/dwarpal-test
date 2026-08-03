@@ -240,18 +240,35 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
   }
 
   function downloadRejectedRows() {
-    if (!bulkResult || !bulkResult.rejected || !bulkResult.rejected.length) return;
+    const errorRows = (bulkResult && bulkResult.rejected && bulkResult.rejected.length)
+      ? bulkResult.rejected
+      : bulkStudents.filter(s => s.validationErrors && s.validationErrors.length > 0).map(s => ({
+          rowNumber: s.rowNumber,
+          originalData: {
+            fullName: s.fullName || '',
+            email: s.email || '',
+            enrollmentNo: s.enrollmentNo || '',
+            phone: s.phone || '',
+            program: s.originalProgram || s.program || '',
+            department: s.originalDepartment || s.department || '',
+            semester: s.semester || ''
+          },
+          reasons: s.validationErrors,
+          fieldErrors: s.fieldErrors
+        }));
+
+    if (!errorRows || !errorRows.length) return;
     try {
       const timestampStr = new Date().toISOString();
       const timestampDate = new Date().toISOString().slice(0, 10);
-      const totalErrors = bulkResult.rejected.length;
+      const totalErrors = errorRows.length;
       
       const aoa = [
         [`Total Error Rows: ${totalErrors} — Generated: ${timestampStr}`, '', '', '', '', '', '', '', ''],
         ['Row #', 'Full Name', 'Email', 'Enrollment Number', 'Phone Number', 'Program', 'Department', 'Semester', 'Issues Found']
       ];
       
-      bulkResult.rejected.forEach(r => {
+      errorRows.forEach(r => {
         const d = r.originalData || {};
         
         const issuesList = [];
@@ -308,7 +325,7 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
             };
           } else {
             const dataRowIndex = R - 2;
-            const rData = bulkResult.rejected[dataRowIndex];
+            const rData = errorRows[dataRowIndex];
             const fErrors = rData.fieldErrors || {};
             
             let fieldHasError = false;
@@ -1424,16 +1441,40 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
                   </div>
                   
                   {bulkStudents.some(s => s.validationErrors.length > 0) && (
-                    <div style={{ display: 'flex', gap: '0.5rem', background: 'rgba(239, 68, 68, 0.04)', border: '1px solid rgba(239, 68, 68, 0.08)', padding: '0.85rem 1rem', borderRadius: '10px', marginBottom: '1.5rem', color: 'var(--danger)', fontSize: '0.8rem', alignItems: 'flex-start' }}>
-                      <AlertOctagon size={16} style={{ flexShrink: 0, marginTop: '0.1rem' }} />
-                      <div>
-                        <p style={{ margin: '0 0 0.25rem', fontWeight: '600' }}>Please fix the errors below in your Excel sheet:</p>
-                        <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>
-                          {bulkStudents.filter(s => s.validationErrors.length > 0).map((s, idx) => (
-                            <li key={idx} style={{ marginBottom: '0.15rem' }}>Row {s.rowNumber} ({s.fullName || 'Unnamed'}): {s.validationErrors.join(', ')}</li>
-                          ))}
-                        </ul>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: 'rgba(239, 68, 68, 0.04)', border: '1px solid rgba(239, 68, 68, 0.08)', padding: '0.85rem 1rem', borderRadius: '10px', marginBottom: '1.5rem', color: 'var(--danger)', fontSize: '0.8rem' }}>
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
+                        <AlertOctagon size={16} style={{ flexShrink: 0, marginTop: '0.1rem' }} />
+                        <div>
+                          <p style={{ margin: '0 0 0.25rem', fontWeight: '600' }}>Please fix the errors below in your Excel sheet:</p>
+                          <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>
+                            {bulkStudents.filter(s => s.validationErrors.length > 0).map((s, idx) => (
+                              <li key={idx} style={{ marginBottom: '0.15rem' }}>Row {s.rowNumber} ({s.fullName || 'Unnamed'}): {s.validationErrors.join(', ')}</li>
+                            ))}
+                          </ul>
+                        </div>
                       </div>
+                      <button
+                        type="button"
+                        onClick={downloadRejectedRows}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.4rem',
+                          padding: '0.4rem 0.8rem',
+                          background: 'var(--danger)',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: '8px',
+                          fontSize: '0.8rem',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          marginLeft: '1rem',
+                          flexShrink: 0
+                        }}
+                      >
+                        <Download size={14} />
+                        <span>Download Error Report</span>
+                      </button>
                     </div>
                   )}
                   
