@@ -481,215 +481,311 @@ async function exportStudentCredentials(query = {}, actor = {}) {
   };
 }
 
+function generateRandomPassword() {
+  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+  let password = '';
+  password += 'A';
+  password += 'a';
+  password += '1';
+  password += '!';
+  for (let i = 0; i < 6; i++) {
+    password += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return password;
+}
+
 async function bulkCreateStudents(rows, actor, requestMeta = {}) {
   if (!Array.isArray(rows)) {
     throw new AppError('Invalid payload: expected an array of students.', 400);
   }
 
   const added = [];
-  const duplicates = [];
-  const errors = [];
+  const rejected = [];
+  const candidates = [];
 
   const fileEmails = new Set();
   const filePhones = new Set();
   const fileEnrollments = new Set();
 
-  const candidates = [];
-
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     const index = i + 1;
+    const reasons = [];
 
-    try {
-      const resolvedProgram = normalizeProgramField(row.program);
-      const resolvedDept = normalizeDepartmentField(row.department);
+    const rawFullName = String(row.fullName || row.name || '').trim();
+    const rawEmail = String(row.email || '').trim();
+    const rawEnrollmentNo = String(row.enrollmentNo || row.enrollment || '').trim();
+    const rawPhone = String(row.phone || '').trim();
+    const rawProgram = String(row.program || '').trim();
+    const rawDepartment = String(row.department || '').trim();
+    const rawSemester = row.semester;
 
-      const rowWithNormalizedFields = {
-        ...row,
-        program: resolvedProgram.canonical,
-        department: resolvedDept.canonical
-      };
+    const originalData = {
+      fullName: rawFullName,
+      email: rawEmail,
+      enrollmentNo: rawEnrollmentNo,
+      phone: rawPhone,
+      program: rawProgram,
+      department: rawDepartment,
+      semester: rawSemester
+    };
 
-      const normalized = normalizeStudentPayload(rowWithNormalizedFields);
+    // 1. Merge detection
+    const checkMerge = (val) => String(val || '').includes(',');
+    if (checkMerge(rawFullName) || checkMerge(rawEnrollmentNo) || checkMerge(rawPhone) || checkMerge(rawEmail)) {
+      reasons.push("Multiple students detected in one row — split into separate rows");
+    }
 
-      if (!normalized.fullName) {
-        throw new Error('Full name is required.');
-      }
-      if (!normalized.email) {
-        throw new Error('Email is required.');
-      }
-      if (!normalized.enrollmentNo) {
-        throw new Error('Enrollment number is required.');
-      }
-      if (!normalized.phone) {
-        throw new Error('Please enter a valid phone number.');
-      }
-      if (!STUDENT_PROGRAMS.includes(normalized.program)) {
-        throw new Error(`Program must be one of: ${STUDENT_PROGRAMS.join(', ')}`);
-      }
-      if (!ROUTING_DEPARTMENTS.includes(normalized.department)) {
-        throw new Error(`Department must be one of: ${ROUTING_DEPARTMENTS.join(', ')}`);
-      }
-      if (!SEMESTERS.includes(normalized.semester)) {
-        throw new Error('Semester must be between 1 and 8.');
-      }
-      if (!normalized.temporaryPassword || normalized.temporaryPassword.length < 8) {
-        throw new Error('Temporary password must be at least 8 characters long.');
-      }
+    // 2. Full Name
+    if (!rawFullName) {
+      reasons.push("Full Name: missing");
+    }
 
-      const emailLower = normalized.email.toLowerCase();
-      const enrollmentLower = normalized.enrollmentNo.toLowerCase();
+    // 3. Email
+    let emailLower = '';
+    if (!rawEmail) {
+      reasons.push("Email: missing");
+    } else {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(rawEmail)) {
+        reasons.push("Email: malformed");
+      } else {
+        emailLower = rawEmail.toLowerCase();
+      }
+    }
 
+    // 4. Enrollment Number
+    let enrollmentLower = '';
+    if (!rawEnrollmentNo) {
+      reasons.push("Enrollment Number: missing");
+    } else {
+      const enrollRegex = /^[a-z0-9-]{3,20}$/i;
+      if (!enrollRegex.test(rawEnrollmentNo)) {
+        reasons.push("Enrollment Number: does not match expected format");
+      } else {
+        enrollmentLower = rawEnrollmentNo.toLowerCase();
+      }
+    }
+
+    // 5. Phone
+    let cleanPhone = '';
+    if (!rawPhone) {
+      reasons.push("Phone Number: missing");
+    } else {
+      cleanPhone = rawPhone.replace(/[^0-9]/g, '');
+      if (cleanPhone.length !== 10) {
+        reasons.push("Phone Number: must be exactly 10 digits");
+      }
+    }
+
+    // 6. Program
+    let resolvedProgramCanonical = '';
+    if (!rawProgram) {
+      reasons.push("Program: missing");
+    } else {
+      try {
+        const resolved = normalizeProgramField(rawProgram);
+        resolvedProgramCanonical = resolved.canonical;
+      } catch (err) {
+        reasons.push(`Program: ${err.message}`);
+      }
+    }
+
+    // 7. Department
+    let resolvedDeptCanonical = '';
+    if (!rawDepartment) {
+      reasons.push("Department: missing");
+    } else {
+      try {
+        const resolved = normalizeDepartmentField(rawDepartment);
+        resolvedDeptCanonical = resolved.canonical;
+      } catch (err) {
+        reasons.push(`Department: ${err.message}`);
+      }
+    }
+
+    // 8. Semester
+    let normalizedSemester = null;
+    if (rawSemester === undefined || rawSemester === null || rawSemester === '') {
+      reasons.push("Semester: missing");
+    } else {
+      normalizedSemester = Number(rawSemester);
+      if (isNaN(normalizedSemester) || normalizedSemester < 1 || normalizedSemester > 8) {
+        reasons.push("Semester: must be between 1 and 8");
+      }
+    }
+
+    // 9. Sheet duplicate checks
+    if (emailLower) {
       if (fileEmails.has(emailLower)) {
-        throw new Error(`Duplicate email "${normalized.email}" in the uploaded file.`);
+        reasons.push(`Email: duplicate email "${rawEmail}" in the uploaded file`);
+      } else if (!reasons.some(r => r.startsWith("Email:"))) {
+        fileEmails.add(emailLower);
       }
-      if (filePhones.has(normalized.phone)) {
-        throw new Error(`Duplicate phone number "${normalized.phone}" in the uploaded file.`);
+    }
+    if (cleanPhone && cleanPhone.length === 10) {
+      if (filePhones.has(cleanPhone)) {
+        reasons.push(`Phone Number: duplicate phone number "${rawPhone}" in the uploaded file`);
+      } else {
+        filePhones.add(cleanPhone);
       }
+    }
+    if (enrollmentLower) {
       if (fileEnrollments.has(enrollmentLower)) {
-        throw new Error(`Duplicate enrollment number "${normalized.enrollmentNo}" in the uploaded file.`);
+        reasons.push(`Enrollment Number: duplicate enrollment number "${rawEnrollmentNo}" in the uploaded file`);
+      } else if (!reasons.some(r => r.startsWith("Enrollment Number:"))) {
+        fileEnrollments.add(enrollmentLower);
       }
-
-      fileEmails.add(emailLower);
-      filePhones.add(normalized.phone);
-      fileEnrollments.add(enrollmentLower);
-
-      candidates.push({
-        index,
-        data: normalized
-      });
-    } catch (err) {
-      errors.push({
-        row: index,
-        name: row.fullName || `Row ${index}`,
-        message: err.message
-      });
-    }
-  }
-
-  if (candidates.length === 0) {
-    return { added, duplicates, errors };
-  }
-
-  const candidateEmails = candidates.map(c => c.data.email);
-  const candidatePhones = candidates.map(c => c.data.phone);
-  const candidateEnrollments = candidates.map(c => c.data.enrollmentNo);
-
-  const existingUsers = await User.find({
-    $or: [
-      { email: { $in: candidateEmails } },
-      { phone: { $in: candidatePhones } },
-      { enrollmentNo: { $in: candidateEnrollments } },
-      { enrollment: { $in: candidateEnrollments } }
-    ]
-  }).select('email phone enrollmentNo enrollment fullName').lean();
-
-  const dbEmails = new Set(existingUsers.map(u => String(u.email || '').toLowerCase()));
-  const dbPhones = new Set(existingUsers.map(u => String(u.phone || '')));
-  const dbEnrollments = new Set(existingUsers.flatMap(u => [String(u.enrollmentNo || '').toLowerCase(), String(u.enrollment || '').toLowerCase()]).filter(Boolean));
-
-  const validToInsert = [];
-
-  for (const candidate of candidates) {
-    const { index, data } = candidate;
-    const emailLower = data.email.toLowerCase();
-    const enrollmentLower = data.enrollmentNo.toLowerCase();
-
-    let isDuplicate = false;
-    let duplicateReason = [];
-
-    if (dbEmails.has(emailLower)) {
-      isDuplicate = true;
-      duplicateReason.push('email');
-    }
-    if (dbPhones.has(data.phone)) {
-      isDuplicate = true;
-      duplicateReason.push('phone number');
-    }
-    if (dbEnrollments.has(enrollmentLower)) {
-      isDuplicate = true;
-      duplicateReason.push('enrollment number');
     }
 
-    if (isDuplicate) {
-      duplicates.push({
-        row: index,
-        fullName: data.fullName,
-        enrollmentNo: data.enrollmentNo,
-        email: data.email,
-        reason: `Student already exists in database with matching ${duplicateReason.join(', ')}.`
+    if (reasons.length > 0) {
+      rejected.push({
+        rowNumber: index,
+        originalData,
+        reasons
       });
     } else {
-      validToInsert.push(data);
+      const tempPass = String(row.temporaryPassword || '').trim() || generateRandomPassword();
+      candidates.push({
+        index,
+        originalRow: originalData,
+        data: {
+          fullName: rawFullName,
+          email: emailLower,
+          enrollmentNo: rawEnrollmentNo,
+          phone: cleanPhone,
+          program: resolvedProgramCanonical,
+          department: resolvedDeptCanonical,
+          semester: normalizedSemester,
+          temporaryPassword: tempPass
+        }
+      });
     }
   }
 
-  const batchSize = 25;
-  for (let i = 0; i < validToInsert.length; i += batchSize) {
-    const batch = validToInsert.slice(i, i + batchSize);
+  if (candidates.length > 0) {
+    const candidateEmails = candidates.map(c => c.data.email);
+    const candidatePhones = candidates.map(c => c.data.phone);
+    const candidateEnrollments = candidates.map(c => c.data.enrollmentNo);
 
-    const docs = batch.map(s => ({
-      fullName: s.fullName,
-      email: s.email,
-      role: 'student',
-      enrollmentNo: s.enrollmentNo,
-      enrollment: s.enrollmentNo,
-      phone: s.phone,
-      program: s.program,
-      department: s.department,
-      semester: s.semester,
-      password: s.temporaryPassword,
-      createdByCao: true,
-      mustChangePassword: true,
-      temporaryCredentialEncrypted: encryptTemporaryCredential(s.temporaryPassword),
-      temporaryCredentialCreatedAt: new Date(),
-      emailVerified: false,
-      isEmailVerified: false,
-      emailVerifiedAt: null
-    }));
+    const existingUsers = await User.find({
+      $or: [
+        { email: { $in: candidateEmails } },
+        { phone: { $in: candidatePhones } },
+        { enrollmentNo: { $in: candidateEnrollments } },
+        { enrollment: { $in: candidateEnrollments } }
+      ]
+    }).select('email phone enrollmentNo enrollment').lean();
 
-    const createdDocs = await User.create(docs);
+    const dbEmails = new Set(existingUsers.map(u => String(u.email || '').toLowerCase()));
+    const dbPhones = new Set(existingUsers.map(u => String(u.phone || '')));
+    const dbEnrollments = new Set(existingUsers.flatMap(u => [String(u.enrollmentNo || '').toLowerCase(), String(u.enrollment || '').toLowerCase()]).filter(Boolean));
 
-    for (let k = 0; k < createdDocs.length; k++) {
-      const student = createdDocs[k];
-      const origPayload = batch[k];
+    const validToInsert = [];
 
-      added.push({
-        id: student._id.toString(),
-        fullName: student.fullName,
-        enrollmentNo: student.enrollmentNo,
-        email: student.email
-      });
+    for (const candidate of candidates) {
+      const { index, originalRow, data } = candidate;
+      const emailLower = data.email.toLowerCase();
+      const enrollmentLower = data.enrollmentNo.toLowerCase();
+      const dbReasons = [];
 
-      await logAction({
-        actorId: actor?._id || null,
-        resourceType: 'user',
-        resourceId: student._id,
-        action: 'create_student',
-        message: 'Student account created via bulk upload by IT',
-        metadata: {
+      if (dbEmails.has(emailLower)) {
+        dbReasons.push(`Email: a user with email "${data.email}" already exists in the database`);
+      }
+      if (dbPhones.has(data.phone)) {
+        dbReasons.push(`Phone Number: a user with phone number "${data.phone}" already exists in the database`);
+      }
+      if (dbEnrollments.has(enrollmentLower)) {
+        dbReasons.push(`Enrollment Number: a user with enrollment number "${data.enrollmentNo}" already exists in the database`);
+      }
+
+      if (dbReasons.length > 0) {
+        rejected.push({
+          rowNumber: index,
+          originalData: originalRow,
+          reasons: dbReasons
+        });
+      } else {
+        validToInsert.push(data);
+      }
+    }
+
+    const batchSize = 25;
+    for (let i = 0; i < validToInsert.length; i += batchSize) {
+      const batch = validToInsert.slice(i, i + batchSize);
+
+      const docs = batch.map(s => ({
+        fullName: s.fullName,
+        email: s.email,
+        role: 'student',
+        enrollmentNo: s.enrollmentNo,
+        enrollment: s.enrollmentNo,
+        phone: s.phone,
+        program: s.program,
+        department: s.department,
+        semester: s.semester,
+        password: s.temporaryPassword,
+        createdByCao: true,
+        mustChangePassword: true,
+        temporaryCredentialEncrypted: encryptTemporaryCredential(s.temporaryPassword),
+        temporaryCredentialCreatedAt: new Date(),
+        emailVerified: false,
+        isEmailVerified: false,
+        emailVerifiedAt: null
+      }));
+
+      const createdDocs = await User.create(docs);
+
+      for (let k = 0; k < createdDocs.length; k++) {
+        const student = createdDocs[k];
+        const origPayload = batch[k];
+
+        added.push({
+          id: student._id.toString(),
+          fullName: student.fullName,
           enrollmentNo: student.enrollmentNo,
           email: student.email
-        },
-        requestMeta
-      });
+        });
 
-      sendStudentOnboardingEmail({
-        email: student.email,
-        fullName: student.fullName,
-        enrollmentNo: student.enrollmentNo,
-        temporaryPassword: origPayload.temporaryPassword,
-        collegeName: env.collegeName
-      }).catch((err) => {
-        console.warn('[student-onboarding] Failed to send bulk onboarding email:', err.message || err);
-      });
+        sendStudentOnboardingEmail({
+          email: student.email,
+          fullName: student.fullName,
+          enrollmentNo: student.enrollmentNo,
+          temporaryPassword: origPayload.temporaryPassword,
+          collegeName: env.collegeName
+        }).catch((err) => {
+          console.warn('[student-onboarding] Failed to send bulk onboarding email:', err.message || err);
+        });
+      }
     }
   }
+
+  // Audit Log once for the entire batch
+  const crypto = require('crypto');
+  const batchId = `batch-${crypto.randomUUID()}`;
+  await logAction({
+    actorId: actor?._id || null,
+    resourceType: 'user',
+    resourceId: actor?._id || null,
+    action: 'bulk_create_students',
+    message: `Bulk student creation batch processed: ${added.length} created, ${rejected.length} rejected`,
+    metadata: {
+      batchId,
+      addedCount: added.length,
+      rejectedCount: rejected.length,
+      totalRows: rows.length
+    },
+    requestMeta
+  });
 
   return {
     added,
-    duplicates,
-    errors
+    rejected,
+    summary: {
+      totalRows: rows.length,
+      addedCount: added.length,
+      rejectedCount: rejected.length
+    }
   };
 }
 

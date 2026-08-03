@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from 'react'
-import { Eye, FileDown, GraduationCap, KeyRound, PencilLine, ShieldCheck, Trash2, UserPlus, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, RefreshCw, X, AlertOctagon } from 'lucide-react'
+import { Eye, FileDown, Download, GraduationCap, KeyRound, PencilLine, ShieldCheck, Trash2, UserPlus, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, RefreshCw, X, AlertOctagon } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import {
   createAdminStudent,
@@ -235,6 +235,38 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
       toast.error({
         title: 'Template Download Failed',
         message: err.message || 'Unable to generate template.'
+      });
+    }
+  }
+
+  function downloadRejectedRows() {
+    if (!bulkResult || !bulkResult.rejected || !bulkResult.rejected.length) return;
+    try {
+      const workbook = XLSX.utils.book_new();
+      const rowsToDownload = bulkResult.rejected.map(r => {
+        const d = r.originalData || {};
+        return {
+          'Full Name': d.fullName || '',
+          'Email': d.email || '',
+          'Enrollment Number': d.enrollmentNo || '',
+          'Phone Number': d.phone || '',
+          'Program': d.program || '',
+          'Department': d.department || '',
+          'Semester': d.semester || '',
+          'Issue': r.reasons ? r.reasons.join('; ') : ''
+        };
+      });
+      const sheet = XLSX.utils.json_to_sheet(rowsToDownload);
+      XLSX.utils.book_append_sheet(workbook, sheet, 'Rejected Students');
+      XLSX.writeFile(workbook, 'dwarpal_rejected_students.xlsx');
+      toast.success({
+        title: 'Export complete',
+        message: 'Downloaded rejected rows Excel sheet.'
+      });
+    } catch (err) {
+      toast.error({
+        title: 'Export failed',
+        message: err.message || 'Unable to generate rejected rows file.'
       });
     }
   }
@@ -528,15 +560,6 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
     if (event) event.preventDefault();
     if (bulkLoading || !bulkStudents.length) return;
     
-    const hasErrors = bulkStudents.some(s => s.validationErrors && s.validationErrors.length > 0);
-    if (hasErrors) {
-      toast.error({
-        title: 'Cannot submit',
-        message: 'Please resolve the validation errors in the list before registering.'
-      });
-      return;
-    }
-    
     setBulkLoading(true);
     try {
       const result = await bulkCreateAdminStudents(bulkStudents);
@@ -545,19 +568,20 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
       setBulkFile(null);
       setReloadKey((prev) => prev + 1);
       
-      const addedCount = result?.added?.length || 0;
-      const dupCount = result?.duplicates?.length || 0;
-      const errCount = result?.errors?.length || 0;
+      const addedCount = result?.summary?.addedCount || result?.added?.length || 0;
+      const rejectedCount = result?.summary?.rejectedCount || result?.rejected?.length || 0;
       
       if (addedCount > 0) {
         toast.success({
           title: 'Bulk registration complete',
           message: `Successfully registered ${addedCount} student(s).`
         });
-      } else {
+      }
+      
+      if (rejectedCount > 0) {
         toast.warn({
-          title: 'No students registered',
-          message: 'No new students were registered (all entries skipped or invalid).'
+          title: 'Some entries rejected',
+          message: `${rejectedCount} row(s) had errors and were not registered.`
         });
       }
     } catch (err) {
@@ -900,48 +924,124 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
                       <X size={16} />
                     </button>
                   </div>
+
+                  {/* Summary Banner */}
+                  <div style={{
+                    padding: '1rem 1.25rem',
+                    background: (bulkResult.summary?.rejectedCount || 0) > 0 ? 'rgba(239, 68, 68, 0.08)' : 'rgba(34, 197, 94, 0.08)',
+                    border: '1px solid ' + ((bulkResult.summary?.rejectedCount || 0) > 0 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(34, 197, 94, 0.15)'),
+                    borderRadius: '12px',
+                    marginBottom: '1.25rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    fontSize: '0.95rem',
+                    fontWeight: '600',
+                    color: (bulkResult.summary?.rejectedCount || 0) > 0 ? 'var(--danger)' : 'var(--success)'
+                  }}>
+                    {(bulkResult.summary?.rejectedCount || 0) > 0 ? (
+                      <>
+                        <AlertTriangle size={18} />
+                        <span>{bulkResult.summary?.addedCount || 0} of {bulkResult.summary?.totalRows || 0} students added successfully. {bulkResult.summary?.rejectedCount || 0} rows need fixing.</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={18} />
+                        <span>All {bulkResult.summary?.totalRows || 0} students added successfully!</span>
+                      </>
+                    )}
+                  </div>
                   
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1.25rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem', marginBottom: '1.25rem' }}>
                     <div style={{ padding: '1rem', background: 'rgba(34, 197, 94, 0.08)', borderRadius: '12px', border: '1px solid rgba(34, 197, 94, 0.15)', textAlign: 'center' }}>
-                      <p style={{ margin: 0, fontSize: '1.8rem', fontWeight: '800', color: '#22c55e' }}>{bulkResult.added?.length || 0}</p>
+                      <p style={{ margin: 0, fontSize: '1.8rem', fontWeight: '800', color: '#22c55e' }}>{bulkResult.summary?.addedCount || bulkResult.added?.length || 0}</p>
                       <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: '600', color: 'var(--app-text-muted)', textTransform: 'uppercase' }}>Registered</p>
                     </div>
-                    <div style={{ padding: '1rem', background: 'rgba(234, 179, 8, 0.08)', borderRadius: '12px', border: '1px solid rgba(234, 179, 8, 0.15)', textAlign: 'center' }}>
-                      <p style={{ margin: 0, fontSize: '1.8rem', fontWeight: '800', color: '#eab308' }}>{bulkResult.duplicates?.length || 0}</p>
-                      <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: '600', color: 'var(--app-text-muted)', textTransform: 'uppercase' }}>Duplicates Skipped</p>
-                    </div>
                     <div style={{ padding: '1rem', background: 'rgba(239, 68, 68, 0.08)', borderRadius: '12px', border: '1px solid rgba(239, 68, 68, 0.15)', textAlign: 'center' }}>
-                      <p style={{ margin: 0, fontSize: '1.8rem', fontWeight: '800', color: '#ef4444' }}>{bulkResult.errors?.length || 0}</p>
-                      <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: '600', color: 'var(--app-text-muted)', textTransform: 'uppercase' }}>Errors</p>
+                      <p style={{ margin: 0, fontSize: '1.8rem', fontWeight: '800', color: '#ef4444' }}>{bulkResult.summary?.rejectedCount || bulkResult.rejected?.length || 0}</p>
+                      <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: '600', color: 'var(--app-text-muted)', textTransform: 'uppercase' }}>Rejected</p>
                     </div>
                   </div>
                   
-                  {bulkResult.duplicates?.length > 0 && (
-                    <div style={{ marginBottom: '0.75rem' }}>
-                      <p style={{ margin: '0 0 0.25rem', fontSize: '0.85rem', fontWeight: '600', color: '#eab308' }}>Skipped Duplicates (Students Already Exist):</p>
-                      <div style={{ maxHeight: '120px', overflowY: 'auto', fontSize: '0.8rem', background: 'var(--app-surface)', borderRadius: '8px', padding: '0.5rem 0.75rem', border: '1px solid var(--app-surface-border)' }}>
-                        <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>
-                          {bulkResult.duplicates.map((dup, i) => (
-                            <li key={i} style={{ marginBottom: '0.2rem' }}>
-                              <strong>{dup.fullName}</strong> ({dup.enrollmentNo}) - <span style={{ color: 'var(--app-text-muted)' }}>{dup.reason}</span>
-                            </li>
-                          ))}
-                        </ul>
+                  {/* Rejected Rows Table */}
+                  {bulkResult.rejected?.length > 0 && (
+                    <div style={{ marginTop: '1rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                        <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: '600', color: '#ef4444' }}>Rows Needing Correction:</p>
+                        <button
+                          type="button"
+                          onClick={downloadRejectedRows}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.4rem',
+                            padding: '0.4rem 0.8rem',
+                            background: 'var(--app-primary)',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '8px',
+                            fontSize: '0.8rem',
+                            fontWeight: '600',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <Download size={14} />
+                          <span>Download Rejected Rows</span>
+                        </button>
                       </div>
-                    </div>
-                  )}
-                  
-                  {bulkResult.errors?.length > 0 && (
-                    <div>
-                      <p style={{ margin: '0 0 0.25rem', fontSize: '0.85rem', fontWeight: '600', color: '#ef4444' }}>Rows with Errors:</p>
-                      <div style={{ maxHeight: '120px', overflowY: 'auto', fontSize: '0.8rem', background: 'var(--app-surface)', borderRadius: '8px', padding: '0.5rem 0.75rem', border: '1px solid var(--app-surface-border)' }}>
-                        <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>
-                          {bulkResult.errors.map((err, i) => (
-                            <li key={i} style={{ marginBottom: '0.2rem' }}>
-                              Row {err.row} ({err.name}): <span style={{ color: 'var(--danger)' }}>{err.message}</span>
-                            </li>
-                          ))}
-                        </ul>
+                      
+                      <div style={{ overflowX: 'auto', maxHeight: '300px', border: '1px solid var(--app-surface-border)', borderRadius: '12px', background: 'var(--app-surface)' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
+                          <thead style={{ background: 'rgba(239, 68, 68, 0.03)', position: 'sticky', top: 0, zIndex: 1, borderBottom: '1px solid var(--app-surface-border)' }}>
+                            <tr>
+                              <th style={{ padding: '0.75rem 1rem' }}>Row</th>
+                              <th style={{ padding: '0.75rem 1rem' }}>Name</th>
+                              <th style={{ padding: '0.75rem 1rem' }}>Enrollment</th>
+                              <th style={{ padding: '0.75rem 1rem' }}>Email / Phone</th>
+                              <th style={{ padding: '0.75rem 1rem' }}>Academic Scope</th>
+                              <th style={{ padding: '0.75rem 1rem' }}>Rejected Issues / Reasons</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {bulkResult.rejected.map((rej, idx) => {
+                              const d = rej.originalData || {};
+                              
+                              const hasError = (field) => rej.reasons.some(r => r.toLowerCase().includes(field.toLowerCase()));
+
+                              return (
+                                <tr key={idx} style={{ borderBottom: '1px solid var(--app-surface-border)', background: 'rgba(239, 68, 68, 0.01)' }}>
+                                  <td style={{ padding: '0.75rem 1rem', color: 'var(--app-text-muted)' }}>{rej.rowNumber}</td>
+                                  <td style={{ padding: '0.75rem 1rem', fontWeight: '500', color: hasError('name') ? 'var(--danger)' : 'inherit' }}>
+                                    {d.fullName || <span style={{ color: 'var(--danger)' }}>(missing)</span>}
+                                  </td>
+                                  <td style={{ padding: '0.75rem 1rem', fontFamily: 'monospace', color: hasError('enrollment') ? 'var(--danger)' : 'inherit' }}>
+                                    {d.enrollmentNo || <span style={{ color: 'var(--danger)' }}>(missing)</span>}
+                                  </td>
+                                  <td style={{ padding: '0.75rem 1rem' }}>
+                                    <div style={{ fontWeight: '500', color: hasError('email') ? 'var(--danger)' : 'inherit' }}>
+                                      {d.email || <span style={{ color: 'var(--danger)' }}>(missing)</span>}
+                                    </div>
+                                    <div style={{ fontSize: '0.75rem', color: hasError('phone') ? 'var(--danger)' : 'var(--app-text-muted)' }}>
+                                      {d.phone || <span style={{ color: 'var(--danger)' }}>(missing)</span>}
+                                    </div>
+                                  </td>
+                                  <td style={{ padding: '0.75rem 1rem' }}>
+                                    <div style={{ color: hasError('program') ? 'var(--danger)' : 'inherit' }}>{d.program || <span style={{ color: 'var(--danger)' }}>(missing)</span>}</div>
+                                    <div style={{ color: hasError('department') ? 'var(--danger)' : 'inherit', fontSize: '0.8rem', marginTop: '0.15rem' }}>{d.department || <span style={{ color: 'var(--danger)' }}>(missing)</span>}</div>
+                                    <div style={{ color: hasError('semester') ? 'var(--danger)' : 'var(--app-text-muted)', fontSize: '0.75rem', marginTop: '0.15rem' }}>Semester {d.semester || <span style={{ color: 'var(--danger)' }}>(missing)</span>}</div>
+                                  </td>
+                                  <td style={{ padding: '0.75rem 1rem' }}>
+                                    <ul style={{ margin: 0, paddingLeft: '1rem', color: 'var(--danger)', fontSize: '0.8rem' }}>
+                                      {rej.reasons.map((r, i) => (
+                                        <li key={i} style={{ marginBottom: '0.15rem' }}>{r}</li>
+                                      ))}
+                                    </ul>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
                   )}
