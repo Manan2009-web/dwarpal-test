@@ -563,6 +563,8 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
     
     // Filter the parsed preview rows to only those with no validationErrors (status === 'Ready')
     const readyRows = bulkStudents.filter(s => !s.validationErrors || s.validationErrors.length === 0);
+    if (readyRows.length === 0) return;
+    
     const errorRows = bulkStudents.filter(s => s.validationErrors && s.validationErrors.length > 0);
     
     setBulkLoading(true);
@@ -1268,7 +1270,7 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
                     <button
                       type="button"
                       className="admin-primary-button inline"
-                      disabled={bulkLoading || bulkStudents.some(s => s.validationErrors.length > 0)}
+                      disabled={bulkLoading || bulkStudents.filter(s => !s.validationErrors || s.validationErrors.length === 0).length === 0}
                       onClick={handleBulkSubmit}
                       style={{ padding: '0.6rem 1.5rem' }}
                     >
