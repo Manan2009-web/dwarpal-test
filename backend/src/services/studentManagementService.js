@@ -511,6 +511,15 @@ async function bulkCreateStudents(rows, actor, requestMeta = {}) {
     const row = rows[i];
     const index = i + 1;
     const reasons = [];
+    const fieldErrors = {
+      fullName: null,
+      email: null,
+      enrollmentNumber: null,
+      phoneNumber: null,
+      program: null,
+      department: null,
+      semester: null
+    };
 
     const rawFullName = String(row.fullName || row.name || '').trim();
     const rawEmail = String(row.email || '').trim();
@@ -532,22 +541,38 @@ async function bulkCreateStudents(rows, actor, requestMeta = {}) {
 
     // 1. Merge detection
     const checkMerge = (val) => String(val || '').includes(',');
-    if (checkMerge(rawFullName) || checkMerge(rawEnrollmentNo) || checkMerge(rawPhone) || checkMerge(rawEmail)) {
-      reasons.push("Multiple students detected in one row — split into separate rows");
+    if (checkMerge(rawFullName)) {
+      fieldErrors.fullName = "Multiple students detected in one row — split into separate rows";
+      reasons.push("Full Name: Multiple students detected in one row — split into separate rows");
+    }
+    if (checkMerge(rawEmail)) {
+      fieldErrors.email = "Multiple students detected in one row — split into separate rows";
+      reasons.push("Email: Multiple students detected in one row — split into separate rows");
+    }
+    if (checkMerge(rawEnrollmentNo)) {
+      fieldErrors.enrollmentNumber = "Multiple students detected in one row — split into separate rows";
+      reasons.push("Enrollment Number: Multiple students detected in one row — split into separate rows");
+    }
+    if (checkMerge(rawPhone)) {
+      fieldErrors.phoneNumber = "Multiple students detected in one row — split into separate rows";
+      reasons.push("Phone Number: Multiple students detected in one row — split into separate rows");
     }
 
     // 2. Full Name
     if (!rawFullName) {
+      fieldErrors.fullName = "Missing — required field";
       reasons.push("Full Name: missing");
     }
 
     // 3. Email
     let emailLower = '';
     if (!rawEmail) {
+      fieldErrors.email = "Missing — required field";
       reasons.push("Email: missing");
     } else {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(rawEmail)) {
+        fieldErrors.email = "Malformed email address";
         reasons.push("Email: malformed");
       } else {
         emailLower = rawEmail.toLowerCase();
@@ -557,10 +582,12 @@ async function bulkCreateStudents(rows, actor, requestMeta = {}) {
     // 4. Enrollment Number
     let enrollmentLower = '';
     if (!rawEnrollmentNo) {
+      fieldErrors.enrollmentNumber = "Missing — required field";
       reasons.push("Enrollment Number: missing");
     } else {
       const enrollRegex = /^[a-z0-9-]{3,20}$/i;
       if (!enrollRegex.test(rawEnrollmentNo)) {
+        fieldErrors.enrollmentNumber = "Enrollment number does not match expected format";
         reasons.push("Enrollment Number: does not match expected format");
       } else {
         enrollmentLower = rawEnrollmentNo.toLowerCase();
@@ -570,10 +597,12 @@ async function bulkCreateStudents(rows, actor, requestMeta = {}) {
     // 5. Phone
     let cleanPhone = '';
     if (!rawPhone) {
+      fieldErrors.phoneNumber = "Missing — required field";
       reasons.push("Phone Number: missing");
     } else {
       cleanPhone = rawPhone.replace(/[^0-9]/g, '');
       if (cleanPhone.length !== 10) {
+        fieldErrors.phoneNumber = "Phone number must be exactly 10 digits";
         reasons.push("Phone Number: must be exactly 10 digits");
       }
     }
@@ -581,12 +610,14 @@ async function bulkCreateStudents(rows, actor, requestMeta = {}) {
     // 6. Program
     let resolvedProgramCanonical = '';
     if (!rawProgram) {
+      fieldErrors.program = "Missing — required field";
       reasons.push("Program: missing");
     } else {
       try {
         const resolved = normalizeProgramField(rawProgram);
         resolvedProgramCanonical = resolved.canonical;
       } catch (err) {
+        fieldErrors.program = `Value '${rawProgram}' could not be matched to a known program`;
         reasons.push(`Program: ${err.message}`);
       }
     }
@@ -594,12 +625,14 @@ async function bulkCreateStudents(rows, actor, requestMeta = {}) {
     // 7. Department
     let resolvedDeptCanonical = '';
     if (!rawDepartment) {
+      fieldErrors.department = "Missing — required field";
       reasons.push("Department: missing");
     } else {
       try {
         const resolved = normalizeDepartmentField(rawDepartment);
         resolvedDeptCanonical = resolved.canonical;
       } catch (err) {
+        fieldErrors.department = `Value '${rawDepartment}' could not be matched to a known department`;
         reasons.push(`Department: ${err.message}`);
       }
     }
@@ -607,10 +640,12 @@ async function bulkCreateStudents(rows, actor, requestMeta = {}) {
     // 8. Semester
     let normalizedSemester = null;
     if (rawSemester === undefined || rawSemester === null || rawSemester === '') {
+      fieldErrors.semester = "Missing — required field";
       reasons.push("Semester: missing");
     } else {
       normalizedSemester = Number(rawSemester);
       if (isNaN(normalizedSemester) || normalizedSemester < 1 || normalizedSemester > 8) {
+        fieldErrors.semester = "Semester must be between 1 and 8";
         reasons.push("Semester: must be between 1 and 8");
       }
     }
@@ -618,6 +653,7 @@ async function bulkCreateStudents(rows, actor, requestMeta = {}) {
     // 9. Sheet duplicate checks
     if (emailLower) {
       if (fileEmails.has(emailLower)) {
+        fieldErrors.email = `Duplicate email "${rawEmail}" in the uploaded file`;
         reasons.push(`Email: duplicate email "${rawEmail}" in the uploaded file`);
       } else if (!reasons.some(r => r.startsWith("Email:"))) {
         fileEmails.add(emailLower);
@@ -625,6 +661,7 @@ async function bulkCreateStudents(rows, actor, requestMeta = {}) {
     }
     if (cleanPhone && cleanPhone.length === 10) {
       if (filePhones.has(cleanPhone)) {
+        fieldErrors.phoneNumber = `Duplicate phone number "${rawPhone}" in the uploaded file`;
         reasons.push(`Phone Number: duplicate phone number "${rawPhone}" in the uploaded file`);
       } else {
         filePhones.add(cleanPhone);
@@ -632,6 +669,7 @@ async function bulkCreateStudents(rows, actor, requestMeta = {}) {
     }
     if (enrollmentLower) {
       if (fileEnrollments.has(enrollmentLower)) {
+        fieldErrors.enrollmentNumber = `Duplicate enrollment number "${rawEnrollmentNo}" in the uploaded file`;
         reasons.push(`Enrollment Number: duplicate enrollment number "${rawEnrollmentNo}" in the uploaded file`);
       } else if (!reasons.some(r => r.startsWith("Enrollment Number:"))) {
         fileEnrollments.add(enrollmentLower);
@@ -642,7 +680,8 @@ async function bulkCreateStudents(rows, actor, requestMeta = {}) {
       rejected.push({
         rowNumber: index,
         originalData,
-        reasons
+        reasons,
+        fieldErrors
       });
     } else {
       const tempPass = String(row.temporaryPassword || '').trim() || generateRandomPassword();
@@ -700,10 +739,30 @@ async function bulkCreateStudents(rows, actor, requestMeta = {}) {
       }
 
       if (dbReasons.length > 0) {
+        const dbErrors = {
+          fullName: null,
+          email: null,
+          enrollmentNumber: null,
+          phoneNumber: null,
+          program: null,
+          department: null,
+          semester: null
+        };
+        if (dbEmails.has(emailLower)) {
+          dbErrors.email = `Email "${data.email}" already exists in the database`;
+        }
+        if (dbPhones.has(data.phone)) {
+          dbErrors.phoneNumber = `Phone number "${data.phone}" already exists in the database`;
+        }
+        if (dbEnrollments.has(enrollmentLower)) {
+          dbErrors.enrollmentNumber = `Enrollment number "${data.enrollmentNo}" already exists in the database`;
+        }
+
         rejected.push({
           rowNumber: index,
           originalData: originalRow,
-          reasons: dbReasons
+          reasons: dbReasons,
+          fieldErrors: dbErrors
         });
       } else {
         validToInsert.push(data);

@@ -242,29 +242,138 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
   function downloadRejectedRows() {
     if (!bulkResult || !bulkResult.rejected || !bulkResult.rejected.length) return;
     try {
-      const workbook = XLSX.utils.book_new();
-      const rowsToDownload = bulkResult.rejected.map(r => {
+      const timestampStr = new Date().toISOString();
+      const timestampDate = new Date().toISOString().slice(0, 10);
+      const totalErrors = bulkResult.rejected.length;
+      
+      const aoa = [
+        [`Total Error Rows: ${totalErrors} — Generated: ${timestampStr}`, '', '', '', '', '', '', '', ''],
+        ['Row #', 'Full Name', 'Email', 'Enrollment Number', 'Phone Number', 'Program', 'Department', 'Semester', 'Issues Found']
+      ];
+      
+      bulkResult.rejected.forEach(r => {
         const d = r.originalData || {};
-        return {
-          'Full Name': d.fullName || '',
-          'Email': d.email || '',
-          'Enrollment Number': d.enrollmentNo || '',
-          'Phone Number': d.phone || '',
-          'Program': d.program || '',
-          'Department': d.department || '',
-          'Semester': d.semester || '',
-          'Issue': r.reasons ? r.reasons.join('; ') : ''
-        };
+        
+        const issuesList = [];
+        const fErrors = r.fieldErrors || {};
+        if (fErrors.fullName) issuesList.push(`Full Name: ${fErrors.fullName}`);
+        if (fErrors.email) issuesList.push(`Email: ${fErrors.email}`);
+        if (fErrors.enrollmentNumber) issuesList.push(`Enrollment Number: ${fErrors.enrollmentNumber}`);
+        if (fErrors.phoneNumber) issuesList.push(`Phone Number: ${fErrors.phoneNumber}`);
+        if (fErrors.program) issuesList.push(`Program: ${fErrors.program}`);
+        if (fErrors.department) issuesList.push(`Department: ${fErrors.department}`);
+        if (fErrors.semester) issuesList.push(`Semester: ${fErrors.semester}`);
+        
+        const issuesFound = issuesList.join('\n');
+        
+        aoa.push([
+          r.rowNumber,
+          d.fullName || '',
+          d.email || '',
+          d.enrollmentNo || '',
+          d.phone || '',
+          d.program || '',
+          d.department || '',
+          d.semester || '',
+          issuesFound
+        ]);
       });
-      const sheet = XLSX.utils.json_to_sheet(rowsToDownload);
-      XLSX.utils.book_append_sheet(workbook, sheet, 'Rejected Students');
-      const timestamp = new Date().toISOString().slice(0, 10);
-      XLSX.writeFile(workbook, `Bulk_Upload_Errors_${timestamp}.xlsx`);
+      
+      const sheet = XLSX.utils.aoa_to_sheet(aoa);
+      
+      sheet['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 8 } }
+      ];
+      
+      const range = XLSX.utils.decode_range(sheet['!ref']);
+      for (let R = range.s.r; R <= range.e.r; ++R) {
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+          const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
+          let cell = sheet[cell_ref];
+          if (!cell) continue;
+          
+          if (!cell.s) cell.s = {};
+          
+          if (R === 0) {
+            cell.s = {
+              font: { bold: true, size: 11, color: { rgb: "333333" } },
+              fill: { fgColor: { rgb: "F3F4F6" } },
+              alignment: { horizontal: "left", vertical: "center" }
+            };
+          } else if (R === 1) {
+            cell.s = {
+              font: { bold: true, size: 10, color: { rgb: "FFFFFF" } },
+              fill: { fgColor: { rgb: "1E3A8A" } },
+              alignment: { horizontal: "center", vertical: "center" }
+            };
+          } else {
+            const dataRowIndex = R - 2;
+            const rData = bulkResult.rejected[dataRowIndex];
+            const fErrors = rData.fieldErrors || {};
+            
+            let fieldHasError = false;
+            if (C === 1 && fErrors.fullName) fieldHasError = true;
+            if (C === 2 && fErrors.email) fieldHasError = true;
+            if (C === 3 && fErrors.enrollmentNumber) fieldHasError = true;
+            if (C === 4 && fErrors.phoneNumber) fieldHasError = true;
+            if (C === 5 && fErrors.program) fieldHasError = true;
+            if (C === 6 && fErrors.department) fieldHasError = true;
+            if (C === 7 && fErrors.semester) fieldHasError = true;
+            
+            if (fieldHasError) {
+              cell.s = {
+                fill: { fgColor: { rgb: "FFC7CE" } },
+                font: { color: { rgb: "9C0006" } },
+                alignment: { horizontal: "left", vertical: "center" }
+              };
+            } else if (C === 8) {
+              cell.s = {
+                alignment: { wrapText: true, vertical: "top" },
+                font: { color: { rgb: "9C0006" } }
+              };
+            } else {
+              cell.s = {
+                alignment: { vertical: "center" }
+              };
+            }
+          }
+        }
+      }
+      
+      const colWidths = [];
+      for (let C = 0; C <= range.e.c; ++C) {
+        let maxLen = 10;
+        for (let R = 1; R <= range.e.r; ++R) {
+          const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
+          const cell = sheet[cell_ref];
+          if (cell && cell.v) {
+            const valStr = String(cell.v);
+            const lines = valStr.split('\n');
+            const longestLine = Math.max(...lines.map(l => l.length));
+            if (longestLine > maxLen) {
+              maxLen = longestLine;
+            }
+          }
+        }
+        colWidths.push({ wch: Math.min(maxLen + 4, 50) });
+      }
+      sheet['!cols'] = colWidths;
+      
+      sheet['!views'] = [
+        { state: 'frozen', ySplit: 2, activePane: 'bottomLeft', pane: { xSplit: 0, ySplit: 2, topLeftCell: 'A3', activePane: 'bottomLeft' } }
+      ];
+      
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, sheet, 'Error Report');
+      
+      XLSX.writeFile(workbook, `Bulk_Upload_Error_Report_${timestampDate}.xlsx`);
+      
       toast.success({
         title: 'Export complete',
         message: 'Downloaded error report Excel sheet.'
       });
     } catch (err) {
+      console.error('Error exporting report:', err);
       toast.error({
         title: 'Export failed',
         message: err.message || 'Unable to generate error report.'
@@ -486,41 +595,114 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
           };
           
           const errors = [];
-          if (!student.fullName) errors.push('Full Name is required');
-          if (!student.email) errors.push('Email is required');
-          if (!student.enrollmentNo) errors.push('Enrollment Number is required');
-          if (!student.phone) errors.push('Phone Number is required');
-          if (!student.semester) errors.push('Semester is required');
+          const fieldErrors = {
+            fullName: null,
+            email: null,
+            enrollmentNumber: null,
+            phoneNumber: null,
+            program: null,
+            department: null,
+            semester: null
+          };
+
+          if (!student.fullName) {
+            fieldErrors.fullName = 'Full Name is required';
+            errors.push('Full Name is required');
+          }
+          if (!student.email) {
+            fieldErrors.email = 'Email is required';
+            errors.push('Email is required');
+          }
+          if (!student.enrollmentNo) {
+            fieldErrors.enrollmentNumber = 'Enrollment Number is required';
+            errors.push('Enrollment Number is required');
+          }
+          if (!student.phone) {
+            fieldErrors.phoneNumber = 'Phone Number is required';
+            errors.push('Phone Number is required');
+          }
+          if (!student.semester) {
+            fieldErrors.semester = 'Semester is required';
+            errors.push('Semester is required');
+          }
           
-          if (!resolvedProgram.canonical) {
+          const checkMerge = (val) => String(val || '').includes(',');
+          if (checkMerge(student.fullName)) {
+            fieldErrors.fullName = 'Multiple students detected in one row — split into separate rows';
+            errors.push('Full Name: Multiple students detected in one row — split into separate rows');
+          }
+          if (checkMerge(student.email)) {
+            fieldErrors.email = 'Multiple students detected in one row — split into separate rows';
+            errors.push('Email: Multiple students detected in one row — split into separate rows');
+          }
+          if (checkMerge(student.enrollmentNo)) {
+            fieldErrors.enrollmentNumber = 'Multiple students detected in one row — split into separate rows';
+            errors.push('Enrollment Number: Multiple students detected in one row — split into separate rows');
+          }
+          if (checkMerge(student.phone)) {
+            fieldErrors.phoneNumber = 'Multiple students detected in one row — split into separate rows';
+            errors.push('Phone Number: Multiple students detected in one row — split into separate rows');
+          }
+
+          if (student.email && !fieldErrors.email) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(student.email)) {
+              fieldErrors.email = 'Malformed email address';
+              errors.push('Malformed email address');
+            }
+          }
+
+          if (student.enrollmentNo && !fieldErrors.enrollmentNumber) {
+            const enrollRegex = /^[a-z0-9-]{3,20}$/i;
+            if (!enrollRegex.test(student.enrollmentNo)) {
+              fieldErrors.enrollmentNumber = 'Enrollment number does not match expected format';
+              errors.push('Enrollment number does not match expected format');
+            }
+          }
+
+          if (student.phone && !fieldErrors.phoneNumber) {
+            const cleanPhone = student.phone.replace(/[^0-9]/g, '');
+            if (cleanPhone.length !== 10) {
+              fieldErrors.phoneNumber = 'Phone number must be exactly 10 digits';
+              errors.push('Phone number must be exactly 10 digits');
+            }
+          }
+
+          if (!resolvedProgram.canonical && !fieldErrors.program) {
+            fieldErrors.program = resolvedProgram.error || 'Program is required';
             errors.push(resolvedProgram.error || 'Program is required');
           }
-          if (!resolvedDept.canonical) {
+          if (!resolvedDept.canonical && !fieldErrors.department) {
+            fieldErrors.department = resolvedDept.error || 'Department is required';
             errors.push(resolvedDept.error || 'Department is required');
           }
-          if (student.semester && !SEMESTER_OPTIONS.map(String).includes(String(student.semester))) {
+          if (student.semester && !SEMESTER_OPTIONS.map(String).includes(String(student.semester)) && !fieldErrors.semester) {
+            fieldErrors.semester = 'Semester must be 1 to 8';
             errors.push('Semester must be 1 to 8');
           }
           
-          const emailLower = student.email.toLowerCase();
-          const enrollmentLower = student.enrollmentNo.toLowerCase();
+          const emailLower = (student.email || '').toLowerCase();
+          const enrollmentLower = (student.enrollmentNo || '').toLowerCase();
           
-          if (student.email) {
+          if (student.email && !fieldErrors.email) {
             if (fileEmails.has(emailLower)) {
+              fieldErrors.email = `Duplicate email "${student.email}" in file`;
               errors.push(`Duplicate email "${student.email}" in file`);
             } else {
               fileEmails.add(emailLower);
             }
           }
-          if (student.phone) {
+          if (student.phone && !fieldErrors.phoneNumber) {
             if (filePhones.has(student.phone)) {
+              fieldErrors.phoneNumber = `Duplicate phone number "${student.phone}" in file`;
               errors.push(`Duplicate phone number "${student.phone}" in file`);
             } else {
               filePhones.add(student.phone);
             }
           }
-          if (student.enrollmentNo) {
+          if (student.enrollmentNo && !fieldErrors.enrollmentNumber) {
             if (fileEnrollments.has(enrollmentLower)) {
+              fieldErrors.enrollmentNumber = `Duplicate enrollment number "${student.enrollmentNo}" in file`;
               errors.push(`Duplicate enrollment number "${student.enrollmentNo}" in file`);
             } else {
               fileEnrollments.add(enrollmentLower);
@@ -528,6 +710,7 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
           }
           
           student.validationErrors = errors;
+          student.fieldErrors = fieldErrors;
           return student;
         });
         
