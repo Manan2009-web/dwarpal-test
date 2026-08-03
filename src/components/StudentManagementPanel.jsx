@@ -258,15 +258,16 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
       });
       const sheet = XLSX.utils.json_to_sheet(rowsToDownload);
       XLSX.utils.book_append_sheet(workbook, sheet, 'Rejected Students');
-      XLSX.writeFile(workbook, 'dwarpal_rejected_students.xlsx');
+      const timestamp = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(workbook, `Bulk_Upload_Errors_${timestamp}.xlsx`);
       toast.success({
         title: 'Export complete',
-        message: 'Downloaded rejected rows Excel sheet.'
+        message: 'Downloaded error report Excel sheet.'
       });
     } catch (err) {
       toast.error({
         title: 'Export failed',
-        message: err.message || 'Unable to generate rejected rows file.'
+        message: err.message || 'Unable to generate error report.'
       });
     }
   }
@@ -560,16 +561,53 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
     if (event) event.preventDefault();
     if (bulkLoading || !bulkStudents.length) return;
     
+    // Filter the parsed preview rows to only those with no validationErrors (status === 'Ready')
+    const readyRows = bulkStudents.filter(s => !s.validationErrors || s.validationErrors.length === 0);
+    const errorRows = bulkStudents.filter(s => s.validationErrors && s.validationErrors.length > 0);
+    
     setBulkLoading(true);
     try {
-      const result = await bulkCreateAdminStudents(bulkStudents);
-      setBulkResult(result);
+      let result = { added: [], rejected: [], summary: { totalRows: 0, addedCount: 0, rejectedCount: 0 } };
+      
+      if (readyRows.length > 0) {
+        result = await bulkCreateAdminStudents(readyRows);
+      }
+      
+      // Map frontend pre-submission error rows to the same rejected format
+      const skippedErrors = errorRows.map(s => ({
+        rowNumber: s.rowNumber,
+        originalData: {
+          fullName: s.fullName,
+          email: s.email,
+          enrollmentNo: s.enrollmentNo,
+          phone: s.phone,
+          program: s.program,
+          department: s.department,
+          semester: s.semester
+        },
+        reasons: s.validationErrors
+      }));
+      
+      const allRejected = [...skippedErrors, ...(result.rejected || [])];
+      allRejected.sort((a, b) => a.rowNumber - b.rowNumber);
+
+      const finalResult = {
+        added: result.added || [],
+        rejected: allRejected,
+        summary: {
+          totalRows: bulkStudents.length,
+          addedCount: result.summary?.addedCount || (result.added?.length || 0),
+          rejectedCount: allRejected.length
+        }
+      };
+
+      setBulkResult(finalResult);
       setBulkStudents([]);
       setBulkFile(null);
       setReloadKey((prev) => prev + 1);
       
-      const addedCount = result?.summary?.addedCount || result?.added?.length || 0;
-      const rejectedCount = result?.summary?.rejectedCount || result?.rejected?.length || 0;
+      const addedCount = finalResult.summary.addedCount;
+      const rejectedCount = finalResult.summary.rejectedCount;
       
       if (addedCount > 0) {
         toast.success({
@@ -962,12 +1000,32 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
                       <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: '600', color: 'var(--app-text-muted)', textTransform: 'uppercase' }}>Rejected</p>
                     </div>
                   </div>
+
+                  {/* Added (N) Section */}
+                  {bulkResult.added?.length > 0 && (
+                    <div style={{ marginBottom: '1.25rem' }}>
+                      <p style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--success)' }}>
+                        Added ({bulkResult.added.length})
+                      </p>
+                      <div style={{ maxHeight: '150px', overflowY: 'auto', fontSize: '0.8rem', background: 'var(--app-surface)', borderRadius: '8px', padding: '0.5rem 0.75rem', border: '1px solid var(--app-surface-border)' }}>
+                        <ul style={{ margin: 0, paddingLeft: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                          {bulkResult.added.map((student, i) => (
+                            <li key={i}>
+                              <strong>{student.fullName}</strong> ({student.enrollmentNo}) - <span style={{ color: 'var(--app-text-muted)' }}>{student.email}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
                   
                   {/* Rejected Rows Table */}
                   {bulkResult.rejected?.length > 0 && (
                     <div style={{ marginTop: '1rem' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                        <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: '600', color: '#ef4444' }}>Rows Needing Correction:</p>
+                        <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: '600', color: '#ef4444' }}>
+                          Not uploaded — Error rows ({bulkResult.rejected.length}):
+                        </p>
                         <button
                           type="button"
                           onClick={downloadRejectedRows}
@@ -986,7 +1044,7 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
                           }}
                         >
                           <Download size={14} />
-                          <span>Download Rejected Rows</span>
+                          <span>Download Error Report</span>
                         </button>
                       </div>
                       
