@@ -24,6 +24,7 @@
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.0.0",
     "ogl": "^1.0.11",
+    "papaparse": "^5.5.4",
     "qr-scanner": "^1.4.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

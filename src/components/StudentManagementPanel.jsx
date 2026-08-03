@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useRef } from 'react'
 import { Eye, FileDown, Download, GraduationCap, KeyRound, PencilLine, ShieldCheck, Trash2, UserPlus, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, RefreshCw, X, AlertOctagon } from 'lucide-react'
 import * as XLSX from 'xlsx'
+import Papa from 'papaparse'
 import {
   createAdminStudent,
   bulkCreateAdminStudents,
@@ -528,6 +529,196 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
     }
 
     return { canonical: '', original: input, isAutoCorrected: false, error: `Value "${input}" could not be matched confidently.` };
+  }  function processParsedRows(rows) {
+    if (!rows.length) {
+      throw new Error('The uploaded file is empty.');
+    }
+    
+    const aliasesMap = {
+      fullName: ['fullname', 'name', 'studentname', 'fullName', 'full name', 'student name'],
+      email: ['email', 'emailaddress', 'mail', 'email address', 'email id', 'emailid', 'student email', 'studentemail'],
+      enrollmentNo: ['enrollmentno', 'enrollmentnumber', 'enrollment', 'enrollment no', 'enrollment number', 'enroll no', 'enrollno', 'student enrollment number', 'student enrollment no', 'studentenrollmentno', 'studentenrollmentnumber'],
+      phone: ['phone', 'phonenumber', 'contact', 'phone number', 'contact number', 'mobile', 'mobile number', 'student phone number', 'studentphonenumber', 'student phone', 'studentphone'],
+      program: ['program', 'course', 'degree', 'stream', 'student program', 'studentprogram'],
+      department: ['department', 'branch', 'dept', 'specialization', 'student department', 'studentdepartment'],
+      semester: ['semester', 'sem', 'current semester', 'current sem', 'student semester', 'studentsemester']
+    };
+    
+    const mapHeaders = (rawRow) => {
+      const rowKeys = Object.keys(rawRow);
+      const getVal = (aliases) => {
+        const match = rowKeys.find(k => aliases.includes(String(k).toLowerCase().trim()));
+        return match ? String(rawRow[match]).trim() : '';
+      };
+      
+      return {
+        fullName: getVal(aliasesMap.fullName),
+        email: getVal(aliasesMap.email),
+        enrollmentNo: getVal(aliasesMap.enrollmentNo),
+        phone: getVal(aliasesMap.phone),
+        program: getVal(aliasesMap.program),
+        department: getVal(aliasesMap.department),
+        semester: getVal(aliasesMap.semester)
+      };
+    };
+    
+    const fileEmails = new Set();
+    const filePhones = new Set();
+    const fileEnrollments = new Set();
+    
+    const mapped = rows.map((row, idx) => {
+      const rawStudent = mapHeaders(row);
+      
+      const resolvedProgram = resolveValue(rawStudent.program, PROGRAM_OPTIONS, PROGRAM_ALIASES);
+      const resolvedDept = resolveValue(rawStudent.department, ROUTING_DEPARTMENTS, DEPT_ALIASES);
+
+      const student = {
+        ...rawStudent,
+        program: resolvedProgram.canonical || rawStudent.program,
+        department: resolvedDept.canonical || rawStudent.department,
+        temporaryPassword: generateRandomPassword(),
+        rowNumber: idx + 2,
+        originalProgram: rawStudent.program,
+        originalDepartment: rawStudent.department,
+        programAutoCorrected: resolvedProgram.isAutoCorrected,
+        deptAutoCorrected: resolvedDept.isAutoCorrected
+      };
+      
+      const errors = [];
+      const fieldErrors = {
+        fullName: null,
+        email: null,
+        enrollmentNumber: null,
+        phoneNumber: null,
+        program: null,
+        department: null,
+        semester: null
+      };
+
+      if (!student.fullName) {
+        fieldErrors.fullName = 'Full Name is required';
+        errors.push('Full Name is required');
+      }
+      if (!student.email) {
+        fieldErrors.email = 'Email is required';
+        errors.push('Email is required');
+      }
+      if (!student.enrollmentNo) {
+        fieldErrors.enrollmentNumber = 'Enrollment Number is required';
+        errors.push('Enrollment Number is required');
+      }
+      if (!student.phone) {
+        fieldErrors.phoneNumber = 'Phone Number is required';
+        errors.push('Phone Number is required');
+      }
+      if (!student.semester) {
+        fieldErrors.semester = 'Semester is required';
+        errors.push('Semester is required');
+      }
+      
+      const checkMerge = (val) => String(val || '').includes(',');
+      if (checkMerge(student.fullName)) {
+        fieldErrors.fullName = 'Multiple students detected in one row — split into separate rows';
+        errors.push('Full Name: Multiple students detected in one row — split into separate rows');
+      }
+      if (checkMerge(student.email)) {
+        fieldErrors.email = 'Multiple students detected in one row — split into separate rows';
+        errors.push('Email: Multiple students detected in one row — split into separate rows');
+      }
+      if (checkMerge(student.enrollmentNo)) {
+        fieldErrors.enrollmentNumber = 'Multiple students detected in one row — split into separate rows';
+        errors.push('Enrollment Number: Multiple students detected in one row — split into separate rows');
+      }
+      if (checkMerge(student.phone)) {
+        fieldErrors.phoneNumber = 'Multiple students detected in one row — split into separate rows';
+        errors.push('Phone Number: Multiple students detected in one row — split into separate rows');
+      }
+
+      if (student.email && !fieldErrors.email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(student.email)) {
+          fieldErrors.email = 'Malformed email address';
+          errors.push('Malformed email address');
+        }
+      }
+
+      if (student.enrollmentNo && !fieldErrors.enrollmentNumber) {
+        const enrollRegex = /^[a-z0-9-]{3,20}$/i;
+        if (!enrollRegex.test(student.enrollmentNo)) {
+          fieldErrors.enrollmentNumber = 'Enrollment number does not match expected format';
+          errors.push('Enrollment number does not match expected format');
+        }
+      }
+
+      if (student.phone && !fieldErrors.phoneNumber) {
+        const cleanPhone = student.phone.replace(/[^0-9]/g, '');
+        if (cleanPhone.length !== 10) {
+          fieldErrors.phoneNumber = 'Phone number must be exactly 10 digits';
+          errors.push('Phone number must be exactly 10 digits');
+        }
+      }
+
+      if (!resolvedProgram.canonical && !fieldErrors.program) {
+        fieldErrors.program = resolvedProgram.error || 'Program is required';
+        errors.push(resolvedProgram.error || 'Program is required');
+      }
+      if (!resolvedDept.canonical && !fieldErrors.department) {
+        fieldErrors.department = resolvedDept.error || 'Department is required';
+        errors.push(resolvedDept.error || 'Department is required');
+      }
+      
+      let semesterNumber = null;
+      if (student.semester) {
+        const semClean = String(student.semester).replace(/[^0-9]/g, '');
+        semesterNumber = Number(semClean);
+      }
+      if (!semesterNumber || isNaN(semesterNumber) || semesterNumber < 1 || semesterNumber > 8) {
+        if (!fieldErrors.semester) {
+          fieldErrors.semester = 'Semester must be 1 to 8';
+          errors.push('Semester must be 1 to 8');
+        }
+      } else {
+        student.semester = semesterNumber;
+      }
+      
+      const emailLower = (student.email || '').toLowerCase();
+      const enrollmentLower = (student.enrollmentNo || '').toLowerCase();
+      
+      if (student.email && !fieldErrors.email) {
+        if (fileEmails.has(emailLower)) {
+          fieldErrors.email = `Duplicate email "${student.email}" in file`;
+          errors.push(`Duplicate email "${student.email}" in file`);
+        } else {
+          fileEmails.add(emailLower);
+        }
+      }
+      if (student.phone && !fieldErrors.phoneNumber) {
+        if (filePhones.has(student.phone)) {
+          fieldErrors.phoneNumber = `Duplicate phone number "${student.phone}" in file`;
+          errors.push(`Duplicate phone number "${student.phone}" in file`);
+        } else {
+          filePhones.add(student.phone);
+        }
+      }
+      if (student.enrollmentNo && !fieldErrors.enrollmentNumber) {
+        if (fileEnrollments.has(enrollmentLower)) {
+          fieldErrors.enrollmentNumber = `Duplicate enrollment number "${student.enrollmentNo}" in file`;
+          errors.push(`Duplicate enrollment number "${student.enrollmentNo}" in file`);
+        } else {
+          fileEnrollments.add(enrollmentLower);
+        }
+      }
+      
+      student.validationErrors = errors;
+      student.fieldErrors = fieldErrors;
+      return student;
+    });
+    
+    setBulkStudents(mapped);
+    toast.success({
+      title: 'File parsed',
+      message: `Found ${mapped.length} student records in the file.`
+    });
   }
 
   function parseExcelFile(file) {
@@ -547,214 +738,81 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
     setBulkLoading(true);
     setBulkResult(null);
     
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = new Uint8Array(e.target.result);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
-        const rows = XLSX.utils.sheet_to_json(sheet);
-        
-        if (!rows.length) {
-          throw new Error('The uploaded file is empty.');
+    const isCsv = ext === 'csv';
+    
+    if (isCsv) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const csvText = e.target.result;
+          const papaResult = Papa.parse(csvText, {
+            header: true,
+            skipEmptyLines: true,
+            transformHeader: (header) => header.trim(),
+            dynamicTyping: false
+          });
+          
+          const rows = papaResult.data;
+          
+          // Temporary console.log as requested by the user
+          console.log('[DwarPal CSV Parse] First parsed row (before validation):', rows[0]);
+          
+          processParsedRows(rows);
+        } catch (err) {
+          console.error(err);
+          toast.error({
+            title: 'CSV Parsing Failed',
+            message: err.message || 'Check the file format.'
+          });
+          setBulkFile(null);
+          setBulkStudents([]);
+        } finally {
+          setBulkLoading(false);
         }
-        
-        const keys = Object.keys(rows[0]);
-        const aliasesMap = {
-          fullName: ['fullname', 'name', 'studentname', 'fullName', 'full name', 'student name'],
-          email: ['email', 'emailaddress', 'mail', 'email address', 'email id', 'emailid'],
-          enrollmentNo: ['enrollmentno', 'enrollmentnumber', 'enrollment', 'enrollment no', 'enrollment number', 'enroll no', 'enrollno'],
-          phone: ['phone', 'phonenumber', 'contact', 'phone number', 'contact number', 'mobile', 'mobile number'],
-          program: ['program', 'course', 'degree', 'stream'],
-          department: ['department', 'branch', 'dept', 'specialization'],
-          semester: ['semester', 'sem', 'current semester', 'current sem']
-        };
-        
-        const mapHeaders = (rawRow) => {
-          const rowKeys = Object.keys(rawRow);
-          const getVal = (aliases) => {
-            const match = rowKeys.find(k => aliases.includes(String(k).toLowerCase().trim()));
-            return match ? String(rawRow[match]).trim() : '';
-          };
-          
-          return {
-            fullName: getVal(aliasesMap.fullName),
-            email: getVal(aliasesMap.email),
-            enrollmentNo: getVal(aliasesMap.enrollmentNo),
-            phone: getVal(aliasesMap.phone),
-            program: getVal(aliasesMap.program),
-            department: getVal(aliasesMap.department),
-            semester: getVal(aliasesMap.semester)
-          };
-        };
-        
-        const fileEmails = new Set();
-        const filePhones = new Set();
-        const fileEnrollments = new Set();
-        
-         const mapped = rows.map((row, idx) => {
-          const rawStudent = mapHeaders(row);
-          
-          const resolvedProgram = resolveValue(rawStudent.program, PROGRAM_OPTIONS, PROGRAM_ALIASES);
-          const resolvedDept = resolveValue(rawStudent.department, ROUTING_DEPARTMENTS, DEPT_ALIASES);
-
-          const student = {
-            ...rawStudent,
-            program: resolvedProgram.canonical || rawStudent.program,
-            department: resolvedDept.canonical || rawStudent.department,
-            temporaryPassword: generateRandomPassword(),
-            rowNumber: idx + 2,
-            originalProgram: rawStudent.program,
-            originalDepartment: rawStudent.department,
-            programAutoCorrected: resolvedProgram.isAutoCorrected,
-            deptAutoCorrected: resolvedDept.isAutoCorrected
-          };
-          
-          const errors = [];
-          const fieldErrors = {
-            fullName: null,
-            email: null,
-            enrollmentNumber: null,
-            phoneNumber: null,
-            program: null,
-            department: null,
-            semester: null
-          };
-
-          if (!student.fullName) {
-            fieldErrors.fullName = 'Full Name is required';
-            errors.push('Full Name is required');
-          }
-          if (!student.email) {
-            fieldErrors.email = 'Email is required';
-            errors.push('Email is required');
-          }
-          if (!student.enrollmentNo) {
-            fieldErrors.enrollmentNumber = 'Enrollment Number is required';
-            errors.push('Enrollment Number is required');
-          }
-          if (!student.phone) {
-            fieldErrors.phoneNumber = 'Phone Number is required';
-            errors.push('Phone Number is required');
-          }
-          if (!student.semester) {
-            fieldErrors.semester = 'Semester is required';
-            errors.push('Semester is required');
-          }
-          
-          const checkMerge = (val) => String(val || '').includes(',');
-          if (checkMerge(student.fullName)) {
-            fieldErrors.fullName = 'Multiple students detected in one row — split into separate rows';
-            errors.push('Full Name: Multiple students detected in one row — split into separate rows');
-          }
-          if (checkMerge(student.email)) {
-            fieldErrors.email = 'Multiple students detected in one row — split into separate rows';
-            errors.push('Email: Multiple students detected in one row — split into separate rows');
-          }
-          if (checkMerge(student.enrollmentNo)) {
-            fieldErrors.enrollmentNumber = 'Multiple students detected in one row — split into separate rows';
-            errors.push('Enrollment Number: Multiple students detected in one row — split into separate rows');
-          }
-          if (checkMerge(student.phone)) {
-            fieldErrors.phoneNumber = 'Multiple students detected in one row — split into separate rows';
-            errors.push('Phone Number: Multiple students detected in one row — split into separate rows');
-          }
-
-          if (student.email && !fieldErrors.email) {
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(student.email)) {
-              fieldErrors.email = 'Malformed email address';
-              errors.push('Malformed email address');
-            }
-          }
-
-          if (student.enrollmentNo && !fieldErrors.enrollmentNumber) {
-            const enrollRegex = /^[a-z0-9-]{3,20}$/i;
-            if (!enrollRegex.test(student.enrollmentNo)) {
-              fieldErrors.enrollmentNumber = 'Enrollment number does not match expected format';
-              errors.push('Enrollment number does not match expected format');
-            }
-          }
-
-          if (student.phone && !fieldErrors.phoneNumber) {
-            const cleanPhone = student.phone.replace(/[^0-9]/g, '');
-            if (cleanPhone.length !== 10) {
-              fieldErrors.phoneNumber = 'Phone number must be exactly 10 digits';
-              errors.push('Phone number must be exactly 10 digits');
-            }
-          }
-
-          if (!resolvedProgram.canonical && !fieldErrors.program) {
-            fieldErrors.program = resolvedProgram.error || 'Program is required';
-            errors.push(resolvedProgram.error || 'Program is required');
-          }
-          if (!resolvedDept.canonical && !fieldErrors.department) {
-            fieldErrors.department = resolvedDept.error || 'Department is required';
-            errors.push(resolvedDept.error || 'Department is required');
-          }
-          if (student.semester && !SEMESTER_OPTIONS.map(String).includes(String(student.semester)) && !fieldErrors.semester) {
-            fieldErrors.semester = 'Semester must be 1 to 8';
-            errors.push('Semester must be 1 to 8');
-          }
-          
-          const emailLower = (student.email || '').toLowerCase();
-          const enrollmentLower = (student.enrollmentNo || '').toLowerCase();
-          
-          if (student.email && !fieldErrors.email) {
-            if (fileEmails.has(emailLower)) {
-              fieldErrors.email = `Duplicate email "${student.email}" in file`;
-              errors.push(`Duplicate email "${student.email}" in file`);
-            } else {
-              fileEmails.add(emailLower);
-            }
-          }
-          if (student.phone && !fieldErrors.phoneNumber) {
-            if (filePhones.has(student.phone)) {
-              fieldErrors.phoneNumber = `Duplicate phone number "${student.phone}" in file`;
-              errors.push(`Duplicate phone number "${student.phone}" in file`);
-            } else {
-              filePhones.add(student.phone);
-            }
-          }
-          if (student.enrollmentNo && !fieldErrors.enrollmentNumber) {
-            if (fileEnrollments.has(enrollmentLower)) {
-              fieldErrors.enrollmentNumber = `Duplicate enrollment number "${student.enrollmentNo}" in file`;
-              errors.push(`Duplicate enrollment number "${student.enrollmentNo}" in file`);
-            } else {
-              fileEnrollments.add(enrollmentLower);
-            }
-          }
-          
-          student.validationErrors = errors;
-          student.fieldErrors = fieldErrors;
-          return student;
-        });
-        
-        setBulkStudents(mapped);
-        toast.success({
-          title: 'File parsed',
-          message: `Found ${mapped.length} student records in the file.`
-        });
-      } catch (err) {
+      };
+      reader.onerror = () => {
         toast.error({
-          title: 'File parsing failed',
-          message: err.message || 'Make sure sheet contains headers and correct format.'
+          title: 'Error reading file',
+          message: 'Could not load the file from disk.'
         });
-        setBulkFile(null);
-        setBulkStudents([]);
-      } finally {
         setBulkLoading(false);
-      }
-    };
-    reader.onerror = () => {
-      toast.error({
-        title: 'Error reading file',
-        message: 'Could not load the file from disk.'
-      });
-      setBulkLoading(false);
-    };
-    reader.readAsArrayBuffer(file);
+      };
+      reader.readAsText(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const sheetName = workbook.SheetNames[0];
+          const sheet = workbook.Sheets[sheetName];
+          const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+          
+          // Temporary console.log for XLSX
+          console.log('[DwarPal Excel Parse] First parsed row (before validation):', rows[0]);
+          
+          processParsedRows(rows);
+        } catch (err) {
+          console.error(err);
+          toast.error({
+            title: 'Excel Parsing Failed',
+            message: err.message || 'Check the file format.'
+          });
+          setBulkFile(null);
+          setBulkStudents([]);
+        } finally {
+          setBulkLoading(false);
+        }
+      };
+      reader.onerror = () => {
+        toast.error({
+          title: 'Error reading file',
+          message: 'Could not load the file from disk.'
+        });
+        setBulkLoading(false);
+      };
+      reader.readAsArrayBuffer(file);
+    }
   }
 
   async function handleBulkSubmit(event) {
