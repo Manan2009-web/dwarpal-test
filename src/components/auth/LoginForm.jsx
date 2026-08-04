@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import logo from '../../assets/dwarpal_logo.png'
 import PasswordInput from '../PasswordInput'
+import AppBrand from '../AppBrand'
 
 const formVariants = {
   hidden: { opacity: 0 },
@@ -42,10 +43,11 @@ function FormField({
 
   return (
     <motion.div variants={itemVariants} className="tw:space-y-2">
-      <label htmlFor={id} className="tw:block tw:text-[0.84rem] tw:font-semibold tw:text-white/60 tw:tracking-wide">
+      <label htmlFor={id} className="tw:block tw:text-[0.84rem] tw:font-semibold tw:text-neutral-700 tw:tracking-wide">
         {label}
       </label>
-      <div className="tw:group tw:relative">
+      <div className="tw:group tw:relative tw:mt-1.5">
+        <div className="tw:absolute tw:inset-0 tw:rounded-xl tw:bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(227,239,251,0.72))]" />
         {isPasswordField ? (
           <PasswordInput
             id={id}
@@ -57,10 +59,10 @@ function FormField({
             ariaInvalid={Boolean(error)}
             wrapperClassName="tw:relative tw:z-[1]"
             className={[
-              'tw:relative tw:w-full tw:h-12 tw:rounded-xl tw:border tw:bg-black/[0.25] tw:px-4 tw:py-3.5 tw:pr-12 tw:text-[0.98rem] tw:text-white tw:tracking-wide tw:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] tw:outline-none tw:transition tw:duration-200 tw:placeholder:text-white/30 tw:focus:border-white/[0.2] tw:focus:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4),0_0_20px_rgba(255,255,255,0.04)] tw:disabled:cursor-not-allowed tw:disabled:opacity-65',
-              error ? 'tw:border-red-500/40' : 'tw:border-white/[0.04]',
+              'tw:relative tw:w-full tw:h-12 tw:rounded-xl tw:border tw:bg-transparent tw:px-4 tw:py-3.5 tw:pr-12 tw:text-[0.98rem] tw:outline-none tw:transition tw:duration-200',
+              error ? 'field-invalid' : 'tw:border-[#173449]/10',
             ].join(' ')}
-            toggleClassName="tw:absolute tw:right-3 tw:top-0 tw:bottom-0 tw:my-auto tw:grid tw:h-9 tw:w-9 tw:place-items-center tw:rounded-lg tw:text-white/40 tw:transition tw:duration-200 hover:tw:text-white/70 focus-visible:tw:outline-none disabled:tw:cursor-not-allowed"
+            toggleClassName="tw:absolute tw:right-3 tw:top-0 tw:bottom-0 tw:my-auto tw:grid tw:h-9 tw:w-9 tw:place-items-center tw:rounded-lg tw:border tw:border-[rgba(105,143,176,0.28)] tw:bg-[rgba(255,255,255,0.74)] tw:text-[#48637c] tw:transition tw:duration-200 hover:tw:bg-white hover:tw:text-[#2f6db5] focus-visible:tw:outline-none disabled:tw:cursor-not-allowed"
           />
         ) : (
           <input
@@ -73,13 +75,13 @@ function FormField({
             disabled={disabled}
             aria-invalid={Boolean(error)}
             className={[
-              'tw:relative tw:w-full tw:h-12 tw:rounded-xl tw:border tw:bg-black/[0.25] tw:px-4 tw:py-3.5 tw:text-[0.98rem] tw:text-white tw:tracking-wide tw:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] tw:outline-none tw:transition tw:duration-200 tw:placeholder:text-white/30 tw:focus:border-white/[0.2] tw:focus:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4),0_0_20px_rgba(255,255,255,0.04)] tw:disabled:cursor-not-allowed tw:disabled:opacity-65',
-              error ? 'tw:border-red-500/40' : 'tw:border-white/[0.04]',
+              'tw:relative tw:w-full tw:h-12 tw:rounded-xl tw:border tw:bg-transparent tw:px-4 tw:py-3.5 tw:text-[0.98rem] tw:outline-none tw:transition tw:duration-200',
+              error ? 'field-invalid' : 'tw:border-[#173449]/10',
             ].join(' ')}
           />
         )}
       </div>
-      {error ? <p className="tw:text-[0.82rem] tw:font-medium tw:text-red-400">{error}</p> : null}
+      {error ? <p className="tw:text-[0.82rem] tw:font-medium tw:text-red-500 tw:mt-1">{error}</p> : null}
     </motion.div>
   )
 }
@@ -109,7 +111,7 @@ export default function LoginForm({
   const reduceMotion = useReducedMotion()
 
   return (
-    <div className="tw:relative tw:flex tw:w-full tw:flex-col tw:bg-transparent tw:text-white">
+    <div className="tw:relative tw:flex tw:w-full tw:flex-col tw:bg-transparent tw:text-[#163247]">
       <motion.div
         variants={formVariants}
         initial={reduceMotion ? false : 'hidden'}
@@ -118,26 +120,21 @@ export default function LoginForm({
       >
         <motion.div
           variants={itemVariants}
-          className="tw:w-full tw:text-white"
+          className="tw:w-full tw:text-[#163247]"
         >
           <div className="tw:space-y-6">
             <motion.div
               variants={itemVariants}
               className="tw:flex tw:flex-col tw:items-center tw:text-center"
             >
-              {/* CLEAN RAW LOGO LAYER (NO BACKGROUND BOX CONTAINER) */}
-              <div className="tw:mb-1 tw:flex tw:items-center tw:justify-center tw:w-full">
-                <img 
-                  src={logo} 
-                  alt="DwarPal Logo" 
-                  className="tw:w-[96px] tw:h-[64px] tw:object-contain tw:block tw:filter tw:drop-shadow-[0_4px_10px_rgba(255,255,255,0.05)]"
-                />
+              <div className="auth-brand-wrap">
+                <AppBrand size="md" layout="stacked" centered />
               </div>
               <div className="tw:space-y-2 tw:-mt-1">
-                <h1 className="tw:font-display tw:text-3xl tw:font-bold tw:leading-none tw:tracking-[-0.05em] tw:text-white">
-                  {title}
-                </h1>
-                <p className="tw:text-sm tw:font-medium tw:text-white/50">{subtitle}</p>
+                <h2 className="tw:text-[#163247] tw:font-bold">
+                  {title === 'DwarPal' ? 'Sign In' : title}
+                </h2>
+                <p className="tw:text-sm tw:font-medium tw:text-neutral-500">{subtitle}</p>
               </div>
             </motion.div>
 
@@ -171,7 +168,7 @@ export default function LoginForm({
               >
                 <label
                   htmlFor="remember-me"
-                  className="tw:inline-flex tw:min-h-[48px] tw:cursor-pointer tw:items-center tw:gap-3 tw:text-[0.94rem] tw:font-medium tw:text-white/60"
+                  className="tw:inline-flex tw:min-h-[48px] tw:cursor-pointer tw:items-center tw:gap-3 tw:text-[0.94rem] tw:font-medium tw:text-neutral-600"
                 >
                   <input
                     id="remember-me"
@@ -180,8 +177,8 @@ export default function LoginForm({
                     onChange={(event) => onRememberMeChange(event.target.checked)}
                     className="tw:peer tw:sr-only"
                   />
-                  <span className="tw:flex tw:h-5 tw:w-5 tw:items-center tw:justify-center tw:rounded-md tw:border tw:border-white/[0.1] tw:bg-black/[0.25] tw:shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)] tw:transition tw:duration-200 tw:peer-checked:border-white/[0.3] tw:peer-checked:bg-white/[0.12]">
-                    <Check className={`tw:h-3.5 tw:w-3.5 tw:text-white tw:transition tw:duration-150 ${rememberMe ? 'tw:scale-100' : 'tw:scale-0'}`} />
+                  <span className="tw:flex tw:h-5 tw:w-5 tw:items-center tw:justify-center tw:rounded-md tw:border tw:border-[rgba(105,143,176,0.28)] tw:bg-[rgba(255,255,255,0.74)] tw:shadow-sm tw:transition tw:duration-200 peer-checked:border-[#2f6db5] peer-checked:bg-[#2f6db5]/10">
+                    <Check className={`tw:h-3.5 tw:w-3.5 tw:text-[#2f6db5] tw:transition tw:duration-150 ${rememberMe ? 'tw:scale-100' : 'tw:scale-0'}`} />
                   </span>
                   Remember me
                 </label>
@@ -191,7 +188,7 @@ export default function LoginForm({
                     type="button"
                     onClick={onForgotPassword}
                     disabled={isSubmitting}
-                    className="tw:border-none tw:bg-transparent tw:p-0 tw:text-[0.92rem] tw:font-semibold tw:text-white/40 tw:underline tw:underline-offset-4 tw:transition tw:duration-200 hover:tw:text-white/70 disabled:tw:opacity-55"
+                    className="tw:border-none tw:bg-transparent tw:p-0 tw:text-[0.92rem] tw:font-semibold tw:text-neutral-500 tw:underline tw:underline-offset-4 tw:transition tw:duration-200 hover:tw:text-[#2f6db5] disabled:tw:opacity-55"
                   >
                     Forgot password?
                   </button>
@@ -202,7 +199,8 @@ export default function LoginForm({
                 <motion.div
                   variants={itemVariants}
                   role="alert"
-                  className="tw:rounded-xl tw:border tw:border-red-500/[0.15] tw:bg-red-500/[0.05] tw:px-4 tw:py-3 tw:text-[0.92rem] tw:font-medium tw:text-red-400 tw:backdrop-blur-md"
+                  className="form-error tw:mb-3"
+                  style={{ textAlign: 'center', fontWeight: 500 }}
                 >
                   {error}
                 </motion.div>
@@ -211,7 +209,7 @@ export default function LoginForm({
               {success ? (
                 <motion.div
                   variants={itemVariants}
-                  className="tw:rounded-xl tw:border tw:border-emerald-500/[0.15] tw:bg-emerald-500/[0.05] tw:px-4 tw:py-3 tw:text-[0.92rem] tw:font-medium tw:text-emerald-400 tw:backdrop-blur-md"
+                  className="tw:rounded-xl tw:border tw:border-emerald-500/[0.15] tw:bg-emerald-500/[0.05] tw:px-4 tw:py-3 tw:text-[0.92rem] tw:font-medium tw:text-emerald-600 tw:backdrop-blur-md"
                 >
                   {success}
                 </motion.div>
@@ -224,7 +222,7 @@ export default function LoginForm({
                 aria-busy={isSubmitting}
                 whileHover={reduceMotion || isSubmitting ? undefined : { y: -1, scale: 1.01 }}
                 whileTap={reduceMotion || isSubmitting ? undefined : { scale: 0.99 }}
-                className="tw:flex tw:h-12 tw:w-full tw:items-center tw:justify-center tw:gap-3 tw:rounded-xl tw:border tw:border-white/[0.18] tw:bg-white/[0.06] tw:backdrop-blur-xl tw:px-5 tw:py-3.5 tw:text-[1rem] tw:font-medium tw:text-white tw:transition-all tw:duration-300 tw:ease-out hover:tw:bg-white/[0.12] tw:disabled:cursor-not-allowed tw:disabled:opacity-70"
+                className="action-button primary tw:w-full tw:flex tw:items-center tw:justify-center tw:gap-3 tw:h-12 tw:rounded-xl tw:font-semibold tw:text-base tw:text-white"
               >
                 <ShieldCheck className="tw:h-5 tw:w-5" />
                 {isSubmitting ? 'Signing in...' : submitLabel}
@@ -233,22 +231,22 @@ export default function LoginForm({
 
             {showRegisterLink ? (
               <motion.div variants={itemVariants} className="tw:mt-5 tw:text-center">
-                <p className="tw:text-[0.92rem] tw:text-white/40">
+                <p className="tw:text-[0.92rem] tw:text-neutral-500">
                   Don't have an account?{' '}
-                  <Link to="/register" replace className="tw:font-semibold tw:text-white/70 tw:underline tw:underline-offset-4 hover:tw:text-white">
+                  <Link to="/register" replace className="tw:font-semibold tw:text-[#2f6db5] tw:underline tw:underline-offset-4 hover:tw:text-[#1d5290]">
                     Register here
                   </Link>
                 </p>
               </motion.div>
             ) : null}
 
-            <motion.div variants={itemVariants} className="tw:mt-6 tw:text-center tw:text-[0.78rem] tw:text-white/35 tw:border-t tw:border-white/[0.05] tw:pt-4">
+            <motion.div variants={itemVariants} className="tw:mt-6 tw:text-center tw:text-[0.78rem] tw:text-neutral-400 tw:border-t tw:border-neutral-200 tw:pt-4">
               By signing in, you agree to our{' '}
-              <Link to="/privacy-policy" className="tw:font-medium tw:text-purple-400 hover:tw:text-purple-300 tw:underline">
+              <Link to="/privacy-policy" className="tw:font-medium tw:text-[#2f6db5] hover:tw:text-[#1d5290] tw:underline">
                 Privacy Policy
               </Link>
               . Need help? Visit{' '}
-              <Link to="/support" className="tw:font-medium tw:text-purple-400 hover:tw:text-purple-300 tw:underline">
+              <Link to="/support" className="tw:font-medium tw:text-[#2f6db5] hover:tw:text-[#1d5290] tw:underline">
                 Support
               </Link>
               .

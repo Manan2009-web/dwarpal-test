@@ -2535,7 +2535,7 @@ function LoginScreen({ onLogin, portalAccess }) {
   const renderRightPanel = () => {
     if (forgotPasswordStep === 'id') {
       return (
-        <div className="tw:relative tw:flex tw:w-full tw:flex-col tw:bg-transparent tw:text-white">
+        <div className="tw:relative tw:flex tw:w-full tw:flex-col tw:bg-transparent tw:text-[#163247]">
           <motion.div
             variants={formVariants}
             initial={reduceMotion ? false : 'hidden'}
@@ -2544,21 +2544,21 @@ function LoginScreen({ onLogin, portalAccess }) {
           >
             <motion.div
               variants={itemVariants}
-              className="tw:w-full tw:text-white"
+              className="tw:w-full tw:text-[#163247]"
             >
               <div className="tw:space-y-6">
                 <motion.div
                   variants={itemVariants}
                   className="tw:flex tw:flex-col tw:items-center tw:gap-4 tw:text-center"
                 >
-                  <div className="tw:flex tw:h-24 tw:w-24 tw:items-center tw:justify-center tw:rounded-3xl tw:border tw:border-white/[0.08] tw:bg-white/[0.02] tw:backdrop-blur-xl tw:shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_10px_20px_rgba(0,0,0,0.4)]">
-                    <KeyRound className="tw:h-14 tw:w-14 tw:text-white" />
+                  <div className="tw:flex tw:h-24 tw:w-24 tw:items-center tw:justify-center tw:rounded-3xl tw:border tw:border-[rgba(105,143,176,0.2)] tw:bg-white/60 tw:shadow-sm">
+                    <KeyRound className="tw:h-14 tw:w-14 tw:text-[#2f6db5]" />
                   </div>
                   <div className="tw:space-y-2">
-                    <h1 className="tw:font-display tw:text-3xl tw:font-bold tw:leading-none tw:tracking-[-0.05em] tw:text-white">
+                    <h1 className="tw:font-display tw:text-3xl tw:font-bold tw:leading-none tw:tracking-[-0.05em] tw:text-[#163247]">
                       Forgot Password
                     </h1>
-                    <p className="tw:text-sm tw:font-medium tw:text-white/50">
+                    <p className="tw:text-sm tw:font-medium tw:text-neutral-500">
                       Enter your enrollment number or employee ID to reset your password
                     </p>
                   </div>
@@ -2571,10 +2571,11 @@ function LoginScreen({ onLogin, portalAccess }) {
                   className="tw:space-y-5"
                 >
                   <motion.div variants={itemVariants} className="tw:space-y-2">
-                    <label htmlFor="forgot-identifier" className="tw:block tw:text-[0.84rem] tw:font-semibold tw:text-white/60 tw:tracking-wide">
+                    <label htmlFor="forgot-identifier" className="tw:block tw:text-[0.84rem] tw:font-semibold tw:text-neutral-700 tw:tracking-wide">
                       Enrollment Number / Employee ID
                     </label>
-                    <div className="tw:group tw:relative">
+                    <div className="tw:group tw:relative tw:mt-1.5">
+                      <div className="tw:absolute tw:inset-0 tw:rounded-xl tw:bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(227,239,251,0.72))]" />
                       <input
                         id="forgot-identifier"
                         type="text"
@@ -2587,13 +2588,13 @@ function LoginScreen({ onLogin, portalAccess }) {
                         placeholder="Enter your enrollment number or employee ID"
                         disabled={forgotPasswordIsSubmitting}
                         className={[
-                          'tw:relative tw:w-full tw:h-12 tw:rounded-xl tw:border tw:bg-black/[0.25] tw:px-4 tw:py-3.5 tw:text-[0.98rem] tw:text-white tw:tracking-wide tw:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] tw:outline-none tw:transition tw:duration-200 tw:placeholder:text-white/30 tw:focus:border-white/[0.2] tw:focus:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4),0_0_20px_rgba(255,255,255,0.04)] tw:disabled:cursor-not-allowed tw:disabled:opacity-65',
-                          forgotPasswordFieldErrors.identifier ? 'tw:border-red-500/40' : 'tw:border-white/[0.04]',
+                          'tw:relative tw:w-full tw:h-12 tw:rounded-xl tw:border tw:bg-transparent tw:px-4 tw:py-3.5 tw:text-[0.98rem] tw:outline-none tw:transition tw:duration-200',
+                          forgotPasswordFieldErrors.identifier ? 'field-invalid' : 'tw:border-[#173449]/10',
                         ].join(' ')}
                       />
                     </div>
                     {forgotPasswordFieldErrors.identifier ? (
-                      <p className="tw:text-[0.82rem] tw:font-medium tw:text-red-400">{forgotPasswordFieldErrors.identifier}</p>
+                      <p className="tw:text-[0.82rem] tw:font-medium tw:text-red-500 tw:mt-1">{forgotPasswordFieldErrors.identifier}</p>
                     ) : null}
                   </motion.div>
 
@@ -2601,7 +2602,8 @@ function LoginScreen({ onLogin, portalAccess }) {
                     <motion.div
                       variants={itemVariants}
                       role="alert"
-                      className="tw:rounded-xl tw:border tw:border-red-500/[0.15] tw:bg-red-500/[0.05] tw:px-4 tw:py-3 tw:text-[0.92rem] tw:font-medium tw:text-red-400 tw:backdrop-blur-md"
+                      className="form-error tw:mb-3"
+                      style={{ textAlign: 'center', fontWeight: 500 }}
                     >
                       {forgotPasswordError}
                     </motion.div>
@@ -2616,14 +2618,14 @@ function LoginScreen({ onLogin, portalAccess }) {
                         setForgotPasswordError('')
                       }}
                       disabled={forgotPasswordIsSubmitting}
-                      className="tw:flex tw:h-12 tw:w-1/2 tw:items-center tw:justify-center tw:rounded-xl tw:border tw:border-white/[0.1] tw:bg-white/[0.02] tw:px-4 tw:py-3.5 tw:text-[0.98rem] tw:font-semibold tw:text-white/60 tw:transition tw:duration-200 hover:tw:bg-white/[0.08] hover:tw:text-white tw:disabled:cursor-not-allowed tw:disabled:opacity-55"
+                      className="tw:flex tw:h-12 tw:w-1/2 tw:items-center tw:justify-center tw:rounded-xl tw:border tw:border-[rgba(105,143,176,0.28)] tw:bg-[rgba(255,255,255,0.74)] tw:text-[#48637c] tw:transition tw:duration-200 hover:tw:bg-white hover:tw:text-[#2f6db5] focus-visible:tw:outline-none disabled:tw:cursor-not-allowed"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
                       disabled={forgotPasswordIsSubmitting || !forgotPasswordIdentifier.trim()}
-                      className="tw:flex tw:h-12 tw:w-1/2 tw:items-center tw:justify-center tw:rounded-xl tw:border tw:border-white/[0.18] tw:bg-white/[0.06] tw:backdrop-blur-xl tw:px-4 tw:py-3.5 tw:text-[0.98rem] tw:font-semibold tw:text-white tw:transition tw:duration-200 hover:tw:bg-white/[0.12] hover:tw:scale-[1.01] active:tw:scale-[0.99] tw:disabled:cursor-not-allowed tw:disabled:opacity-70"
+                      className="action-button primary tw:flex tw:h-12 tw:w-1/2 tw:items-center tw:justify-center tw:rounded-xl tw:px-4 tw:py-3.5 tw:text-[0.98rem] tw:font-semibold tw:disabled:cursor-not-allowed"
                     >
                       {forgotPasswordIsSubmitting ? 'Requesting...' : 'Request OTP'}
                     </button>
@@ -2638,7 +2640,7 @@ function LoginScreen({ onLogin, portalAccess }) {
 
     if (forgotPasswordStep === 'otp') {
       return (
-        <div className="tw:relative tw:flex tw:w-full tw:flex-col tw:bg-transparent tw:text-white">
+        <div className="tw:relative tw:flex tw:w-full tw:flex-col tw:bg-transparent tw:text-[#163247]">
           <motion.div
             variants={formVariants}
             initial={reduceMotion ? false : 'hidden'}
@@ -2647,21 +2649,21 @@ function LoginScreen({ onLogin, portalAccess }) {
           >
             <motion.div
               variants={itemVariants}
-              className="tw:w-full tw:text-white"
+              className="tw:w-full tw:text-[#163247]"
             >
               <div className="tw:space-y-6">
                 <motion.div
                   variants={itemVariants}
                   className="tw:flex tw:flex-col tw:items-center tw:gap-4 tw:text-center"
                 >
-                  <div className="tw:flex tw:h-24 tw:w-24 tw:items-center tw:justify-center tw:rounded-3xl tw:border tw:border-white/[0.08] tw:bg-white/[0.02] tw:backdrop-blur-xl tw:shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_10px_20px_rgba(0,0,0,0.4)]">
-                    <Clock3 className="tw:h-14 tw:w-14 tw:text-white" />
+                  <div className="tw:flex tw:h-24 tw:w-24 tw:items-center tw:justify-center tw:rounded-3xl tw:border tw:border-[rgba(105,143,176,0.2)] tw:bg-white/60 tw:shadow-sm">
+                    <Clock3 className="tw:h-14 tw:w-14 tw:text-[#2f6db5]" />
                   </div>
                   <div className="tw:space-y-2">
-                    <h1 className="tw:font-display tw:text-3xl tw:font-bold tw:leading-none tw:tracking-[-0.05em] tw:text-white">
+                    <h1 className="tw:font-display tw:text-3xl tw:font-bold tw:leading-none tw:tracking-[-0.05em] tw:text-[#163247]">
                       Verify OTP
                     </h1>
-                    <p className="tw:text-sm tw:font-medium tw:text-white/50">
+                    <p className="tw:text-sm tw:font-medium tw:text-neutral-500">
                       We've sent a 6-digit verification code to {forgotPasswordMaskedEmail || forgotPasswordEmail}
                     </p>
                   </div>
@@ -2674,7 +2676,7 @@ function LoginScreen({ onLogin, portalAccess }) {
                   className="tw:space-y-5"
                 >
                   <motion.div variants={itemVariants} className="tw:space-y-2">
-                    <label className="tw:block tw:text-[0.84rem] tw:font-semibold tw:text-white/60 tw:tracking-wide tw:text-center">
+                    <label className="tw:block tw:text-[0.84rem] tw:font-semibold tw:text-neutral-700 tw:tracking-wide tw:text-center">
                       Enter 6-Digit OTP
                     </label>
                     <div className="tw:flex tw:justify-center">
@@ -2690,15 +2692,15 @@ function LoginScreen({ onLogin, portalAccess }) {
                       />
                     </div>
                     {forgotPasswordFieldErrors.otp ? (
-                      <p className="tw:text-[0.82rem] tw:font-medium tw:text-red-400 tw:text-center">{forgotPasswordFieldErrors.otp}</p>
+                      <p className="tw:text-[0.82rem] tw:font-medium tw:text-red-500 tw:text-center tw:mt-1">{forgotPasswordFieldErrors.otp}</p>
                     ) : null}
                   </motion.div>
 
-                  <motion.div variants={itemVariants} className="tw:text-center tw:text-sm tw:font-medium tw:text-white/40">
+                  <motion.div variants={itemVariants} className="tw:text-center tw:text-sm tw:font-medium tw:text-neutral-500">
                     {forgotPasswordSecondsLeft > 0 ? (
-                      <span>OTP expires in: <strong className="tw:text-white/70">{Math.floor(forgotPasswordSecondsLeft / 60)}:{String(forgotPasswordSecondsLeft % 60).padStart(2, '0')}</strong></span>
+                      <span>OTP expires in: <strong className="tw:text-[#2f6db5]">{Math.floor(forgotPasswordSecondsLeft / 60)}:{String(forgotPasswordSecondsLeft % 60).padStart(2, '0')}</strong></span>
                     ) : (
-                      <span className="tw:text-red-400">OTP has expired. Please request a new code.</span>
+                      <span className="tw:text-red-500">OTP has expired. Please request a new code.</span>
                     )}
                   </motion.div>
 
@@ -2707,7 +2709,7 @@ function LoginScreen({ onLogin, portalAccess }) {
                       type="button"
                       onClick={handleForgotPasswordRequest}
                       disabled={forgotPasswordSecondsLeft > 0 || forgotPasswordIsSubmitting}
-                      className="tw:border-none tw:bg-transparent tw:p-0 tw:text-[0.92rem] tw:font-semibold tw:text-white/40 tw:underline tw:underline-offset-4 tw:transition tw:duration-200 hover:tw:text-white/70 disabled:tw:opacity-55"
+                      className="tw:border-none tw:bg-transparent tw:p-0 tw:text-[0.92rem] tw:font-semibold tw:text-neutral-500 tw:underline tw:underline-offset-4 tw:transition tw:duration-200 hover:tw:text-[#2f6db5] disabled:tw:opacity-55"
                     >
                       Resend OTP
                     </button>
@@ -2717,7 +2719,8 @@ function LoginScreen({ onLogin, portalAccess }) {
                     <motion.div
                       variants={itemVariants}
                       role="alert"
-                      className="tw:rounded-xl tw:border tw:border-red-500/[0.15] tw:bg-red-500/[0.05] tw:px-4 tw:py-3 tw:text-[0.92rem] tw:font-medium tw:text-red-400 tw:backdrop-blur-md"
+                      className="form-error tw:mb-3"
+                      style={{ textAlign: 'center', fontWeight: 500 }}
                     >
                       {forgotPasswordError}
                     </motion.div>
@@ -2732,14 +2735,14 @@ function LoginScreen({ onLogin, portalAccess }) {
                         setForgotPasswordError('')
                       }}
                       disabled={forgotPasswordIsSubmitting}
-                      className="tw:flex tw:h-12 tw:w-1/2 tw:items-center tw:justify-center tw:rounded-xl tw:border tw:border-white/[0.1] tw:bg-white/[0.02] tw:px-4 tw:py-3.5 tw:text-[0.98rem] tw:font-semibold tw:text-white/60 tw:transition tw:duration-200 hover:tw:bg-white/[0.08] hover:tw:text-white tw:disabled:cursor-not-allowed tw:disabled:opacity-55"
+                      className="tw:flex tw:h-12 tw:w-1/2 tw:items-center tw:justify-center tw:rounded-xl tw:border tw:border-[rgba(105,143,176,0.28)] tw:bg-[rgba(255,255,255,0.74)] tw:text-[#48637c] tw:transition tw:duration-200 hover:tw:bg-white hover:tw:text-[#2f6db5] focus-visible:tw:outline-none disabled:tw:cursor-not-allowed"
                     >
                       Back
                     </button>
                     <button
                       type="submit"
                       disabled={forgotPasswordIsSubmitting || forgotPasswordOtp.length !== 6}
-                      className="tw:flex tw:h-12 tw:w-1/2 tw:items-center tw:justify-center tw:rounded-xl tw:border tw:border-white/[0.18] tw:bg-white/[0.06] tw:backdrop-blur-xl tw:px-4 tw:py-3.5 tw:text-[0.98rem] tw:font-semibold tw:text-white tw:transition tw:duration-200 hover:tw:bg-white/[0.12] hover:tw:scale-[1.01] active:tw:scale-[0.99] tw:disabled:cursor-not-allowed tw:disabled:opacity-70"
+                      className="action-button primary tw:flex tw:h-12 tw:w-1/2 tw:items-center tw:justify-center tw:rounded-xl tw:px-4 tw:py-3.5 tw:text-[0.98rem] tw:font-semibold tw:disabled:cursor-not-allowed"
                     >
                       {forgotPasswordIsSubmitting ? 'Verifying...' : 'Verify OTP'}
                     </button>
@@ -2754,7 +2757,7 @@ function LoginScreen({ onLogin, portalAccess }) {
 
     if (forgotPasswordStep === 'reset') {
       return (
-        <div className="tw:relative tw:flex tw:w-full tw:flex-col tw:bg-transparent tw:text-white">
+        <div className="tw:relative tw:flex tw:w-full tw:flex-col tw:bg-transparent tw:text-[#163247]">
           <motion.div
             variants={formVariants}
             initial={reduceMotion ? false : 'hidden'}
@@ -2763,21 +2766,21 @@ function LoginScreen({ onLogin, portalAccess }) {
           >
             <motion.div
               variants={itemVariants}
-              className="tw:w-full tw:text-white"
+              className="tw:w-full tw:text-[#163247]"
             >
               <div className="tw:space-y-6">
                 <motion.div
                   variants={itemVariants}
                   className="tw:flex tw:flex-col tw:items-center tw:gap-4 tw:text-center"
                 >
-                  <div className="tw:flex tw:h-24 tw:w-24 tw:items-center tw:justify-center tw:rounded-3xl tw:border tw:border-white/[0.08] tw:bg-white/[0.02] tw:backdrop-blur-xl tw:shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_10px_20px_rgba(0,0,0,0.4)]">
-                    <KeyRound className="tw:h-14 tw:w-14 tw:text-white" />
+                  <div className="tw:flex tw:h-24 tw:w-24 tw:items-center tw:justify-center tw:rounded-3xl tw:border tw:border-[rgba(105,143,176,0.2)] tw:bg-white/60 tw:shadow-sm">
+                    <KeyRound className="tw:h-14 tw:w-14 tw:text-[#2f6db5]" />
                   </div>
                   <div className="tw:space-y-2">
-                    <h1 className="tw:font-display tw:text-3xl tw:font-bold tw:leading-none tw:tracking-[-0.05em] tw:text-white">
+                    <h1 className="tw:font-display tw:text-3xl tw:font-bold tw:leading-none tw:tracking-[-0.05em] tw:text-[#163247]">
                       Reset Password
                     </h1>
-                    <p className="tw:text-sm tw:font-medium tw:text-white/50">
+                    <p className="tw:text-sm tw:font-medium tw:text-neutral-500">
                       Please choose a secure new password for your account
                     </p>
                   </div>
@@ -2790,58 +2793,64 @@ function LoginScreen({ onLogin, portalAccess }) {
                   className="tw:space-y-5"
                 >
                   <motion.div variants={itemVariants} className="tw:space-y-2">
-                    <label htmlFor="new-password" className="tw:block tw:text-[0.84rem] tw:font-semibold tw:text-white/60 tw:tracking-wide">
+                    <label htmlFor="new-password" className="tw:block tw:text-[0.84rem] tw:font-semibold tw:text-neutral-700 tw:tracking-wide">
                       New Password
                     </label>
-                    <PasswordInput
-                      id="new-password"
-                      value={forgotPasswordNewPassword}
-                      onChange={(val) => {
-                        setForgotPasswordNewPassword(val)
-                        setForgotPasswordFieldErrors({})
-                        setForgotPasswordError('')
-                      }}
-                      placeholder="Enter your new password"
-                      autoComplete="new-password"
-                      disabled={forgotPasswordIsSubmitting}
-                      ariaInvalid={Boolean(forgotPasswordFieldErrors.newPassword)}
-                      wrapperClassName="tw:relative tw:z-[1]"
-                      className={[
-                        'tw:relative tw:w-full tw:h-12 tw:rounded-xl tw:border tw:bg-black/[0.25] tw:px-4 tw:py-3.5 tw:pr-12 tw:text-[0.98rem] tw:text-white tw:tracking-wide tw:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] tw:outline-none tw:transition tw:duration-200 tw:placeholder:text-white/30 tw:focus:border-white/[0.2] tw:focus:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4),0_0_20px_rgba(255,255,255,0.04)] tw:disabled:cursor-not-allowed tw:disabled:opacity-65',
-                        forgotPasswordFieldErrors.newPassword ? 'tw:border-red-500/40' : 'tw:border-white/[0.04]',
-                      ].join(' ')}
-                      toggleClassName="tw:absolute tw:right-3 tw:top-0 tw:bottom-0 tw:my-auto tw:grid tw:h-9 tw:w-9 tw:place-items-center tw:rounded-lg tw:text-white/40 tw:transition tw:duration-200 hover:tw:text-white/70 focus-visible:tw:outline-none disabled:tw:cursor-not-allowed"
-                    />
+                    <div className="tw:group tw:relative tw:mt-1.5">
+                      <div className="tw:absolute tw:inset-0 tw:rounded-xl tw:bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(227,239,251,0.72))]" />
+                      <PasswordInput
+                        id="new-password"
+                        value={forgotPasswordNewPassword}
+                        onChange={(val) => {
+                          setForgotPasswordNewPassword(val)
+                          setForgotPasswordFieldErrors({})
+                          setForgotPasswordError('')
+                        }}
+                        placeholder="Enter your new password"
+                        autoComplete="new-password"
+                        disabled={forgotPasswordIsSubmitting}
+                        ariaInvalid={Boolean(forgotPasswordFieldErrors.newPassword)}
+                        wrapperClassName="tw:relative tw:z-[1]"
+                        className={[
+                          'tw:relative tw:w-full tw:h-12 tw:rounded-xl tw:border tw:bg-transparent tw:px-4 tw:py-3.5 tw:pr-12 tw:text-[0.98rem] tw:outline-none tw:transition tw:duration-200',
+                          forgotPasswordFieldErrors.newPassword ? 'field-invalid' : 'tw:border-[#173449]/10',
+                        ].join(' ')}
+                        toggleClassName="tw:absolute tw:right-3 tw:top-0 tw:bottom-0 tw:my-auto tw:grid tw:h-9 tw:w-9 tw:place-items-center tw:rounded-lg tw:border tw:border-[rgba(105,143,176,0.28)] tw:bg-[rgba(255,255,255,0.74)] tw:text-[#48637c] tw:transition tw:duration-200 hover:tw:bg-white hover:tw:text-[#2f6db5] focus-visible:tw:outline-none disabled:tw:cursor-not-allowed"
+                      />
+                    </div>
                     {forgotPasswordFieldErrors.newPassword ? (
-                      <p className="tw:text-[0.82rem] tw:font-medium tw:text-red-400">{forgotPasswordFieldErrors.newPassword}</p>
+                      <p className="tw:text-[0.82rem] tw:font-medium tw:text-red-500 tw:mt-1">{forgotPasswordFieldErrors.newPassword}</p>
                     ) : null}
                   </motion.div>
 
                   <motion.div variants={itemVariants} className="tw:space-y-2">
-                    <label htmlFor="confirm-password" className="tw:block tw:text-[0.84rem] tw:font-semibold tw:text-white/60 tw:tracking-wide">
+                    <label htmlFor="confirm-password" className="tw:block tw:text-[0.84rem] tw:font-semibold tw:text-neutral-700 tw:tracking-wide">
                       Confirm Password
                     </label>
-                    <PasswordInput
-                      id="confirm-password"
-                      value={forgotPasswordConfirmPassword}
-                      onChange={(val) => {
-                        setForgotPasswordConfirmPassword(val)
-                        setForgotPasswordFieldErrors({})
-                        setForgotPasswordError('')
-                      }}
-                      placeholder="Confirm your new password"
-                      autoComplete="new-password"
-                      disabled={forgotPasswordIsSubmitting}
-                      ariaInvalid={Boolean(forgotPasswordFieldErrors.confirmPassword)}
-                      wrapperClassName="tw:relative tw:z-[1]"
-                      className={[
-                        'tw:relative tw:w-full tw:h-12 tw:rounded-xl tw:border tw:bg-black/[0.25] tw:px-4 tw:py-3.5 tw:pr-12 tw:text-[0.98rem] tw:text-white tw:tracking-wide tw:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] tw:outline-none tw:transition tw:duration-200 tw:placeholder:text-white/30 tw:focus:border-white/[0.2] tw:focus:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4),0_0_20px_rgba(255,255,255,0.04)] tw:disabled:cursor-not-allowed tw:disabled:opacity-65',
-                        forgotPasswordFieldErrors.confirmPassword ? 'tw:border-red-500/40' : 'tw:border-white/[0.04]',
-                      ].join(' ')}
-                      toggleClassName="tw:absolute tw:right-3 tw:top-0 tw:bottom-0 tw:my-auto tw:grid tw:h-9 tw:w-9 tw:place-items-center tw:rounded-lg tw:text-white/40 tw:transition tw:duration-200 hover:tw:text-white/70 focus-visible:tw:outline-none disabled:tw:cursor-not-allowed"
-                    />
+                    <div className="tw:group tw:relative tw:mt-1.5">
+                      <div className="tw:absolute tw:inset-0 tw:rounded-xl tw:bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(227,239,251,0.72))]" />
+                      <PasswordInput
+                        id="confirm-password"
+                        value={forgotPasswordConfirmPassword}
+                        onChange={(val) => {
+                          setForgotPasswordConfirmPassword(val)
+                          setForgotPasswordFieldErrors({})
+                          setForgotPasswordError('')
+                        }}
+                        placeholder="Confirm your new password"
+                        autoComplete="new-password"
+                        disabled={forgotPasswordIsSubmitting}
+                        ariaInvalid={Boolean(forgotPasswordFieldErrors.confirmPassword)}
+                        wrapperClassName="tw:relative tw:z-[1]"
+                        className={[
+                          'tw:relative tw:w-full tw:h-12 tw:rounded-xl tw:border tw:bg-transparent tw:px-4 tw:py-3.5 tw:pr-12 tw:text-[0.98rem] tw:outline-none tw:transition tw:duration-200',
+                          forgotPasswordFieldErrors.confirmPassword ? 'field-invalid' : 'tw:border-[#173449]/10',
+                        ].join(' ')}
+                        toggleClassName="tw:absolute tw:right-3 tw:top-0 tw:bottom-0 tw:my-auto tw:grid tw:h-9 tw:w-9 tw:place-items-center tw:rounded-lg tw:border tw:border-[rgba(105,143,176,0.28)] tw:bg-[rgba(255,255,255,0.74)] tw:text-[#48637c] tw:transition tw:duration-200 hover:tw:bg-white hover:tw:text-[#2f6db5] focus-visible:tw:outline-none disabled:tw:cursor-not-allowed"
+                      />
+                    </div>
                     {forgotPasswordFieldErrors.confirmPassword ? (
-                      <p className="tw:text-[0.82rem] tw:font-medium tw:text-red-400">{forgotPasswordFieldErrors.confirmPassword}</p>
+                      <p className="tw:text-[0.82rem] tw:font-medium tw:text-red-500 tw:mt-1">{forgotPasswordFieldErrors.confirmPassword}</p>
                     ) : null}
                   </motion.div>
 
@@ -2849,7 +2858,8 @@ function LoginScreen({ onLogin, portalAccess }) {
                     <motion.div
                       variants={itemVariants}
                       role="alert"
-                      className="tw:rounded-xl tw:border tw:border-red-500/[0.15] tw:bg-red-500/[0.05] tw:px-4 tw:py-3 tw:text-[0.92rem] tw:font-medium tw:text-red-400 tw:backdrop-blur-md"
+                      className="form-error tw:mb-3"
+                      style={{ textAlign: 'center', fontWeight: 500 }}
                     >
                       {forgotPasswordError}
                     </motion.div>
@@ -2865,14 +2875,14 @@ function LoginScreen({ onLogin, portalAccess }) {
                         setForgotPasswordError('')
                       }}
                       disabled={forgotPasswordIsSubmitting}
-                      className="tw:flex tw:h-12 tw:w-1/2 tw:items-center tw:justify-center tw:rounded-xl tw:border tw:border-white/[0.1] tw:bg-white/[0.02] tw:px-4 tw:py-3.5 tw:text-[0.98rem] tw:font-semibold tw:text-white/60 tw:transition tw:duration-200 hover:tw:bg-white/[0.08] hover:tw:text-white tw:disabled:cursor-not-allowed tw:disabled:opacity-55"
+                      className="tw:flex tw:h-12 tw:w-1/2 tw:items-center tw:justify-center tw:rounded-xl tw:border tw:border-[rgba(105,143,176,0.28)] tw:bg-[rgba(255,255,255,0.74)] tw:text-[#48637c] tw:transition tw:duration-200 hover:tw:bg-white hover:tw:text-[#2f6db5] focus-visible:tw:outline-none disabled:tw:cursor-not-allowed"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
                       disabled={forgotPasswordIsSubmitting || !forgotPasswordNewPassword || !forgotPasswordConfirmPassword}
-                      className="tw:flex tw:h-12 tw:w-1/2 tw:items-center tw:justify-center tw:rounded-xl tw:border tw:border-white/[0.18] tw:bg-white/[0.06] tw:backdrop-blur-xl tw:px-4 tw:py-3.5 tw:text-[0.98rem] tw:font-semibold tw:text-white tw:transition tw:duration-200 hover:tw:bg-white/[0.12] hover:tw:scale-[1.01] active:tw:scale-[0.99] tw:disabled:cursor-not-allowed tw:disabled:opacity-70"
+                      className="action-button primary tw:flex tw:h-12 tw:w-1/2 tw:items-center tw:justify-center tw:rounded-xl tw:px-4 tw:py-3.5 tw:text-[0.98rem] tw:font-semibold tw:disabled:cursor-not-allowed"
                     >
                       {forgotPasswordIsSubmitting ? 'Resetting...' : 'Reset Password'}
                     </button>
@@ -2914,22 +2924,44 @@ function LoginScreen({ onLogin, portalAccess }) {
   }
 
   return (
-    <div className="tw:relative tw:flex tw:min-h-screen tw:items-center tw:justify-center tw:bg-[#040406] tw:px-4 tw:font-sans tw:antialiased tw:selection:bg-white/20 tw:overflow-hidden">
-      {/* Refraction WebGL Aurora Background */}
-      <div className="tw:absolute tw:inset-0 tw:z-0 tw:pointer-events-none tw:transform-gpu">
-        <Aurora 
-          colorStops={['#A855F7', '#6366F1', '#EC4899']}
-          amplitude={1.2}
-          blend={0.5}
-          speed={0.5}
-        />
+    <div className="auth-shell" style={{ minHeight: '100vh', background: 'var(--page-bg)' }}>
+      <div className="auth-background" aria-hidden="true">
+        <div className="bg-orb bg-orb-left" />
+        <div className="bg-orb bg-orb-right" />
+        <div className="bg-grid" />
+        
+        <div className="floating-card building-card">
+          <span className="floating-label">Campus Block</span>
+          <div className="building-roof" />
+          <div className="building-body">
+            <span /><span /><span /><span /><span /><span />
+          </div>
+        </div>
+        
+        <div className="floating-card pass-card">
+          <span className="floating-label">Gatepass</span>
+          <div className="pass-lines">
+            <span /><span /><span />
+          </div>
+          <div className="pass-badge" />
+        </div>
+        
+        <div className="floating-card gate-card">
+          <span className="floating-label">Security Gate</span>
+          <div className="gate-frame">
+            <span /><span /><span />
+          </div>
+        </div>
+        
+        <div className="floating-card path-card">
+          <span className="floating-label">Campus Flow</span>
+          <div className="path-lines">
+            <span /><span />
+          </div>
+        </div>
       </div>
 
-      {/* Apple Glass Container */}
-      <div className="tw:relative tw:w-full tw:max-w-md tw:rounded-2xl tw:border tw:border-white/[0.08] tw:bg-white/[0.015] tw:p-8 tw:text-white tw:shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_25px_50px_-12px_rgba(0,0,0,0.7)] tw:backdrop-blur-2xl tw:overflow-hidden tw:z-10">
-        {/* Specular Surface Gloss Overlay */}
-        <div className="tw:absolute tw:inset-0 tw:bg-gradient-to-tr tw:from-white/[0.02] tw:via-transparent tw:to-white/[0.01] tw:pointer-events-none" />
-        
+      <div className="auth-panel" style={{ zIndex: 10 }}>
         {renderRightPanel()}
       </div>
     </div>
@@ -3643,21 +3675,21 @@ function GatepassAvailabilityPanel({
           {approvalEnabled ? 'Available' : 'Busy / On leave'}
         </span>
       </div>
-      <div className="availability-card-actions">
-        <button
-          type="button"
-          className={`availability-toggle ${approvalEnabled ? 'enabled' : 'disabled'}`}
-          onClick={handleToggleAvailability}
-          disabled={isSaving}
-          aria-pressed={approvalEnabled}
-          aria-label={`${roleLabel} availability switch`}
-        >
-          <span className="availability-toggle-track">
-            <span className="availability-toggle-thumb" />
-          </span>
-          <span>{isSaving ? 'Updating...' : approvalEnabled ? 'Switch OFF' : 'Switch ON'}</span>
-        </button>
-        <p className="field-hint">
+      <div className="availability-card-actions" style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+        <label className="switch">
+          <input
+            type="checkbox"
+            checked={approvalEnabled}
+            onChange={handleToggleAvailability}
+            disabled={isSaving}
+            aria-label={`${roleLabel} availability switch`}
+          />
+          <span className="slider" />
+        </label>
+        <span style={{ fontSize: '0.92rem', fontWeight: 600, color: 'var(--text)' }}>
+          {isSaving ? 'Updating...' : approvalEnabled ? 'Review Active' : 'Bypassed'}
+        </span>
+        <p className="field-hint" style={{ width: '100%', marginTop: '0.5rem' }}>
           {locationLabel === 'dashboard'
             ? 'Use this switch directly from the dashboard when you become unavailable.'
             : 'This setting controls automatic gatepass routing for student requests.'}

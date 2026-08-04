@@ -5626,30 +5626,102 @@ button {
   }
 
   .topbar {
-    align-items: flex-start;
+    position: relative;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    height: 5.5rem !important;
+    padding: 0.5rem 1rem !important;
   }
 
-  .topbar-copy,
-  .topbar-brand-wrap,
-  .dashboard-header-branding,
-  .notification-page-item-main,
-  .notification-page-item-meta {
-    width: 100%;
+  .topbar-copy {
+    display: flex;
+    justify-content: flex-start;
+    width: auto;
   }
 
   .topbar-leading {
-    grid-template-columns: auto minmax(0, 1fr);
-    width: 100%;
-    align-items: flex-start;
+    display: flex !important;
+    justify-content: flex-start !important;
+    align-items: center !important;
+    width: auto !important;
+    gap: 0.75rem !important; /* Spacing between hamburger button and logo */
+  }
+
+  /* Hamburger button aligned to the left */
+  .topbar-leading .hamburger-button {
+    position: static !important;
+    transform: none !important;
+    z-index: 10;
+    flex-shrink: 0;
+  }
+
+  /* Brand container aligned next to hamburger */
+  .topbar-brand-wrap,
+  .dashboard-header-branding {
+    position: static !important;
+    transform: none !important;
+    width: auto !important;
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    z-index: 5;
+  }
+
+  /* Hide context metadata in mobile topbar to avoid layout distortion */
+  .dashboard-header-branding-meta,
+  .dashboard-header-context {
+    display: none !important;
+  }
+
+  /* Center the elements horizontally and vertically on the same baseline */
+  .topbar-brand-wrap .brand,
+  .dashboard-header-branding .brand {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 4px !important; /* Tight spacing gap between logo and text */
+  }
+
+  /* Prominent logo size: 72px height/width on mobile */
+  .topbar-brand-wrap .brand-logo,
+  .dashboard-header-branding .brand-logo {
+    height: 72px !important;
+    width: 72px !important;
+    max-height: 72px !important;
+    max-width: 72px !important;
+    object-fit: contain !important;
+    margin: 0 !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* Vertical optical alignment for wordmark text */
+  .topbar-brand-wrap .brand-title,
+  .dashboard-header-branding .brand-title {
+    font-size: 1.3rem !important;
+    font-weight: 700 !important;
+    line-height: 1 !important;
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    color: #163247 !important;
+    transform: translateY(1.5px) !important; /* optical alignment tweak */
+  }
+
+  /* Notification Bell on the far right */
+  .topbar-actions {
+    position: absolute !important;
+    right: 1rem !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    margin: 0 !important;
+    z-index: 10;
   }
 
   .topbar .topbar-supporting-copy {
-    display: block;
-    white-space: normal;
-  }
-
-  .dashboard-header-branding .brand {
-    flex-wrap: wrap;
+    display: none !important;
   }
 
   .notification-page-item-meta,
@@ -6784,21 +6856,22 @@ html, body, #root, .admin-shell {
 
 /* Scanner Modal Redesign using DwarPal Exact Colors */
 /* Primary Navy Background: #10263e, Primary Blue Accent: #2872a1, Surface/Light Card: #f6fbff */
+/* Scanner Modal Redesign using DwarPal Exact Colors */
 .scanner-modal-card {
-  background: linear-gradient(180deg, #10263e 0%, #0a1827 100%) !important;
-  border: 1px solid rgba(40, 114, 161, 0.2) !important;
-  color: #f6fbff !important;
-  box-shadow: 0 30px 60px rgba(16, 38, 62, 0.4) !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(240, 246, 252, 0.96) 100%) !important;
+  border: 1px solid rgba(105, 143, 176, 0.22) !important;
+  color: #163247 !important;
+  box-shadow: 0 30px 60px rgba(22, 50, 71, 0.16) !important;
 }
 .scanner-modal-card .eyebrow {
-  color: rgba(96, 165, 250, 0.7);
+  color: #2f6db5;
 }
 .scanner-modal-card h3 {
-  color: #ffffff;
-  font-family: 'Syne', sans-serif;
+  color: #163247;
+  font-family: inherit;
 }
 .scanner-modal-card p {
-  color: #62788d !important;
+  color: #5d7183 !important;
 }
 .scanner-modal-viewport {
   min-height: 350px !important;
@@ -6806,7 +6879,7 @@ html, body, #root, .admin-shell {
   aspect-ratio: 1;
   margin: 1.5rem auto !important;
   border: 2px solid #2872a1 !important;
-  box-shadow: 0 0 30px rgba(40, 114, 161, 0.25) !important;
+  box-shadow: 0 0 30px rgba(40, 114, 161, 0.15) !important;
   overflow: hidden;
   border-radius: 32px !important;
 }
@@ -6814,7 +6887,7 @@ html, body, #root, .admin-shell {
   width: 80% !important;
   height: 80% !important;
   border-radius: 24px;
-  box-shadow: 0 0 0 999px rgba(16, 38, 62, 0.65) !important;
+  box-shadow: 0 0 0 999px rgba(105, 143, 176, 0.5) !important;
 }
 .scan-line {
   position: absolute;
@@ -6859,62 +6932,62 @@ html, body, #root, .admin-shell {
   }
 }
 .scanner-modal-status {
-  background: rgba(40, 114, 161, 0.1) !important;
-  border: 1px solid rgba(40, 114, 161, 0.2) !important;
-  color: #f6fbff !important;
+  background: rgba(40, 114, 161, 0.08) !important;
+  border: 1px solid rgba(40, 114, 161, 0.16) !important;
+  color: #163247 !important;
 }
 .scanner-modal-close svg {
-  color: #62788d;
+  color: #5d7183;
 }
 .scanner-modal-close:hover svg {
-  color: #ffffff;
+  color: #163247;
 }
 
-/* Dark mode overrides for buttons in Scanner Modal */
+/* Light mode overrides for buttons in Scanner Modal */
 .scanner-modal-card .action-button.primary {
-  background: linear-gradient(135deg, #2872a1, #1f5a80) !important;
-  border-color: rgba(31, 90, 128, 0.4) !important;
+  background: #2f6db5 !important;
+  border-color: #2f6db5 !important;
   color: #ffffff !important;
-  box-shadow: var(--control-shadow) !important;
+  box-shadow: 0 4px 14px rgba(47, 109, 181, 0.25) !important;
 }
 .scanner-modal-card .action-button.primary:hover {
-  background: linear-gradient(135deg, #1f5a80, #16425d) !important;
+  background: #1d5290 !important;
+  border-color: #1d5290 !important;
 }
 .scanner-modal-card .action-button.secondary {
-  background: rgba(246, 251, 255, 0.05) !important;
-  border: 1px solid rgba(40, 114, 161, 0.25) !important;
-  color: #f6fbff !important;
+  background: #ffffff !important;
+  border: 1px solid rgba(105, 143, 176, 0.28) !important;
+  color: #163247 !important;
   box-shadow: none !important;
 }
 .scanner-modal-card .action-button.secondary:hover {
-  background: rgba(246, 251, 255, 0.1) !important;
-  border-color: rgba(40, 114, 161, 0.4) !important;
+  background: #f4f8fc !important;
+  border-color: rgba(105, 143, 176, 0.4) !important;
 }
 
 /* Premium Gatepass QR Modal Redesign using DwarPal Exact Colors */
-/* Primary Navy Background: #10263e, Primary Blue Accent: #2872a1, Surface/Light Card: #f6fbff */
 .gatepass-qr-modal-card {
-  background: linear-gradient(135deg, #10263e 0%, #0a1827 100%) !important;
-  border: 1px solid rgba(40, 114, 161, 0.2) !important;
-  color: #f6fbff !important;
-  box-shadow: 0 30px 60px rgba(16, 38, 62, 0.4) !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(240, 246, 252, 0.96) 100%) !important;
+  border: 1px solid rgba(105, 143, 176, 0.22) !important;
+  color: #163247 !important;
+  box-shadow: 0 30px 60px rgba(22, 50, 71, 0.16) !important;
 }
 .gatepass-qr-modal-card h3 {
-  color: #ffffff !important;
-  font-family: 'Syne', sans-serif;
+  color: #163247 !important;
+  font-family: inherit;
   font-weight: 700;
 }
 .gatepass-qr-modal-card span {
-  color: rgba(96, 165, 250, 0.8) !important;
+  color: #2f6db5 !important;
 }
 .gatepass-qr-modal-card .modal-header {
-  border-bottom: 1px solid rgba(40, 114, 161, 0.15) !important;
+  border-bottom: 1px solid rgba(105, 143, 176, 0.15) !important;
 }
 .gatepass-qr-modal-card .modal-header button svg {
-  color: #62788d;
+  color: #5d7183;
 }
 .gatepass-qr-modal-card .modal-header button:hover svg {
-  color: #ffffff;
+  color: #163247;
 }
 
 /* Glowing frame stage */
@@ -6922,9 +6995,9 @@ html, body, #root, .admin-shell {
   position: relative;
   padding: 1.25rem;
   border-radius: 32px;
-  background: rgba(246, 251, 255, 0.02);
-  border: 1px solid rgba(40, 114, 161, 0.12);
-  box-shadow: 0 0 35px rgba(40, 114, 161, 0.18);
+  background: rgba(40, 114, 161, 0.02);
+  border: 1px solid rgba(105, 143, 176, 0.12);
+  box-shadow: 0 0 35px rgba(40, 114, 161, 0.08);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -6940,15 +7013,15 @@ html, body, #root, .admin-shell {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  background: #10263e;
-  border: 1px solid #2872a1;
+  background: #ffffff;
+  border: 1px solid rgba(105, 143, 176, 0.28);
   padding: 0.35rem 0.95rem;
   border-radius: 999px;
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.06em;
-  color: #60a5fa;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+  color: #2872a1;
+  box-shadow: 0 4px 15px rgba(105, 143, 176, 0.15);
   z-index: 10;
 }
 .live-indicator-dot {
@@ -6970,14 +7043,14 @@ html, body, #root, .admin-shell {
   }
 }
 .gatepass-qr-stage {
-  background: #f6fbff !important; /* exact light card background */
+  background: #ffffff !important; /* exact light card background */
   padding: 1.25rem !important;
   border-radius: 24px !important;
   border: 3px solid #2872a1 !important;
-  box-shadow: 0 8px 32px rgba(40, 114, 161, 0.25) !important;
+  box-shadow: 0 8px 32px rgba(40, 114, 161, 0.12) !important;
 }
 .secure-qr-canvas-shell {
-  background: #f6fbff !important;
+  background: #ffffff !important;
   box-shadow: none !important;
   border-radius: 12px !important;
 }
@@ -6991,9 +7064,9 @@ html, body, #root, .admin-shell {
   gap: 0.75rem;
   padding: 0.95rem;
   border-radius: 16px;
-  background: rgba(246, 251, 255, 0.03);
-  border-top: 1px solid rgba(40, 114, 161, 0.2);
-  border-bottom: 1px solid rgba(40, 114, 161, 0.2);
+  background: rgba(40, 114, 161, 0.02);
+  border-top: 1px solid rgba(105, 143, 176, 0.18);
+  border-bottom: 1px solid rgba(105, 143, 176, 0.18);
   margin-bottom: 1.5rem;
 }
 .info-item {
@@ -7003,52 +7076,52 @@ html, body, #root, .admin-shell {
   font-size: 0.85rem;
 }
 .info-item .label {
-  color: #62788d;
+  color: #5d7183;
 }
 .info-item .value {
-  color: #ffffff;
+  color: #163247;
   font-weight: 600;
 }
 .info-divider {
   width: 1px;
   height: 12px;
-  background: rgba(40, 114, 161, 0.3) !important;
+  background: rgba(105, 143, 176, 0.3) !important;
 }
 .gatepass-qr-footer {
-  border-top: 1px solid rgba(40, 114, 161, 0.15) !important;
+  border-top: 1px solid rgba(105, 143, 176, 0.15) !important;
   padding-top: 1rem !important;
 }
 .gatepass-qr-footer-copy span {
-  color: #62788d !important;
+  color: #5d7183 !important;
   font-size: 0.88rem;
 }
 .gatepass-qr-limit-note span {
-  color: #62788d !important;
+  color: #5d7183 !important;
   font-size: 0.8rem;
 }
 .gatepass-qr-limit-note svg {
   color: #eab308;
 }
 
-/* Dark mode overrides for buttons in QR Modal */
+/* Light mode overrides for buttons in QR Modal */
 .gatepass-qr-modal-card .action-button.primary {
-  background: linear-gradient(135deg, #2872a1, #1f5a80) !important;
-  border-color: rgba(31, 90, 128, 0.4) !important;
+  background: #2f6db5 !important;
+  border-color: #2f6db5 !important;
   color: #ffffff !important;
-  box-shadow: var(--control-shadow) !important;
+  box-shadow: 0 4px 14px rgba(47, 109, 181, 0.25) !important;
 }
 .gatepass-qr-modal-card .action-button.primary:hover {
-  background: linear-gradient(135deg, #1f5a80, #16425d) !important;
+  background: #1d5290 !important;
 }
 .gatepass-qr-modal-card .action-button.secondary {
-  background: rgba(246, 251, 255, 0.05) !important;
-  border: 1px solid rgba(40, 114, 161, 0.25) !important;
-  color: #f6fbff !important;
+  background: #ffffff !important;
+  border: 1px solid rgba(105, 143, 176, 0.25) !important;
+  color: #163247 !important;
   box-shadow: none !important;
 }
 .gatepass-qr-modal-card .action-button.secondary:hover {
-  background: rgba(246, 251, 255, 0.1) !important;
-  border-color: rgba(40, 114, 161, 0.4) !important;
+  background: #f4f8fc !important;
+  border-color: rgba(105, 143, 176, 0.4) !important;
 }
 
 /* ── Security Station Compact Card & Light Theme Controls ────────────────── */
@@ -7393,5 +7466,183 @@ html, body, #root, .admin-shell {
   }
 }
 
+/* The switch - the box around the slider */
+.switch {
+  font-size: 15px; /* adjusted slightly for a better visual balance on dashboard */
+  position: relative;
+  display: inline-block;
+  width: 3.5em;
+  height: 2em;
+}
 
+/* Hide default HTML checkbox */
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+/* The slider */
+.slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: #9fccfa;
+  border-radius: 50px;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 2em;
+  width: 2em;
+  inset: 0;
+  background-color: white;
+  border-radius: 50px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.15); /* softer shadow for better light mode integration */
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.switch input:checked + .slider {
+  background: #2f6db5; /* DwarPal primary blue instead of generic #0974f1 */
+}
+
+.switch input:focus + .slider {
+  box-shadow: 0 0 1px #2f6db5;
+}
+
+.switch input:checked + .slider:before {
+  transform: translateX(1.5em);
+}
+
+/* Interactive Security Scan Animation Trigger */
+.security-scan-animation-trigger {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  width: 100%;
+  height: 100%;
+  min-height: 175px;
+  padding: 1.8rem;
+  border-radius: 22px;
+  border: 1.5px dashed rgba(40, 114, 161, 0.28);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.03);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+}
+
+.security-scan-animation-trigger:hover:not(:disabled) {
+  border-color: rgba(40, 114, 161, 0.7);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 10px 30px -5px rgba(40, 114, 161, 0.15);
+  transform: translateY(-2px);
+}
+
+.security-scan-animation-trigger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.security-scan-animation-hint {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--app-shell-muted, #5d7183);
+  transition: color 0.3s;
+}
+
+.security-scan-animation-trigger:hover:not(:disabled) .security-scan-animation-hint {
+  color: #2872a1;
+}
+
+.loader {
+  max-width: fit-content;
+  color: #163247;
+  font-size: 50px;
+  font-family: inherit;
+  position: relative;
+  font-style: italic;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  line-height: 1.1;
+  margin: 0;
+  user-select: none;
+}
+
+.loader span {
+  display: inline-block;
+  animation: cut 2.4s infinite;
+  transition: 1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.loader:hover {
+  color: #2872a1;
+}
+
+.loader::after {
+  position: absolute;
+  content: "";
+  width: 105%;
+  height: 6px;
+  border-radius: 4px;
+  background-color: rgba(255, 130, 130, 0.5);
+  top: 0px;
+  filter: blur(8px);
+  animation: scan 2.4s infinite;
+  left: -2.5%;
+  z-index: 0;
+  transition: 1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.loader::before {
+  position: absolute;
+  content: "";
+  width: 105%;
+  height: 4px;
+  border-radius: 4px;
+  background-color: #ff8282;
+  top: 0px;
+  animation: scan 2.4s infinite;
+  left: -2.5%;
+  z-index: 1;
+  filter: opacity(0.9);
+  transition: 1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes scan {
+  0% {
+    top: 0%;
+  }
+  50% {
+    top: 100%;
+  }
+  100% {
+    top: 0%;
+  }
+}
+
+@keyframes cut {
+  0% {
+    clip-path: inset(0 0 0 0);
+  }
+  25% {
+    clip-path: inset(100% 0 0 0);
+  }
+  50% {
+    clip-path: inset(0 0 100% 0);
+  }
+  75% {
+    clip-path: inset(0 0 0 0);
+  }
+}
 

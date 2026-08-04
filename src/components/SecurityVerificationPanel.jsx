@@ -433,26 +433,19 @@ export default function SecurityVerificationPanel({
 
       <div className="security-verify-grid">
         <div className="security-scan-panel">
-          <div className="security-scan-card security-scan-launcher-compact">
-            <div className="security-scan-launcher-icon-badge">
-              <QrCode size={30} className="qr-pulse-icon" />
+          <button
+            type="button"
+            className="security-scan-animation-trigger"
+            onClick={() => setScannerOpen(true)}
+            disabled={isScanVerifying}
+          >
+            <div className="loader">
+              <span>{isScanVerifying ? 'Scanning...' : 'Scan'}</span>
             </div>
-            <div className="security-scan-launcher-info">
-              <span className="eyebrow">Instant Verification</span>
-              <h4>Camera Scanner</h4>
-              <p>Quickly read and verify student or faculty gatepass QRs with your camera.</p>
-            </div>
-            <ActionButton
-              type="button"
-              tone="primary"
-              icon={Camera}
-              onClick={() => setScannerOpen(true)}
-              disabled={isScanVerifying}
-              className="scanner-launch-btn"
-            >
-              {isScanVerifying ? 'Verifying scan...' : 'Open Scanner'}
-            </ActionButton>
-          </div>
+            <span className="security-scan-animation-hint">
+              Tap animation to open camera
+            </span>
+          </button>
         </div>
 
         <ManualGatepassLookup

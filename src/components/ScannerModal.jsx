@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { AlertTriangle, Camera, LoaderCircle, QrCode, ScanLine, X } from 'lucide-react'
 import QrScanner from 'qr-scanner'
 import { ActionButton } from './ui'
@@ -291,7 +292,7 @@ export default function ScannerModal({
 
   const showPreview = status === 'starting' || status === 'ready' || status === 'verifying' || busy
 
-  return (
+  return createPortal(
     <div className="scanner-modal-backdrop" role="presentation" onClick={onClose}>
       <div
         className="scanner-modal-card"
@@ -377,6 +378,7 @@ export default function ScannerModal({
           </ActionButton>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
