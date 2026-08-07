@@ -1006,6 +1006,7 @@ function toUiUser(user, session = null) {
     role: normalizedRole || 'student',
     semester: user.semester || null,
     createdByCao: Boolean(user.createdByCao),
+    isTemporaryEnrollment: Boolean(user.isTemporaryEnrollment),
     mustChangePassword: Boolean(user.mustChangePassword),
     profileImageUrl: user.profileImageUrl || user.profileImage || null,
     isActive: user.isActive ?? true,
@@ -1406,6 +1407,7 @@ export function toUiGatepass(gatepass) {
     enrollment: applicantId,
     enrollmentNumber,
     employeeId,
+    isTemporaryEnrollment: Boolean(applicant.isTemporaryEnrollment || submittedBy.isTemporaryEnrollment || gatepass.isTemporaryEnrollment),
     program: normalizeProgram(applicant.program || submittedBy.program || gatepass.program || ''),
     department:
       normalizeDepartment(applicant.department || submittedBy.department || gatepass.department || '') ||

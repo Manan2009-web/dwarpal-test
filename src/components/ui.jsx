@@ -279,6 +279,9 @@ export function ProfileCard({ currentUser, onLogout, children = null }) {
           <div className="profile-meta-pills">
             <span className="profile-meta-pill">{ROLE_META[currentUser.role].title}</span>
             {primaryId ? <span className="profile-meta-pill accent">{primaryId}</span> : null}
+            {currentUser.isTemporaryEnrollment ? (
+              <span className="profile-meta-pill" style={{ backgroundColor: '#fef3c7', color: '#b45309', border: '1px solid #f59e0b' }}>New Student</span>
+            ) : null}
           </div>
         </div>
       </div>

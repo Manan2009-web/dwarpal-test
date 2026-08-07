@@ -23,6 +23,34 @@ async function updateProfile(user, payload, req, requestMeta) {
     ]);
   }
 
+  if (currentUser.role === 'student' && payload.enrollmentNo) {
+    if (!currentUser.isTemporaryEnrollment) {
+      throw new AppError('Enrollment number cannot be changed once established.', 400);
+    }
+
+    const newEnrollmentNo = String(payload.enrollmentNo).trim();
+    const enrollRegex = /^[a-z0-9-]{3,20}$/i;
+    if (!enrollRegex.test(newEnrollmentNo)) {
+      throw new AppError('Enrollment number does not match expected format.', 400);
+    }
+
+    const duplicate = await User.findOne({
+      _id: { $ne: currentUser._id },
+      $or: [
+        { enrollmentNo: newEnrollmentNo },
+        { enrollment: newEnrollmentNo }
+      ]
+    });
+
+    if (duplicate) {
+      throw new AppError('This enrollment ID already exists.', 400);
+    }
+
+    currentUser.enrollmentNo = newEnrollmentNo;
+    currentUser.enrollment = newEnrollmentNo;
+    currentUser.isTemporaryEnrollment = false;
+  }
+
   if (payload.fullName) {
     currentUser.fullName = payload.fullName;
   }

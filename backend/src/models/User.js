@@ -259,6 +259,10 @@ const userSchema = new mongoose.Schema(
       select: false,
       default: undefined
     },
+    isTemporaryEnrollment: {
+      type: Boolean,
+      default: false
+    },
     employeeId: {
       type: String,
       trim: true,

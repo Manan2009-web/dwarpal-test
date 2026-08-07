@@ -30,6 +30,69 @@ function createFieldError(message, field = 'field', statusCode = 422) {
   return new AppError(message, statusCode, [buildFieldError(field, message)]);
 }
 
+let localSerialCache = {};
+
+function getGtuBranchCode(department) {
+  const dept = String(department || '').trim().toLowerCase();
+  if (dept.includes('computer')) return '07';
+  if (dept.includes('information') || dept.includes('it')) return '16';
+  if (dept.includes('mechanical')) return '19';
+  if (dept.includes('civil')) return '06';
+  if (dept.includes('electrical')) return '09';
+  if (dept.includes('electronics') || dept.includes('ec')) return '11';
+  if (dept.includes('artificial') || dept.includes('ai') || dept.includes('data science')) return '31';
+  return '07'; // Default
+}
+
+async function getNextSerialForPrefix(prefix) {
+  if (localSerialCache[prefix] === undefined) {
+    const regex = new RegExp(`^${prefix}\\d{3}$`);
+    const matchingUsers = await User.find({ enrollmentNo: regex }).select('enrollmentNo').lean();
+    let maxSerial = 0;
+    for (const user of matchingUsers) {
+      const serialStr = String(user.enrollmentNo || '').slice(-3);
+      const serialNum = parseInt(serialStr, 10);
+      if (!isNaN(serialNum) && serialNum > maxSerial) {
+        maxSerial = serialNum;
+      }
+    }
+    localSerialCache[prefix] = maxSerial;
+  }
+  localSerialCache[prefix] += 1;
+  return String(localSerialCache[prefix]).padStart(3, '0');
+}
+
+async function generateTemporaryEnrollmentNo(program, department, semester) {
+  const currentYear = new Date().getFullYear();
+  const yy = String(currentYear).slice(-2);
+
+  let ccc = '117';
+  const progLower = String(program || '').toLowerCase();
+  if (progLower.includes('diploma')) {
+    ccc = '959';
+  }
+
+  const sem = Number(semester);
+  let ss = '01';
+  if (progLower.includes('degree')) {
+    ss = sem === 3 ? '31' : '01';
+  } else if (progLower.includes('diploma')) {
+    ss = '03';
+  } else if (progLower.includes('pharmacy')) {
+    ss = '02';
+  } else if (progLower.includes('management') || progLower.includes('mba')) {
+    ss = '05';
+  } else if (progLower.includes('computer applications') || progLower.includes('mca')) {
+    ss = '06';
+  }
+
+  const bb = getGtuBranchCode(department);
+  const prefix = `${yy}${ccc}${ss}${bb}`;
+
+  const nnn = await getNextSerialForPrefix(prefix);
+  return `${prefix}${nnn}`;
+}
+
 function normalizeStudentPayload(payload = {}) {
   const normalizedSemester =
     payload.semester === undefined || payload.semester === null || payload.semester === ''
@@ -224,8 +287,26 @@ async function createStudent(payload, actor, requestMeta = {}) {
     throw createFieldError('Email is required.', 'email', 400);
   }
 
-  if (!normalizedPayload.enrollmentNo) {
-    throw createFieldError('Enrollment number is required.', 'enrollmentNo', 400);
+  let enrollmentNo = normalizedPayload.enrollmentNo;
+  let isTemporaryEnrollment = false;
+
+  const isSem1 = Number(normalizedPayload.semester) === 1;
+  const progLower = String(normalizedPayload.program || '').toLowerCase();
+  const isSem3DToD = Number(normalizedPayload.semester) === 3 && (progLower.includes('degree') || progLower.includes('d to d') || progLower.includes('dtd') || progLower.includes('d2d'));
+  const isEligibleForTemp = isSem1 || isSem3DToD;
+
+  if (!enrollmentNo) {
+    if (!isEligibleForTemp) {
+      throw createFieldError('Enrollment number is required.', 'enrollmentNo', 400);
+    }
+    isTemporaryEnrollment = true;
+    localSerialCache = {}; // Reset for single generation
+    enrollmentNo = await generateTemporaryEnrollmentNo(
+      normalizedPayload.program,
+      normalizedPayload.department,
+      normalizedPayload.semester
+    );
+    normalizedPayload.enrollmentNo = enrollmentNo;
   }
 
   if (!normalizedPayload.phone) {
@@ -258,8 +339,9 @@ async function createStudent(payload, actor, requestMeta = {}) {
     fullName: normalizedPayload.fullName,
     email: normalizedPayload.email,
     role: 'student',
-    enrollmentNo: normalizedPayload.enrollmentNo,
-    enrollment: normalizedPayload.enrollmentNo,
+    enrollmentNo: enrollmentNo,
+    enrollment: enrollmentNo,
+    isTemporaryEnrollment: isTemporaryEnrollment,
     phone: normalizedPayload.phone,
     program: normalizedPayload.program,
     department: normalizedPayload.department,
@@ -499,6 +581,7 @@ async function bulkCreateStudents(rows, actor, requestMeta = {}) {
     throw new AppError('Invalid payload: expected an array of students.', 400);
   }
 
+  localSerialCache = {};
   const added = [];
   const rejected = [];
   const candidates = [];
@@ -579,20 +662,10 @@ async function bulkCreateStudents(rows, actor, requestMeta = {}) {
       }
     }
 
-    // 4. Enrollment Number
+    // 4. Enrollment Number (Validation will be deferred until after semester/program are resolved)
     let enrollmentLower = '';
-    if (!rawEnrollmentNo) {
-      fieldErrors.enrollmentNumber = "Missing — required field";
-      reasons.push("Enrollment Number: missing");
-    } else {
-      const enrollRegex = /^[a-z0-9-]{3,20}$/i;
-      if (!enrollRegex.test(rawEnrollmentNo)) {
-        fieldErrors.enrollmentNumber = "Enrollment number does not match expected format";
-        reasons.push("Enrollment Number: does not match expected format");
-      } else {
-        enrollmentLower = rawEnrollmentNo.toLowerCase();
-      }
-    }
+    let finalEnrollmentNo = rawEnrollmentNo;
+    let isTemporaryEnrollment = false;
 
     // 5. Phone
     let cleanPhone = '';
@@ -650,6 +723,44 @@ async function bulkCreateStudents(rows, actor, requestMeta = {}) {
       }
     }
 
+    // Defer check: validate enrollment number now that we have Semester, Program, and Department
+    const hasBasicErrors = fieldErrors.program || fieldErrors.department || fieldErrors.semester;
+
+    if (!hasBasicErrors) {
+      if (!rawEnrollmentNo) {
+        const isSem1 = normalizedSemester === 1;
+        const progCleanLower = String(resolvedProgramCanonical || '').toLowerCase();
+        const isSem3DToD = normalizedSemester === 3 && (progCleanLower.includes('degree') || progCleanLower.includes('d to d') || progCleanLower.includes('dtd') || progCleanLower.includes('d2d'));
+        const isEligibleForTemp = isSem1 || isSem3DToD;
+
+        if (isEligibleForTemp) {
+          isTemporaryEnrollment = true;
+          finalEnrollmentNo = await generateTemporaryEnrollmentNo(
+            resolvedProgramCanonical,
+            resolvedDeptCanonical,
+            normalizedSemester
+          );
+          enrollmentLower = finalEnrollmentNo.toLowerCase();
+        } else {
+          fieldErrors.enrollmentNumber = "Missing — required field";
+          reasons.push("Enrollment Number: missing");
+        }
+      } else {
+        const enrollRegex = /^[a-z0-9-]{3,20}$/i;
+        if (!enrollRegex.test(rawEnrollmentNo)) {
+          fieldErrors.enrollmentNumber = "Enrollment number does not match expected format";
+          reasons.push("Enrollment Number: does not match expected format");
+        } else {
+          enrollmentLower = rawEnrollmentNo.toLowerCase();
+        }
+      }
+    } else {
+      if (!rawEnrollmentNo) {
+        fieldErrors.enrollmentNumber = "Missing — required field";
+        reasons.push("Enrollment Number: missing");
+      }
+    }
+
     // 9. Sheet duplicate checks
     if (emailLower) {
       if (fileEmails.has(emailLower)) {
@@ -669,8 +780,8 @@ async function bulkCreateStudents(rows, actor, requestMeta = {}) {
     }
     if (enrollmentLower) {
       if (fileEnrollments.has(enrollmentLower)) {
-        fieldErrors.enrollmentNumber = `Duplicate enrollment number "${rawEnrollmentNo}" in the uploaded file`;
-        reasons.push(`Enrollment Number: duplicate enrollment number "${rawEnrollmentNo}" in the uploaded file`);
+        fieldErrors.enrollmentNumber = `Duplicate enrollment number "${finalEnrollmentNo}" in the uploaded file`;
+        reasons.push(`Enrollment Number: duplicate enrollment number "${finalEnrollmentNo}" in the uploaded file`);
       } else if (!reasons.some(r => r.startsWith("Enrollment Number:"))) {
         fileEnrollments.add(enrollmentLower);
       }
@@ -691,7 +802,8 @@ async function bulkCreateStudents(rows, actor, requestMeta = {}) {
         data: {
           fullName: rawFullName,
           email: emailLower,
-          enrollmentNo: rawEnrollmentNo,
+          enrollmentNo: finalEnrollmentNo,
+          isTemporaryEnrollment,
           phone: cleanPhone,
           program: resolvedProgramCanonical,
           department: resolvedDeptCanonical,
@@ -779,6 +891,7 @@ async function bulkCreateStudents(rows, actor, requestMeta = {}) {
         role: 'student',
         enrollmentNo: s.enrollmentNo,
         enrollment: s.enrollmentNo,
+        isTemporaryEnrollment: s.isTemporaryEnrollment,
         phone: s.phone,
         program: s.program,
         department: s.department,

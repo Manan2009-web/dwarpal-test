@@ -263,7 +263,8 @@ function mapGatepassListItem(gatepass) {
       semester: applicant.semester || gatepass.createdBy?.semester || null,
       enrollmentNo: applicant.enrollmentNo || gatepass.createdBy?.enrollmentNo || null,
       employeeId: applicant.employeeId || gatepass.createdBy?.employeeId || null,
-      phone: applicant.phone || gatepass.createdBy?.phone || null
+      phone: applicant.phone || gatepass.createdBy?.phone || null,
+      isTemporaryEnrollment: Boolean(applicant.isTemporaryEnrollment || gatepass.createdBy?.isTemporaryEnrollment)
     },
     submittedBy: mapUserSummary(gatepass.createdBy, applicant),
     reason: gatepass.reason,
@@ -342,7 +343,8 @@ function createApplicantSnapshot(user) {
     semester: user.semester || null,
     enrollmentNo: user.enrollmentNo || null,
     employeeId: user.employeeId || null,
-    phone: user.phone
+    phone: user.phone,
+    isTemporaryEnrollment: Boolean(user.isTemporaryEnrollment)
   };
 }
 

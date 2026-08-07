@@ -26,6 +26,7 @@ function pickUser(user, req) {
     department: source.department || null,
     semester: source.semester || null,
     enrollmentNo: source.enrollmentNo || source.enrollment || null,
+    isTemporaryEnrollment: Boolean(source.isTemporaryEnrollment),
     employeeId: source.employeeId || null,
     phone: source.phone,
     designation: source.designation || null,

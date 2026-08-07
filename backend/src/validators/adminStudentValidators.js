@@ -21,7 +21,18 @@ function studentIdentityValidation(field = 'enrollmentNo', required = true) {
   const chain = body(field).trim();
 
   if (required) {
-    return chain.notEmpty().withMessage('Enrollment number is required.');
+    return chain.custom((value, { req }) => {
+      const sem = Number(req.body.semester);
+      const prog = String(req.body.program || '').toLowerCase();
+      const isSem1 = sem === 1;
+      const isSem3DToD = sem === 3 && (prog.includes('degree') || prog.includes('d to d') || prog.includes('dtd') || prog.includes('d2d'));
+      const isEligibleForTemp = isSem1 || isSem3DToD;
+
+      if (!value && !isEligibleForTemp) {
+        throw new Error('Enrollment number is required.');
+      }
+      return true;
+    });
   }
 
   return chain.optional({ values: 'falsy' });

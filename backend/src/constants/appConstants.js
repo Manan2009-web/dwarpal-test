@@ -4,6 +4,7 @@ const STUDENT_PROGRAMS = Object.freeze(
     : [
         'Diploma Engineering',
         'Degree Engineering',
+        'Degree Engineering (D to D)',
         'Management Studies',
         'Pharmacy',
         'Computer Applications',
@@ -97,8 +98,13 @@ function normalizeProgram(value) {
     return defaultDiploma;
   }
 
+  if (normalizedKey.includes('d to d') || normalizedKey.includes('dtd') || normalizedKey.includes('d2d')) {
+    const dtdMatch = STUDENT_PROGRAMS.find((p) => p.toLowerCase().includes('d to d')) || 'Degree Engineering (D to D)';
+    return dtdMatch;
+  }
+
   if (normalizedKey.includes('degree')) {
-    const defaultDegree = STUDENT_PROGRAMS.find((p) => p.toLowerCase().includes('degree')) || STUDENT_PROGRAMS[1] || STUDENT_PROGRAMS[0];
+    const defaultDegree = STUDENT_PROGRAMS.find((p) => p.toLowerCase().includes('degree') && !p.toLowerCase().includes('d to d')) || STUDENT_PROGRAMS[1] || STUDENT_PROGRAMS[0];
     return defaultDegree;
   }
 

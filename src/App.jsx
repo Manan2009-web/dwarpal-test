@@ -3871,6 +3871,96 @@ function CoordinatorAssignmentPanel({ currentUser, onUpdateCurrentUserProfile })
   )
 }
 
+function EstablishEnrollmentPanel({ currentUser, onUpdateCurrentUserProfile }) {
+  const [enrollmentNo, setEnrollmentNo] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setError('')
+    setSuccess(false)
+    if (!enrollmentNo.trim()) {
+      setError('Enrollment number is required')
+      return
+    }
+    const enrollRegex = /^[a-z0-9-]{3,20}$/i
+    if (!enrollRegex.test(enrollmentNo.trim())) {
+      setError('Enrollment number must be alphanumeric (3-20 characters)')
+      return
+    }
+
+    setLoading(true)
+    try {
+      const result = await onUpdateCurrentUserProfile({ enrollmentNo: enrollmentNo.trim() })
+      if (result && result.ok) {
+        setSuccess(true)
+      } else {
+        setError(result?.error || 'Failed to update enrollment number')
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to update enrollment number')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (success) {
+    return (
+      <div className="profile-subcard" style={{ marginTop: '1.5rem', padding: '1.5rem', border: '1px solid #10b981', background: '#ecfdf5', borderRadius: '8px' }}>
+        <h3 style={{ color: '#065f46', margin: '0 0 0.5rem 0' }}>✓ Enrollment Number Saved</h3>
+        <p style={{ color: '#047857', margin: 0 }}>Your enrollment number was updated successfully. You are now considered a regular student.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="profile-subcard" style={{ marginTop: '1.5rem', padding: '1.5rem', border: '1px solid #f59e0b', background: '#fffbeb', borderRadius: '8px' }}>
+      <h3 style={{ color: '#b45309', margin: '0 0 0.5rem 0' }}>🆕 Establish Real Enrollment Number</h3>
+      <p style={{ color: '#d97706', fontSize: '0.875rem', margin: '0 0 1rem 0' }}>
+        You are currently using a temporary enrollment number. Once you receive your official GTU enrollment number, please enter it below. Note: This can only be done once.
+      </p>
+      <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '0.5rem', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <input
+            type="text"
+            placeholder="Enter official 12-digit enrollment no."
+            value={enrollmentNo}
+            onChange={(e) => setEnrollmentNo(e.target.value)}
+            disabled={loading}
+            style={{
+              flex: 1,
+              padding: '0.5rem 0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '6px',
+              outline: 'none',
+              background: '#fff',
+              color: '#000'
+            }}
+          />
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              padding: '0.5rem 1rem',
+              background: '#d97706',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontWeight: '600'
+            }}
+          >
+            {loading ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+        {error && <p style={{ color: '#dc2626', fontSize: '0.8125rem', margin: '0.25rem 0 0 0' }}>⚠️ {error}</p>}
+      </form>
+    </div>
+  )
+}
+
 function ProfileSettingsTabs({
   currentUser,
   cookieConsent,
@@ -3950,6 +4040,13 @@ function ProfileSettingsTabs({
 
       {['faculty', 'hod'].includes(currentUser.role) ? (
         <CoordinatorAssignmentPanel
+          currentUser={currentUser}
+          onUpdateCurrentUserProfile={onUpdateCurrentUserProfile}
+        />
+      ) : null}
+
+      {currentUser.role === 'student' && currentUser.isTemporaryEnrollment ? (
+        <EstablishEnrollmentPanel
           currentUser={currentUser}
           onUpdateCurrentUserProfile={onUpdateCurrentUserProfile}
         />

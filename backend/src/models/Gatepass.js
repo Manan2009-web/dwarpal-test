@@ -110,7 +110,11 @@ const applicantSnapshotSchema = new mongoose.Schema(
       type: String,
       default: null
     },
-    phone: String
+    phone: String,
+    isTemporaryEnrollment: {
+      type: Boolean,
+      default: false
+    }
   },
   {
     _id: false

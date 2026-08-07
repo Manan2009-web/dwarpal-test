@@ -110,7 +110,7 @@ function buildSummaryItems(gatepass, currentUserRole) {
   if (!isRequesterView) {
     items.splice(1, 0, {
       label: 'Requester',
-      value: `${gatepass?.name || 'Not provided'}${gatepass?.enrollment ? ` • ${gatepass.enrollment}` : ''}`,
+      value: `${gatepass?.name || 'Not provided'}${gatepass?.enrollment ? ` • ${gatepass.enrollment}` : ''}${gatepass?.isTemporaryEnrollment ? ' (New Student)' : ''}`,
     })
   }
 
@@ -127,7 +127,7 @@ function buildDetailItems(gatepass, currentUserRole) {
     { label: 'Workflow stage', value: getWorkflowSummary(gatepass) },
     { label: isRequesterView ? 'Name' : 'Requester name', value: gatepass?.name || 'Not provided' },
     { label: 'Role', value: getRequesterRoleLabel(gatepass) },
-    { label: 'Enrollment / Employee ID', value: gatepass?.enrollment || 'Not provided' },
+    { label: 'Enrollment / Employee ID', value: `${gatepass?.enrollment || 'Not provided'}${gatepass?.isTemporaryEnrollment ? ' (Temporary / New Student)' : ''}` },
     { label: 'Department', value: gatepass?.department || 'Not provided' },
     {
       label: gatepass?.requestKind === 'faculty_leave' ? 'Designation / Program' : 'Program',
@@ -227,6 +227,9 @@ const ExpandableGatepassCard = memo(function ExpandableGatepassCard({
             <div className="expandable-gatepass-badges">
               <span className="gatepass-request-chip">{requestTypeLabel}</span>
               <span className="gatepass-request-chip subtle">{reviewerRole} view</span>
+              {gatepass?.isTemporaryEnrollment && (
+                <span className="gatepass-request-chip" style={{ backgroundColor: '#fef3c7', color: '#b45309', border: '1px solid #f59e0b' }}>New Student</span>
+              )}
               {timeLeft && (
                 <span className="gatepass-request-chip timer-chip">
                   ⌛ {timeLeft}
