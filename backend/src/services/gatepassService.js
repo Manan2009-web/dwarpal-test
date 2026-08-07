@@ -2925,14 +2925,7 @@ async function processPendingStudentEscalations({ maxPerSweep = 50 } = {}) {
         .populate('forwardedTo', '_id isActive gatepassApprovalEnabled'),
       Gatepass.find({
         applicantType: 'student',
-        status: {
-          $in: [
-            'forwarded_to_campus_security',
-            'approved_by_principal',
-            'approved_by_hod',
-            'approved_by_coordinator'
-          ]
-        },
+        status: 'forwarded_to_campus_security',
         'autoEscalation.state': { $ne: 'blocked' }
       })
         .sort({ updatedAt: 1, _id: 1 })
