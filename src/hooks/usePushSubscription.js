@@ -1,4 +1,5 @@
-﻿import { useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
+import { buildApiUrl } from '../lib/dwarpalApi'
 
 // ---------------------------------------------------------------------------
 // urlBase64ToUint8Array — converts a Base64URL VAPID public key to a
@@ -60,7 +61,7 @@ export function usePushSubscription(currentUser) {
         // ----------------------------------------------------------------
         // 2. Get the VAPID public key from the backend
         // ----------------------------------------------------------------
-        const configRes = await fetch('/api/public/frontend-config', { credentials: 'include' })
+        const configRes = await fetch(buildApiUrl('/public/frontend-config'), { credentials: 'include' })
         if (!configRes.ok || cancelled) return
 
         const configData = await configRes.json()
@@ -100,7 +101,7 @@ export function usePushSubscription(currentUser) {
         // ----------------------------------------------------------------
         const subJson = subscription.toJSON()
 
-        const saveRes = await fetch('/api/notifications/subscribe', {
+        const saveRes = await fetch(buildApiUrl('/notifications/subscribe'), {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
