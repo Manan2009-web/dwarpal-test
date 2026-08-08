@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from 'react'
-import { Eye, FileDown, Download, GraduationCap, KeyRound, PencilLine, ShieldCheck, Trash2, UserPlus, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, RefreshCw, X, AlertOctagon } from 'lucide-react'
+import { Eye, FileDown, Download, GraduationCap, KeyRound, PencilLine, ShieldCheck, Trash2, UserPlus, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, RefreshCw, X, AlertOctagon, History, Clock, FileWarning, Trash } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import Papa from 'papaparse'
 import {
@@ -14,6 +14,81 @@ import {
 import { DEPARTMENTS, PROGRAM_OPTIONS, ROUTING_DEPARTMENTS, SEMESTER_OPTIONS } from '../mockData'
 import { useToast } from './ToastProvider'
 import { ActionButton, EmptyState, ModalForm, SelectField } from './ui'
+
+// ── Error History Hook ──────────────────────────────────────────────────────
+// Persists upload error logs to localStorage per IT user.
+// Key: dwarpal_upload_errors_<userId>
+const ERROR_HISTORY_MAX = 50;
+
+function useErrorHistory(userId) {
+  const storageKey = userId ? `dwarpal_upload_errors_${userId}` : null;
+  const unseenKey = userId ? `dwarpal_upload_errors_unseen_${userId}` : null;
+
+  function readHistory() {
+    if (!storageKey) return [];
+    try {
+      const raw = localStorage.getItem(storageKey);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function writeHistory(entries) {
+    if (!storageKey) return;
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(entries));
+    } catch {
+      // Storage full or unavailable — fail silently
+    }
+  }
+
+  function readUnseen() {
+    if (!unseenKey) return 0;
+    try {
+      return Number(localStorage.getItem(unseenKey) || 0);
+    } catch {
+      return 0;
+    }
+  }
+
+  function saveErrorEntry(entry) {
+    const history = readHistory();
+    const newEntry = {
+      id: `err_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      timestamp: new Date().toISOString(),
+      ...entry,
+    };
+    const updated = [newEntry, ...history].slice(0, ERROR_HISTORY_MAX);
+    writeHistory(updated);
+    // Increment unseen count
+    if (unseenKey) {
+      try { localStorage.setItem(unseenKey, String(readUnseen() + 1)); } catch {}
+    }
+    return newEntry;
+  }
+
+  function removeEntry(id) {
+    const updated = readHistory().filter(e => e.id !== id);
+    writeHistory(updated);
+  }
+
+  function clearHistory() {
+    writeHistory([]);
+    if (unseenKey) {
+      try { localStorage.removeItem(unseenKey); } catch {}
+    }
+  }
+
+  function markSeen() {
+    if (unseenKey) {
+      try { localStorage.setItem(unseenKey, '0'); } catch {}
+    }
+  }
+
+  return { readHistory, saveErrorEntry, removeEntry, clearHistory, readUnseen, markSeen };
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 const STUDENT_PAGE_SIZE = 10
 
@@ -229,13 +304,19 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
   const [exporting, setExporting] = useState(false)
 
   // Bulk upload states
-  const [activeTab, setActiveTab] = useState('single') // 'single' | 'bulk'
+  const [activeTab, setActiveTab] = useState('single') // 'single' | 'bulk' | 'error_history'
   const [bulkStudents, setBulkStudents] = useState([])
   const [bulkFile, setBulkFile] = useState(null)
   const [bulkLoading, setBulkLoading] = useState(false)
   const [bulkResult, setBulkResult] = useState(null)
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef(null)
+
+  // Error history
+  const errorHistoryHook = useErrorHistory(currentUser?.id)
+  const [errorHistory, setErrorHistory] = useState(() => errorHistoryHook.readHistory())
+  const [unseenCount, setUnseenCount] = useState(() => errorHistoryHook.readUnseen())
+  const [bulkFileName, setBulkFileName] = useState('')
 
   function generateRandomPassword() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
@@ -285,6 +366,143 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
       });
     }
   }
+
+  // ── Error History helpers ─────────────────────────────────────────────────
+  function refreshHistory() {
+    setErrorHistory(errorHistoryHook.readHistory());
+    setUnseenCount(errorHistoryHook.readUnseen());
+  }
+
+  function saveAndRefresh(entry) {
+    errorHistoryHook.saveErrorEntry(entry);
+    refreshHistory();
+  }
+
+  function removeHistoryEntry(id) {
+    errorHistoryHook.removeEntry(id);
+    refreshHistory();
+  }
+
+  function clearAllHistory() {
+    errorHistoryHook.clearHistory();
+    refreshHistory();
+  }
+
+  function handleTabChange(tab) {
+    setActiveTab(tab);
+    if (tab === 'error_history') {
+      errorHistoryHook.markSeen();
+      setUnseenCount(0);
+      refreshHistory();
+    }
+  }
+
+  /**
+   * Re-run the Excel error report download for a stored history entry.
+   */
+  function downloadHistoryEntry(entry) {
+    const errorRows = entry.rejectedRows || [];
+    if (!errorRows.length) return;
+    try {
+      const timestampStr = entry.timestamp;
+      const timestampDate = (timestampStr || '').slice(0, 10);
+      const totalErrors = errorRows.length;
+
+      const aoa = [
+        [`Total Error Rows: ${totalErrors} — Generated: ${timestampStr}`, '', '', '', '', '', '', '', ''],
+        ['Row #', 'Full Name', 'Email', 'Enrollment Number', 'Phone Number', 'Program', 'Department', 'Semester', 'Issues Found']
+      ];
+
+      errorRows.forEach(r => {
+        const d = r.originalData || {};
+        const fErrors = r.fieldErrors || {};
+        const issuesList = [];
+        if (fErrors.fullName) issuesList.push(`Full Name: ${fErrors.fullName}`);
+        if (fErrors.email) issuesList.push(`Email: ${fErrors.email}`);
+        if (fErrors.enrollmentNumber) issuesList.push(`Enrollment Number: ${fErrors.enrollmentNumber}`);
+        if (fErrors.phoneNumber) issuesList.push(`Phone Number: ${fErrors.phoneNumber}`);
+        if (fErrors.program) issuesList.push(`Program: ${fErrors.program}`);
+        if (fErrors.department) issuesList.push(`Department: ${fErrors.department}`);
+        if (fErrors.semester) issuesList.push(`Semester: ${fErrors.semester}`);
+        if (!issuesList.length && r.reasons?.length) {
+          r.reasons.forEach(reason => issuesList.push(reason));
+        }
+        aoa.push([
+          r.rowNumber,
+          d.fullName || '',
+          d.email || '',
+          d.enrollmentNo || '',
+          d.phone || '',
+          d.program || '',
+          d.department || '',
+          d.semester || '',
+          issuesList.join('\n')
+        ]);
+      });
+
+      const sheet = XLSX.utils.aoa_to_sheet(aoa);
+      sheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 8 } }];
+      const range = XLSX.utils.decode_range(sheet['!ref']);
+      for (let R = range.s.r; R <= range.e.r; ++R) {
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+          const cellRef = XLSX.utils.encode_cell({ c: C, r: R });
+          let cell = sheet[cellRef];
+          if (!cell) continue;
+          if (!cell.s) cell.s = {};
+          if (R === 0) {
+            cell.s = { font: { bold: true, size: 11, color: { rgb: '333333' } }, fill: { fgColor: { rgb: 'F3F4F6' } }, alignment: { horizontal: 'left', vertical: 'center' } };
+          } else if (R === 1) {
+            cell.s = { font: { bold: true, size: 10, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '1E3A8A' } }, alignment: { horizontal: 'center', vertical: 'center' } };
+          } else {
+            const dataRowIndex = R - 2;
+            const rData = errorRows[dataRowIndex];
+            const fE = rData?.fieldErrors || {};
+            let fieldHasError = false;
+            if (C === 1 && fE.fullName) fieldHasError = true;
+            if (C === 2 && fE.email) fieldHasError = true;
+            if (C === 3 && fE.enrollmentNumber) fieldHasError = true;
+            if (C === 4 && fE.phoneNumber) fieldHasError = true;
+            if (C === 5 && fE.program) fieldHasError = true;
+            if (C === 6 && fE.department) fieldHasError = true;
+            if (C === 7 && fE.semester) fieldHasError = true;
+            if (fieldHasError) {
+              cell.s = { fill: { fgColor: { rgb: 'FFC7CE' } }, font: { color: { rgb: '9C0006' } }, alignment: { horizontal: 'left', vertical: 'center' } };
+            } else if (C === 8) {
+              cell.s = { alignment: { wrapText: true, vertical: 'top' }, font: { color: { rgb: '9C0006' } } };
+            } else {
+              cell.s = { alignment: { vertical: 'center' } };
+            }
+          }
+        }
+      }
+      const colWidths = [];
+      for (let C = 0; C <= range.e.c; ++C) {
+        let maxLen = 10;
+        for (let R = 1; R <= range.e.r; ++R) {
+          const cellRef = XLSX.utils.encode_cell({ c: C, r: R });
+          const cell = sheet[cellRef];
+          if (cell && cell.v) {
+            const lines = String(cell.v).split('\n');
+            const longest = Math.max(...lines.map(l => l.length));
+            if (longest > maxLen) maxLen = longest;
+          }
+        }
+        colWidths.push({ wch: Math.min(maxLen + 4, 50) });
+      }
+      sheet['!cols'] = colWidths;
+      sheet['!views'] = [{ state: 'frozen', ySplit: 2, activePane: 'bottomLeft', pane: { xSplit: 0, ySplit: 2, topLeftCell: 'A3', activePane: 'bottomLeft' } }];
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, sheet, 'Error Report');
+      XLSX.writeFile(workbook, `Upload_Error_Report_${timestampDate}.xlsx`);
+
+      toast.success({ title: 'Downloaded', message: 'Error report Excel sheet downloaded.' });
+    } catch (err) {
+      console.error('Error re-downloading history entry:', err);
+      toast.error({ title: 'Download failed', message: err.message || 'Unable to generate error report.' });
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   function downloadRejectedRows() {
     const errorRows = (bulkResult && bulkResult.rejected && bulkResult.rejected.length)
@@ -790,6 +1008,7 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
     }
     
     setBulkFile(file);
+    setBulkFileName(name);
     setBulkLoading(true);
     setBulkResult(null);
     
@@ -932,9 +1151,19 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
       }
       
       if (rejectedCount > 0) {
-        toast.warn({
+        toast.warning({
           title: 'Some entries rejected',
-          message: `${rejectedCount} row(s) had errors and were not registered.`
+          message: `${rejectedCount} row(s) had errors and were not registered. Check Error History tab to download.`
+        });
+        // Persist the error log so it is available even after navigating away
+        const currentFileName = bulkFileName || bulkFile?.name || 'Unknown file';
+        const fileExt = currentFileName.split('.').pop().toLowerCase();
+        saveAndRefresh({
+          type: fileExt === 'csv' ? 'bulk_csv' : 'bulk_excel',
+          fileName: currentFileName,
+          errorCount: rejectedCount,
+          addedCount,
+          rejectedRows: finalResult.rejected,
         });
       }
     } catch (err) {
@@ -1103,14 +1332,38 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
       const message = getApiErrorMessage(error, 'Unable to save the student right now.')
       const apiFieldErrors = error?.payload?.errors || error?.errors || []
       setSubmitError(message)
-      setFieldErrors(
-        apiFieldErrors.reduce((result, item) => {
-          if (item?.field) {
-            result[item.field] = item.message
-          }
-          return result
-        }, {}),
-      )
+      const reducedFieldErrors = apiFieldErrors.reduce((result, item) => {
+        if (item?.field) {
+          result[item.field] = item.message
+        }
+        return result
+      }, {})
+      setFieldErrors(reducedFieldErrors)
+
+      // Persist the failed single-form submission to error history (IT role only)
+      if (currentUser?.role === 'it' && !isEditMode) {
+        const rejectedRow = {
+          rowNumber: 1,
+          originalData: {
+            fullName: form.fullName || '',
+            email: form.email || '',
+            enrollmentNo: form.enrollmentNo || '',
+            phone: form.phone || '',
+            program: form.program || '',
+            department: form.department || '',
+            semester: form.semester || '',
+          },
+          reasons: [message],
+          fieldErrors: reducedFieldErrors,
+        };
+        saveAndRefresh({
+          type: 'single_form',
+          fileName: 'Manual Form',
+          errorCount: 1,
+          addedCount: 0,
+          rejectedRows: [rejectedRow],
+        });
+      }
     } finally {
       setSubmitting(false)
     }
@@ -1195,10 +1448,10 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
           </div>
 
           {/* Tab Switcher */}
-          <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--app-surface-border)', marginBottom: '1.5rem', paddingBottom: '0.5rem' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--app-surface-border)', marginBottom: '1.5rem', paddingBottom: '0.5rem', flexWrap: 'wrap' }}>
             <button
               type="button"
-              onClick={() => setActiveTab('single')}
+              onClick={() => handleTabChange('single')}
               style={{
                 background: 'none',
                 border: 'none',
@@ -1213,7 +1466,7 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('bulk')}
+              onClick={() => handleTabChange('bulk')}
               style={{
                 background: 'none',
                 border: 'none',
@@ -1225,6 +1478,44 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
               }}
             >
               Bulk Excel Upload
+            </button>
+            <button
+              type="button"
+              onClick={() => handleTabChange('error_history')}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: '0.5rem 1rem',
+                fontWeight: '600',
+                color: activeTab === 'error_history' ? 'var(--app-text-accent)' : 'var(--app-text-muted)',
+                borderBottom: activeTab === 'error_history' ? '2px solid var(--app-text-accent)' : 'none',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                position: 'relative'
+              }}
+            >
+              <History size={15} />
+              Upload Error History
+              {unseenCount > 0 && (
+                <span style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  minWidth: '18px',
+                  height: '18px',
+                  padding: '0 4px',
+                  background: '#ef4444',
+                  color: '#fff',
+                  borderRadius: '999px',
+                  fontSize: '0.65rem',
+                  fontWeight: '700',
+                  lineHeight: 1,
+                }}>
+                  {unseenCount > 9 ? '9+' : unseenCount}
+                </span>
+              )}
             </button>
           </div>
 
@@ -1273,6 +1564,116 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
                 </div>
               </form>
             </>
+          ) : activeTab === 'error_history' ? (
+            /* ── Error History Panel ─────────────────────────────────────────── */
+            <div style={{ paddingBottom: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                <div>
+                  <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: '600', color: 'var(--app-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Persistent Log</p>
+                  <h3 style={{ margin: '0.2rem 0 0', fontSize: '1.1rem', fontWeight: '700', color: 'var(--app-text)' }}>Upload Error History</h3>
+                  <p style={{ margin: '0.3rem 0 0', fontSize: '0.82rem', color: 'var(--app-text-muted)' }}>All past rejected rows from bulk uploads and single-form failures. Persisted across sessions.</p>
+                </div>
+                {errorHistory.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearAllHistory}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.9rem', background: 'rgba(239, 68, 68, 0.08)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '8px', fontSize: '0.78rem', fontWeight: '600', cursor: 'pointer' }}
+                  >
+                    <Trash size={13} />
+                    Clear All
+                  </button>
+                )}
+              </div>
+
+              {errorHistory.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '3.5rem 2rem', background: 'var(--app-surface)', border: '1px dashed var(--app-surface-border)', borderRadius: '16px', color: 'var(--app-text-muted)' }}>
+                  <FileWarning size={40} strokeWidth={1.2} style={{ opacity: 0.35, marginBottom: '0.75rem' }} />
+                  <p style={{ margin: 0, fontWeight: '600', fontSize: '0.95rem' }}>No error history yet</p>
+                  <p style={{ margin: '0.4rem 0 0', fontSize: '0.82rem' }}>When bulk uploads or single-form submissions are rejected, error logs will appear here for download.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                  {errorHistory.map((entry) => {
+                    const ts = new Date(entry.timestamp);
+                    const dateStr = ts.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+                    const timeStr = ts.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+                    const typeMeta = {
+                      bulk_csv: { label: 'Bulk CSV', color: '#7c3aed', bg: 'rgba(124,58,237,0.08)', border: 'rgba(124,58,237,0.18)' },
+                      bulk_excel: { label: 'Bulk Excel', color: '#0369a1', bg: 'rgba(3,105,161,0.08)', border: 'rgba(3,105,161,0.18)' },
+                      single_form: { label: 'Single Form', color: '#b45309', bg: 'rgba(180,83,9,0.08)', border: 'rgba(180,83,9,0.18)' },
+                    }[entry.type] || { label: entry.type, color: 'var(--app-text-muted)', bg: 'var(--app-surface)', border: 'var(--app-surface-border)' };
+
+                    return (
+                      <div
+                        key={entry.id}
+                        style={{
+                          background: 'var(--app-surface)',
+                          border: '1px solid var(--app-surface-border)',
+                          borderRadius: '14px',
+                          padding: '1rem 1.25rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '1rem',
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        {/* Type Badge */}
+                        <span style={{ padding: '0.25rem 0.7rem', borderRadius: '999px', fontSize: '0.72rem', fontWeight: '700', background: typeMeta.bg, color: typeMeta.color, border: `1px solid ${typeMeta.border}`, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                          {typeMeta.label}
+                        </span>
+
+                        {/* Timestamp */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--app-text-muted)', fontSize: '0.8rem', flexShrink: 0 }}>
+                          <Clock size={13} />
+                          <span>{dateStr} · {timeStr}</span>
+                        </div>
+
+                        {/* File name */}
+                        <div style={{ flex: 1, minWidth: '120px' }}>
+                          <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: '600', color: 'var(--app-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {entry.fileName || 'Unknown source'}
+                          </p>
+                        </div>
+
+                        {/* Counts */}
+                        <div style={{ display: 'flex', gap: '0.75rem', flexShrink: 0 }}>
+                          <span style={{ fontSize: '0.8rem', fontWeight: '600', color: '#ef4444', background: 'rgba(239,68,68,0.07)', padding: '0.2rem 0.6rem', borderRadius: '6px' }}>
+                            {entry.errorCount} error{entry.errorCount !== 1 ? 's' : ''}
+                          </span>
+                          {entry.addedCount > 0 && (
+                            <span style={{ fontSize: '0.8rem', fontWeight: '600', color: '#16a34a', background: 'rgba(22,163,74,0.07)', padding: '0.2rem 0.6rem', borderRadius: '6px' }}>
+                              {entry.addedCount} added
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Actions */}
+                        <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+                          <button
+                            type="button"
+                            onClick={() => downloadHistoryEntry(entry)}
+                            title="Download error report as Excel"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.85rem', background: 'var(--app-primary)', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '0.78rem', fontWeight: '600', cursor: 'pointer' }}
+                          >
+                            <Download size={13} />
+                            Download
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeHistoryEntry(entry.id)}
+                            title="Remove this entry"
+                            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', background: 'rgba(239,68,68,0.07)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.15)', borderRadius: '8px', cursor: 'pointer' }}
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           ) : (
             <>
               {bulkResult && (

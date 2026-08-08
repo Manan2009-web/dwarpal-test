@@ -27,7 +27,7 @@ test('Verify CSV parsing logic on IT dashboard', async ({ page }) => {
   await page.goto('https://127.0.0.1:5173/access-portal', { waitUntil: 'domcontentloaded' });
 
   // Handle Cookie consent if visible
-  await page.click('text=Accept All', { timeout: 3000 }).catch(() => {});
+  await page.click('button:has-text("Accept All")', { timeout: 5000 }).catch(() => {});
 
   await page.fill('#access-code', 'GATEKEEPER2026');
   await page.fill('#portal-password', 'dwarpal-admin-access');
@@ -37,7 +37,7 @@ test('Verify CSV parsing logic on IT dashboard', async ({ page }) => {
   await page.waitForTimeout(1000);
 
   // Dismiss Cookie Preferences again if it shows up
-  await page.click('text=Accept All', { timeout: 3000 }).catch(() => {});
+  await page.click('button:has-text("Accept All")', { timeout: 5000 }).catch(() => {});
 
   // Enter IT Admin credentials
   await page.fill('#login-identifier', '105');
