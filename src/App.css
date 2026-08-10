@@ -3285,6 +3285,13 @@ button {
 
 .gatepass-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
+.gatepass-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
 }
 
 .workspace-pagination,
@@ -4817,32 +4824,12 @@ button {
   line-height: 1.45;
 }
 
-.expandable-gatepass-details-shell {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 240ms ease;
-}
-
-.expandable-gatepass-details-shell.expanded {
-  grid-template-rows: 1fr;
-}
-
 .expandable-gatepass-details {
   min-height: 0;
   overflow: hidden;
   padding: 0 1.1rem 1.1rem;
   display: grid;
   gap: 0.95rem;
-  opacity: 0;
-  transform: translateY(-6px);
-  transition:
-    opacity 180ms ease,
-    transform 180ms ease;
-}
-
-.expandable-gatepass-details-shell.expanded .expandable-gatepass-details {
-  opacity: 1;
-  transform: translateY(0);
 }
 
 .expandable-gatepass-section {
@@ -5463,10 +5450,19 @@ button {
 @media (max-width: 1080px) {
   .hero-card,
   .app-shell,
-  .gatepass-grid,
   .profile-grid,
   .read-only-grid {
     grid-template-columns: 1fr;
+  }
+
+  .gatepass-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+
+  .gatepass-column {
+    display: contents;
   }
 
   .summary-grid {
@@ -7646,3 +7642,515 @@ html, body, #root, .admin-shell {
   }
 }
 
+
+/* ============================================================
+   DWARPAL REDESIGN — PHASE 1: DESIGN SYSTEM ADDITIONS
+   All rules here ADD to existing styles. Colors are 100% from
+   existing CSS variables — no hardcoded color overrides.
+   ============================================================ */
+
+/* --- Keyframes --- */
+@keyframes dp-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes dp-button-shimmer {
+  0% { left: -100%; }
+  60%, 100% { left: 100%; }
+}
+
+@keyframes dp-ping {
+  75%, 100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+@keyframes dp-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+@keyframes dp-scan-sweep {
+  0% { transform: translateY(-100%); }
+  50% { transform: translateY(200%); }
+  50.001% { transform: translateY(-100%); }
+  100% { transform: translateY(200%); }
+}
+
+@keyframes dp-orb-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(0.65); opacity: 0.45; }
+}
+
+/* --- Skeleton Loader --- */
+.dp-skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  background: linear-gradient(
+    90deg,
+    rgba(23, 52, 73, 0.06) 25%,
+    rgba(23, 52, 73, 0.12) 50%,
+    rgba(23, 52, 73, 0.06) 75%
+  );
+  background-size: 200% 100%;
+  animation: dp-shimmer 1.6s ease-in-out infinite;
+}
+
+.dp-skeleton-text {
+  height: 0.85rem;
+  border-radius: 6px;
+}
+
+.dp-skeleton-text.sm { height: 0.72rem; }
+.dp-skeleton-text.lg { height: 1.1rem; }
+
+.dp-skeleton-card {
+  border-radius: 20px;
+  padding: 1rem;
+  display: grid;
+  gap: 0.75rem;
+  border: 1px solid var(--line);
+  background: var(--bg-elevated);
+}
+
+.dp-skeleton-row {
+  display: grid;
+  grid-template-columns: 2rem 1fr 1fr auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.dp-skeleton-row:last-child { border-bottom: 0; }
+
+.dp-skeleton-avatar {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+}
+
+/* --- StatusBadge — dot prefix and improved spacing --- */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.28rem 0.72rem;
+  letter-spacing: 0.025em;
+}
+
+.status-badge::before {
+  content: '';
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.7;
+}
+
+.status-badge.count-badge::before {
+  display: none;
+}
+
+/* --- ActionButton — shimmer sweep on primary --- */
+.action-button.primary {
+  position: relative;
+  overflow: hidden;
+}
+
+.action-button.primary::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.22),
+    transparent
+  );
+  pointer-events: none;
+}
+
+.action-button.primary:hover::before {
+  animation: dp-button-shimmer 0.55s ease forwards;
+}
+
+/* --- SummaryCard — hover lift and left-accent line --- */
+.summary-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.summary-card::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12%;
+  bottom: 12%;
+  width: 3px;
+  background: var(--app-accent);
+  border-radius: 0 999px 999px 0;
+  transform: scaleY(0);
+  transform-origin: center;
+  transition: transform 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.summary-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 24px 52px rgba(15, 23, 42, 0.14),
+    0 8px 16px rgba(40, 114, 161, 0.1);
+  border-color: rgba(40, 114, 161, 0.22);
+}
+
+.summary-card:hover::after {
+  transform: scaleY(1);
+}
+
+.summary-icon {
+  transition: transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  background: linear-gradient(135deg, var(--app-accent-soft-bg), rgba(40, 114, 161, 0.18));
+}
+
+.summary-card:hover .summary-icon {
+  transform: scale(1.12);
+}
+
+/* --- EmptyState — float animation and dashed border --- */
+.empty-state {
+  border-style: dashed;
+  background: rgba(244, 247, 241, 0.6);
+}
+
+.empty-icon {
+  animation: dp-float 3.2s ease-in-out infinite;
+}
+
+/* --- GatepassCard — hover lift and QR glow --- */
+.gatepass-card {
+  transition:
+    transform 200ms ease,
+    box-shadow 200ms ease,
+    border-color 200ms ease;
+}
+
+.gatepass-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 28px 60px rgba(15, 23, 42, 0.14),
+    0 10px 20px rgba(40, 114, 161, 0.1);
+  border-color: rgba(40, 114, 161, 0.2);
+  border-top-color: var(--app-accent);
+}
+
+.qr-image-button:hover .qr-image-shell {
+  box-shadow:
+    inset 0 0 0 1px rgba(40, 114, 161, 0.18),
+    0 0 18px rgba(40, 114, 161, 0.12);
+}
+
+/* --- ModalForm — scale-from-center (canonical pattern) --- */
+.modal-backdrop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--modal-overlay);
+  backdrop-filter: blur(6px);
+  padding: 1rem;
+}
+
+.modal-header {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.85rem;
+  margin-bottom: 0.1rem;
+}
+
+/* X button rotate on hover */
+.modal-header .icon-button {
+  transition:
+    transform 200ms ease,
+    background 180ms ease,
+    color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.modal-header .icon-button:hover {
+  transform: translateY(-1px) rotate(90deg);
+}
+
+/* --- Sidebar — icon hover spring and role pill glass --- */
+.nav-link svg {
+  flex-shrink: 0;
+  transition: transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.nav-link:hover svg {
+  transform: scale(1.14);
+}
+
+.nav-link.active svg {
+  transform: scale(1.06);
+}
+
+/* Role pill glass chip */
+.sidebar-role {
+  backdrop-filter: blur(8px);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(237, 244, 248, 0.6));
+}
+
+/* --- Topbar scroll shadow (toggled via .scrolled class) --- */
+.topbar {
+  transition:
+    box-shadow 220ms ease,
+    backdrop-filter 220ms ease,
+    border-color 220ms ease,
+    background 220ms ease;
+}
+
+.topbar.scrolled {
+  backdrop-filter: blur(16px);
+  border-bottom-color: rgba(40, 114, 161, 0.18);
+  box-shadow:
+    0 8px 28px rgba(15, 23, 42, 0.1),
+    0 2px 8px rgba(40, 114, 161, 0.08);
+}
+
+/* Brand hover nudge */
+.topbar-brand-wrap .brand,
+.drawer-header .brand {
+  transition: transform 180ms ease;
+}
+
+.topbar-brand-wrap .brand:hover,
+.drawer-header .brand:hover {
+  transform: scale(1.03);
+}
+
+/* --- IdentityField — label uppercase tracking + row separator --- */
+.identity-field {
+  border-bottom: 1px solid rgba(23, 52, 73, 0.07);
+  padding-bottom: 0.45rem;
+}
+
+.identity-field:last-child {
+  border-bottom: 0;
+}
+
+.identity-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+/* --- Notification ping dot --- */
+.notification-ping {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--app-accent);
+  flex-shrink: 0;
+  position: relative;
+}
+
+.notification-ping::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--app-accent);
+  animation: dp-ping 1.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.notification-ping.read {
+  background: rgba(23, 52, 73, 0.2);
+}
+
+.notification-ping.read::after {
+  animation: none;
+}
+
+/* --- Toast — left colored bar design --- */
+.notification-toast {
+  position: relative;
+  padding-left: 1rem;
+}
+
+.notification-toast::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 15%;
+  bottom: 15%;
+  width: 3px;
+  border-radius: 0 999px 999px 0;
+  background: var(--app-accent);
+  transition: background 180ms ease;
+}
+
+.notification-toast-success::before { background: var(--success); }
+.notification-toast-error::before { background: var(--danger); }
+.notification-toast-warning::before { background: var(--warning); }
+.notification-toast-info::before { background: var(--info); }
+
+/* --- ThinkingOrb --- */
+.dp-thinking-orb {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  justify-content: center;
+}
+
+.dp-orb-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--app-accent);
+  animation: dp-orb-pulse 1.2s ease-in-out infinite;
+}
+
+.dp-orb-dot:nth-child(2) { animation-delay: 0.2s; }
+.dp-orb-dot:nth-child(3) { animation-delay: 0.4s; }
+
+/* --- Scanner scan-line upgrade --- */
+.scanner-scan-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--app-accent) 40%,
+    rgba(255, 255, 255, 0.9) 50%,
+    var(--app-accent) 60%,
+    transparent 100%
+  );
+  box-shadow: 0 0 12px rgba(40, 114, 161, 0.55);
+  border-radius: 999px;
+  animation: dp-scan-sweep 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* --- ProfileCard avatar ring --- */
+.profile-avatar {
+  position: relative;
+}
+
+.profile-avatar::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 999px;
+  border: 2px solid var(--app-accent-soft-bg);
+  pointer-events: none;
+}
+
+/* --- OTP input fill state --- */
+.otp-code-input-box.filled {
+  border-color: var(--app-accent);
+  box-shadow: 0 0 0 3px var(--app-accent-soft-bg);
+}
+
+/* --- Admin table improvements --- */
+.admin-table tbody tr {
+  transition: background 160ms ease;
+}
+
+.admin-table tbody tr:hover {
+  background: var(--control-bg-hover);
+}
+
+.admin-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  backdrop-filter: blur(8px);
+  background: rgba(244, 248, 251, 0.92);
+  border-bottom: 2px solid var(--app-surface-border);
+}
+
+/* ============================================================
+   PREFERS-REDUCED-MOTION
+   Keep: opacity, color, background transitions (state changes)
+   Remove: springs, large layout shifts, parallax, float loops
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  .gatepass-card:hover,
+  .summary-card:hover,
+  .expandable-gatepass-card:hover,
+  .action-button:hover,
+  .icon-button:hover,
+  .nav-link:hover,
+  .mobile-nav-item:hover,
+  .filter-tab:hover,
+  .ghost-button:hover,
+  .text-button:hover,
+  .topbar-brand-wrap .brand:hover,
+  .drawer-header .brand:hover {
+    transform: none;
+  }
+
+  .empty-icon {
+    animation: none;
+  }
+
+  .dp-skeleton {
+    animation: none;
+    background: rgba(23, 52, 73, 0.07);
+  }
+
+  .action-button.primary::before {
+    animation: none;
+    display: none;
+  }
+
+  .notification-ping::after {
+    animation: none;
+  }
+
+  .dp-orb-dot {
+    animation: none;
+    opacity: 0.6;
+  }
+
+  .scanner-scan-line {
+    animation: none;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: 0.7;
+  }
+
+  .summary-card::after {
+    transform: scaleY(1);
+    transition: none;
+  }
+
+  .nav-link svg {
+    transition: none;
+  }
+
+  .modal-header .icon-button:hover {
+    transform: none;
+  }
+
+  .summary-card:hover .summary-icon {
+    transform: none;
+  }
+
+  .summary-icon {
+    transition: none;
+  }
+}

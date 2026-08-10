@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { AlertTriangle, Camera, LoaderCircle, QrCode, ScanLine, X } from 'lucide-react'
+import { AlertTriangle, Camera, QrCode, ScanLine, X } from 'lucide-react'
 import QrScanner from 'qr-scanner'
 import { ActionButton } from './ui'
+import { ThinkingOrb } from './ui/ThinkingOrb'
 
 const BLACK_PREVIEW_TIMEOUT_MS = 4200
 
@@ -318,7 +319,7 @@ export default function ScannerModal({
           {showPreview ? (
             <div className="scanner-modal-overlay" aria-hidden="true">
               <div className={`scanner-focus-frame ${status === 'verifying' || busy ? 'busy' : ''}`}>
-                {status === 'ready' && !busy ? <div className="scan-line" /> : null}
+                {status === 'ready' && !busy ? <div className="scanner-scan-line" /> : null}
                 <span className="scanner-frame-corner top-left" />
                 <span className="scanner-frame-corner top-right" />
                 <span className="scanner-frame-corner bottom-left" />
@@ -337,7 +338,10 @@ export default function ScannerModal({
 
           {status === 'starting' || status === 'verifying' || busy ? (
             <div className="scanner-modal-busy">
-              <LoaderCircle size={18} className="spin" />
+              <ThinkingOrb
+                size={status === 'verifying' || busy ? 'md' : 'sm'}
+                label={busy || status === 'verifying' ? 'Verifying scanned gatepass...' : 'Opening camera...'}
+              />
               <span>{busy || status === 'verifying' ? 'Verifying scanned gatepass...' : 'Opening camera...'}</span>
             </div>
           ) : null}

@@ -1,4 +1,5 @@
-import { memo } from 'react'
+import { memo, useEffect, useRef } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import {
   Bell,
   Check,
@@ -17,6 +18,15 @@ import {
 import { ROLE_META, STATUS_COLORS, formatSemesterLabel } from '../mockData'
 import AppBrand from './AppBrand'
 
+// ---------------------------------------------------------------------------
+// Framer Motion spring presets
+// ---------------------------------------------------------------------------
+const SPRING_SNAPPY = { type: 'spring', stiffness: 420, damping: 30 }
+const SPRING_GENTLE = { type: 'spring', stiffness: 300, damping: 28 }
+
+// ---------------------------------------------------------------------------
+// DashboardHeaderBranding
+// ---------------------------------------------------------------------------
 export function DashboardHeaderBranding({
   logo,
   appName = 'DwarPal',
@@ -30,7 +40,11 @@ export function DashboardHeaderBranding({
         <AppBrand size="lg" logo={logo} appName={appName} align="start" />
       </div>
       <div className="dashboard-header-branding-meta dashboard-header-context">
-        {roleName ? <p className="dashboard-header-role">{roleName}</p> : null}
+        {roleName ? (
+          <p className="dashboard-header-role" style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--app-accent)' }}>
+            {roleName}
+          </p>
+        ) : null}
         {dashboardTitle ? <h1 className="dashboard-header-title">{dashboardTitle}</h1> : null}
         {subtitle ? <p className="dashboard-header-subtitle">{subtitle}</p> : null}
       </div>
@@ -38,10 +52,16 @@ export function DashboardHeaderBranding({
   )
 }
 
+// ---------------------------------------------------------------------------
+// StatusBadge — dot prefix + improved spacing (CSS handles the ::before dot)
+// ---------------------------------------------------------------------------
 export function StatusBadge({ status }) {
   return <span className={`status-badge ${STATUS_COLORS[status] || 'pending'}`}>{status}</span>
 }
 
+// ---------------------------------------------------------------------------
+// ActionButton — shimmer on primary hover (CSS handles ::before shimmer)
+// ---------------------------------------------------------------------------
 export function ActionButton({
   children,
   tone = 'primary',
@@ -53,32 +73,46 @@ export function ActionButton({
   ...props
 }) {
   return (
-    <button
+    <motion.button
       type={type}
       className={['action-button', tone, className].filter(Boolean).join(' ')}
       onClick={onClick}
       disabled={disabled}
+      whileTap={disabled ? undefined : { scale: 0.97 }}
+      transition={SPRING_SNAPPY}
       {...props}
     >
       {Icon ? <Icon size={16} /> : null}
       <span>{children}</span>
-    </button>
+    </motion.button>
   )
 }
 
+// ---------------------------------------------------------------------------
+// SummaryCard — hover lift + left-accent line + whileInView stagger (CSS hover)
+// ---------------------------------------------------------------------------
 export function SummaryCard({ label, value, trend, icon: Icon, tone = 'default' }) {
   return (
-    <article className={`summary-card ${tone}`}>
+    <motion.article
+      className={`summary-card ${tone}`}
+      initial={{ opacity: 0, y: 14 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-40px' }}
+      transition={{ duration: 0.38, ease: [0.16, 1, 0.3, 1] }}
+    >
       <div className="summary-icon">{Icon ? <Icon size={18} /> : <Sparkles size={18} />}</div>
       <div className="summary-copy">
         <p>{label}</p>
         <h3>{value}</h3>
         {trend ? <span>{trend}</span> : null}
       </div>
-    </article>
+    </motion.article>
   )
 }
 
+// ---------------------------------------------------------------------------
+// SearchBar — animated focus ring (CSS handles the :focus-within ring)
+// ---------------------------------------------------------------------------
 export function SearchBar({ value, onChange, placeholder = 'Search by name, ID, department, status' }) {
   return (
     <label className="search-bar">
@@ -88,6 +122,9 @@ export function SearchBar({ value, onChange, placeholder = 'Search by name, ID, 
   )
 }
 
+// ---------------------------------------------------------------------------
+// SelectField — animated chevron rotate (CSS handles the :focus-within rotate)
+// ---------------------------------------------------------------------------
 export function SelectField({
   children,
   className = '',
@@ -107,36 +144,61 @@ export function SelectField({
   )
 }
 
+// ---------------------------------------------------------------------------
+// FilterTabs — Framer Motion layoutId sliding pill indicator
+// ---------------------------------------------------------------------------
 export function FilterTabs({ value, onChange, options }) {
   return (
-    <div className="filter-tabs">
+    <div className="filter-tabs" role="tablist">
       {options.map((option) => (
         <button
           key={option}
           type="button"
+          role="tab"
+          aria-selected={value === option}
           className={`filter-tab ${value === option ? 'active' : ''}`}
           onClick={() => onChange(option)}
+          style={{ position: 'relative' }}
         >
           {option}
+          {value === option ? (
+            <motion.span
+              layoutId="filter-tab-indicator"
+              className="filter-tab-indicator"
+              style={{ position: 'absolute', bottom: '-1px', left: '20%', right: '20%', height: '2px' }}
+              transition={SPRING_GENTLE}
+            />
+          ) : null}
         </button>
       ))}
     </div>
   )
 }
 
+// ---------------------------------------------------------------------------
+// EmptyState — floating icon + dashed border (CSS handles both)
+// ---------------------------------------------------------------------------
 export function EmptyState({ title, description, action }) {
   return (
-    <div className="empty-state">
+    <motion.div
+      className="empty-state"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+    >
       <div className="empty-icon">
         <QrCode size={22} />
       </div>
       <h3>{title}</h3>
       {description ? <p>{description}</p> : null}
       {action}
-    </div>
+    </motion.div>
   )
 }
 
+// ---------------------------------------------------------------------------
+// Sidebar — layoutId nav indicator + icon scale (CSS handles icon hover)
+// ---------------------------------------------------------------------------
 export function Sidebar({
   currentUser,
   currentPage,
@@ -178,17 +240,34 @@ export function Sidebar({
           <span>{ROLE_META[currentUser.role].shortTitle}</span>
           <p>{[currentUser.program, currentUser.department].filter(Boolean).join(' | ') || 'Not assigned'}</p>
         </div>
-        <nav className="sidebar-nav">
+        <nav className="sidebar-nav" aria-label="Main navigation">
           {navItems.map((item) => (
             <button
               key={item.key}
               type="button"
               className={`nav-link ${currentPage === item.key ? 'active' : ''}`}
               onClick={() => handleNavigate(item.key)}
+              aria-current={currentPage === item.key ? 'page' : undefined}
+              style={{ position: 'relative' }}
             >
               <item.icon size={18} />
               <span className="nav-link-label">{item.label}</span>
               {item.badge ? <span className="nav-link-badge">{formatNavBadge(item.badge)}</span> : null}
+              {currentPage === item.key ? (
+                <motion.span
+                  layoutId="sidebar-nav-indicator"
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    top: '15%',
+                    bottom: '15%',
+                    width: '3px',
+                    background: 'rgba(255,255,255,0.5)',
+                    borderRadius: '0 999px 999px 0',
+                  }}
+                  transition={SPRING_GENTLE}
+                />
+              ) : null}
             </button>
           ))}
         </nav>
@@ -213,6 +292,9 @@ export function Sidebar({
   )
 }
 
+// ---------------------------------------------------------------------------
+// Topbar — scroll shadow via .scrolled class
+// ---------------------------------------------------------------------------
 export function Topbar({
   currentUser,
   title,
@@ -222,9 +304,20 @@ export function Topbar({
   actions = null,
 }) {
   const showDashboardCopy = Boolean(title || subtitle)
+  const headerRef = useRef(null)
+
+  useEffect(() => {
+    function onScroll() {
+      if (!headerRef.current) return
+      const scrolled = window.scrollY > 8
+      headerRef.current.classList.toggle('scrolled', scrolled)
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   return (
-    <header className={`topbar ${showDashboardCopy ? '' : 'compact'}`}>
+    <header ref={headerRef} className={`topbar ${showDashboardCopy ? '' : 'compact'}`}>
       <div className="topbar-copy">
         <div className="topbar-leading">
           <button
@@ -253,6 +346,9 @@ export function Topbar({
   )
 }
 
+// ---------------------------------------------------------------------------
+// IdentityField — label uppercase + row separator (CSS handles both)
+// ---------------------------------------------------------------------------
 export function IdentityField({ label, value, className = '', valueOnly = false }) {
   const resolvedValue =
     typeof value === 'string' ? (value.trim() ? value.trim() : 'Not provided') : value ?? 'Not provided'
@@ -266,6 +362,9 @@ export function IdentityField({ label, value, className = '', valueOnly = false 
   )
 }
 
+// ---------------------------------------------------------------------------
+// ProfileCard — avatar ring (CSS handles ::after ring) + stagger reveal
+// ---------------------------------------------------------------------------
 export function ProfileCard({ currentUser, onLogout, children = null }) {
   const primaryId = currentUser.enrollment || currentUser.employeeId
   return (
@@ -285,7 +384,15 @@ export function ProfileCard({ currentUser, onLogout, children = null }) {
           </div>
         </div>
       </div>
-      <div className="profile-grid">
+      <motion.div
+        className="profile-grid"
+        initial="hidden"
+        animate="visible"
+        variants={{
+          hidden: {},
+          visible: { transition: { staggerChildren: 0.06, delayChildren: 0.08 } },
+        }}
+      >
         <ProfileField label="Department" value={currentUser.department} />
         {currentUser.program ? <ProfileField label="Program" value={currentUser.program} /> : null}
         <ProfileField label="Mobile" value={currentUser.phone} />
@@ -294,7 +401,7 @@ export function ProfileCard({ currentUser, onLogout, children = null }) {
           <ProfileField label="Semester" value={formatSemesterLabel(currentUser.semester) || 'Semester not assigned'} />
         ) : null}
         {primaryId ? <IdentityField className="profile-field profile-field-id" value={primaryId} valueOnly /> : null}
-      </div>
+      </motion.div>
       {children}
       <ActionButton tone="danger" icon={LogOut} onClick={onLogout}>
         Logout
@@ -304,9 +411,21 @@ export function ProfileCard({ currentUser, onLogout, children = null }) {
 }
 
 function ProfileField({ label, value }) {
-  return <IdentityField className="profile-field" label={label} value={value} />
+  return (
+    <motion.div
+      variants={{
+        hidden: { opacity: 0, y: 6 },
+        visible: { opacity: 1, y: 0, transition: { duration: 0.28, ease: [0.16, 1, 0.3, 1] } },
+      }}
+    >
+      <IdentityField className="profile-field" label={label} value={value} />
+    </motion.div>
+  )
 }
 
+// ---------------------------------------------------------------------------
+// GatepassCard — hover lift + QR glow (CSS handles both)
+// ---------------------------------------------------------------------------
 export const GatepassCard = memo(function GatepassCard({
   gatepass,
   currentUserRole,
@@ -470,6 +589,9 @@ export const GatepassCard = memo(function GatepassCard({
 
 GatepassCard.displayName = 'GatepassCard'
 
+// ---------------------------------------------------------------------------
+// ModalForm — scale-from-center with AnimatePresence (canonical pattern)
+// ---------------------------------------------------------------------------
 export function ModalForm({
   open,
   title,
@@ -481,36 +603,53 @@ export function ModalForm({
   closeOnBackdrop = true,
   showCloseButton = true,
 }) {
-  if (!open) return null
+  const titleId = `modal-title-${title?.replace(/\s+/g, '-').toLowerCase() || 'dialog'}`
+
   return (
-    <div
-      className={['modal-backdrop', backdropClassName].filter(Boolean).join(' ')}
-      role="presentation"
-      onClick={closeOnBackdrop ? onClose : undefined}
-    >
-      <div
-        className={['modal-card', className].filter(Boolean).join(' ')}
-        role="dialog"
-        aria-modal="true"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="modal-header">
-          <div>
-            <h3>{title}</h3>
-            {subtitle ? <span>{subtitle}</span> : null}
-          </div>
-          {showCloseButton ? (
-            <button type="button" className="icon-button" onClick={onClose} aria-label="Close">
-              <X size={18} />
-            </button>
-          ) : null}
-        </div>
-        {children}
-      </div>
-    </div>
+    <AnimatePresence>
+      {open ? (
+        <motion.div
+          className={['modal-backdrop', backdropClassName].filter(Boolean).join(' ')}
+          role="presentation"
+          onClick={closeOnBackdrop ? onClose : undefined}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
+        >
+          <motion.div
+            className={['modal-card', className].filter(Boolean).join(' ')}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={titleId}
+            onClick={(event) => event.stopPropagation()}
+            initial={{ opacity: 0, scale: 0.92 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.94 }}
+            transition={SPRING_SNAPPY}
+          >
+            <div className="modal-header">
+              <div>
+                <h3 id={titleId}>{title}</h3>
+                {subtitle ? <span>{subtitle}</span> : null}
+              </div>
+              {showCloseButton ? (
+                <button type="button" className="icon-button" onClick={onClose} aria-label="Close">
+                  <X size={18} />
+                </button>
+              ) : null}
+            </div>
+            {children}
+          </motion.div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
   )
 }
 
+// ---------------------------------------------------------------------------
+// Utility formatters (unchanged — pure data logic, no visual changes)
+// ---------------------------------------------------------------------------
 export function formatDateTime(value) {
   if (!value) return 'Awaiting action'
   return new Intl.DateTimeFormat('en-IN', {

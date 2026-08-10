@@ -45,6 +45,7 @@ import PrivacyPreferencesBanner from './components/PrivacyPreferencesBanner'
 import PasswordInput from './components/PasswordInput'
 import PasswordResetPanel from './components/PasswordResetPanel'
 import NewStudentWelcomeModal from './components/NewStudentWelcomeModal'
+import { SkeletonNotificationList } from './components/ui/SkeletonLoader'
 
 const LegalDocs = lazy(() => import('./components/LegalDocs'))
 const SupportPage = lazy(() => import('./components/SupportPage'))
@@ -1897,13 +1898,18 @@ function App() {
         createdRequest,
         ...previousGatepasses.filter((item) => item.recordId !== createdRequest.recordId),
       ])
-      await refreshAppData(undefined, { force: true })
+      // Show success toast and signal OK immediately — before refreshAppData so the
+      // background auto-refresh interval (which uses its own AbortController) cannot
+      // abort this refresh and race into the catch block, preventing modal close.
       toast.success({
         title: isLeave ? 'Leave request created' : 'Gatepass created',
         message: isLeave
           ? 'Your leave request was submitted successfully.'
           : 'Your gatepass request was submitted successfully.',
       })
+      // Fire the workspace refresh in the background — the local state update above
+      // already ensures the new gatepass appears in the list immediately.
+      refreshAppData(undefined, { force: true }).catch(() => {})
       return { ok: true, request: createdRequest }
     } catch (error) {
       const { message, fieldErrors } = resolveApiError(error, {
@@ -1925,12 +1931,19 @@ function App() {
   async function updateGatepass(request, action, requestBody = null) {
     try {
       const updatedRequest = await updateRequestStatus(request, action, requestBody)
-      await refreshAppData(undefined, { force: true })
+      // Update local state immediately so card UI reflects the new status/actions
+      // without waiting for the background refresh to complete.
+      setGatepasses((prev) =>
+        prev.map((item) => (item.recordId === updatedRequest.recordId ? updatedRequest : item)),
+      )
       const toastMeta = getActionToastMeta(request, action)
       toast[toastMeta.tone]?.({
         title: toastMeta.title,
         message: toastMeta.message,
       })
+      // Fire refresh in background — don't await so the auto-refresh AbortController
+      // cannot race into the catch block and produce a false failure toast.
+      refreshAppData(undefined, { force: true }).catch(() => {})
       return { ok: true, request: updatedRequest }
     } catch (error) {
       const { message, fieldErrors } = resolveApiError(error, {
@@ -3500,7 +3513,7 @@ function BiometricSettingsPanel({ currentUser, onCurrentUserPatch }) {
         </span>
       </div>
 
-      {isLoading ? <p className="field-hint">Loading biometric devices...</p> : null}
+      {isLoading ? <div className="dp-skeleton dp-skeleton-text" style={{ width: '160px', height: '0.85rem' }} /> : null}
       {support.supported ? null : (
         <p className="field-hint">
           {`Fingerprint login is not supported on this device/browser. ${support.message || ''}`.trim()}
@@ -4626,10 +4639,7 @@ function NotificationsPage({
         ) : null}
 
         {loading && !notifications.length ? (
-          <EmptyState
-            title="Loading notifications"
-            description="Fetching your latest gatepass workflow updates from DwarPal."
-          />
+          <SkeletonNotificationList count={6} />
         ) : notifications.length ? (
           <div className="notification-page-list">
             {notifications.map((notification) => (
@@ -4831,18 +4841,42 @@ function DashboardPage({
 
         {gatepassCards.length ? (
           <div className="gatepass-grid">
-            {gatepassCards.map(({ gatepass, actions, highlighted }) => (
-              <ExpandableGatepassCard
-                key={gatepass.id}
-                gatepass={gatepass}
-                currentUserRole={currentUser.role}
-                actions={actions}
-                expanded={expandedGatepassId === gatepass.id}
-                highlighted={highlighted}
-                onOpenQrPreview={isRequester ? onOpenQrPreview : undefined}
-                onToggle={() => setExpandedGatepassId((previousId) => (previousId === gatepass.id ? '' : gatepass.id))}
-              />
-            ))}
+            <div className="gatepass-column">
+              {gatepassCards
+                .map((card, index) => ({ ...card, index }))
+                .filter((_, i) => i % 2 === 0)
+                .map(({ gatepass, actions, highlighted, index }) => (
+                  <ExpandableGatepassCard
+                    key={gatepass.id}
+                    gatepass={gatepass}
+                    currentUserRole={currentUser.role}
+                    actions={actions}
+                    expanded={expandedGatepassId === gatepass.id}
+                    highlighted={highlighted}
+                    onOpenQrPreview={isRequester ? onOpenQrPreview : undefined}
+                    onToggle={() => setExpandedGatepassId((previousId) => (previousId === gatepass.id ? '' : gatepass.id))}
+                    style={{ order: index }}
+                  />
+                ))}
+            </div>
+            <div className="gatepass-column">
+              {gatepassCards
+                .map((card, index) => ({ ...card, index }))
+                .filter((_, i) => i % 2 !== 0)
+                .map(({ gatepass, actions, highlighted, index }) => (
+                  <ExpandableGatepassCard
+                    key={gatepass.id}
+                    gatepass={gatepass}
+                    currentUserRole={currentUser.role}
+                    actions={actions}
+                    expanded={expandedGatepassId === gatepass.id}
+                    highlighted={highlighted}
+                    onOpenQrPreview={isRequester ? onOpenQrPreview : undefined}
+                    onToggle={() => setExpandedGatepassId((previousId) => (previousId === gatepass.id ? '' : gatepass.id))}
+                    style={{ order: index }}
+                  />
+                ))}
+            </div>
           </div>
         ) : (
           <EmptyState
@@ -5279,7 +5313,7 @@ function getRoleStats(currentUser, summary, gatepasses) {
       Boolean(currentUser.coordinatorAssignment?.isCoordinator)
     const coordinatorPending =
       summaryStats.coordinatorPending ??
-      gatepasses.filter((item) => item.stage === 'coordinator' && item.status === 'Pending').length
+      gatepasses.filter((item) => ['coordinator', 'coordinator_review'].includes(item.stage) && item.status === 'Pending').length
     const coordinatorApproved = summaryStats.coordinatorApproved ?? 0
     const coordinatorRejected = summaryStats.coordinatorRejected ?? 0
 
@@ -5452,7 +5486,7 @@ function getAvailableActions(role, gatepass, onGatepassAction, securityStation =
     return []
   }
 
-  if (role === 'principal' && gatepass.status === 'Pending' && gatepass.stage === 'principal') {
+  if (role === 'principal' && gatepass.status === 'Pending' && ['principal', 'principal_review'].includes(gatepass.stage)) {
     return [
       { label: 'Approve', tone: 'success', onClick: handleAction('approve') },
       { label: 'Reject', tone: 'danger', onClick: handleAction('reject') },
@@ -5460,7 +5494,7 @@ function getAvailableActions(role, gatepass, onGatepassAction, securityStation =
     ]
   }
 
-  if (role === 'hod' && gatepass.status === 'Pending' && gatepass.stage === 'hod') {
+  if (role === 'hod' && gatepass.status === 'Pending' && ['hod', 'hod_review'].includes(gatepass.stage)) {
     return [
       { label: 'Approve', tone: 'success', onClick: handleAction('approve') },
       { label: 'Reject', tone: 'danger', onClick: handleAction('reject') },
@@ -5468,7 +5502,7 @@ function getAvailableActions(role, gatepass, onGatepassAction, securityStation =
     ]
   }
 
-  if (role === 'faculty' && gatepass.status === 'Pending' && gatepass.stage === 'coordinator') {
+  if (role === 'faculty' && gatepass.status === 'Pending' && ['coordinator', 'coordinator_review'].includes(gatepass.stage)) {
     return [
       { label: 'Approve', tone: 'success', onClick: handleAction('approve') },
       { label: 'Reject', tone: 'danger', onClick: handleAction('reject') },

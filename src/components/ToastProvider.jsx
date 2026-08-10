@@ -1,10 +1,17 @@
+/**
+ * ToastProvider — Redesigned with Framer Motion AnimatePresence.
+ * Visual: glass background, left colored bar (CSS), slide-in from right.
+ * The ToastItem component is internal to this file.
+ * All prop signatures and API (show, success, error, warning, info, dismiss) are unchanged.
+ */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, BellRing, CheckCircle2, TriangleAlert, X } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
 
 const ToastContext = createContext(null)
 
 const TOAST_DISMISS_DELAY_MS = 4200
-const TOAST_EXIT_DELAY_MS = 220
+const TOAST_EXIT_DELAY_MS = 350
 
 const TOAST_META = {
   success: {
@@ -54,15 +61,25 @@ function normalizeToastInput(input, fallbackTone = 'info') {
   }
 }
 
+// Framer Motion spring for toast entrance
+const TOAST_SPRING = { type: 'spring', stiffness: 380, damping: 32 }
+
 function ToastItem({ toast, onDismiss }) {
   const meta = TOAST_META[toast.tone] || TOAST_META.info
   const Icon = toast.icon || meta.icon
   const title = toast.title || meta.title
 
   return (
-    <article
-      className={`notification-toast notification-toast-${toast.tone}${toast.visible ? ' visible' : ' leaving'}`}
+    <motion.article
+      key={toast.id}
+      layout
+      className={`notification-toast notification-toast-${toast.tone}`}
       role={toast.tone === 'error' || toast.tone === 'warning' ? 'alert' : 'status'}
+      initial={{ opacity: 0, x: 80, scale: 0.96 }}
+      animate={{ opacity: 1, x: 0, scale: 1 }}
+      exit={{ opacity: 0, x: 60, scale: 0.96 }}
+      transition={TOAST_SPRING}
+      whileHover={{ scale: 1.01 }}
     >
       <div className="notification-toast-body">
         <div className="notification-toast-icon" aria-hidden="true">
@@ -88,7 +105,7 @@ function ToastItem({ toast, onDismiss }) {
       >
         <X size={16} />
       </button>
-    </article>
+    </motion.article>
   )
 }
 
@@ -117,17 +134,7 @@ export function ToastProvider({ children }) {
   const dismissToast = useCallback(
     (toastId) => {
       clearToastTimeouts(toastId)
-      setToasts((previousToasts) =>
-        previousToasts.map((toast) =>
-          toast.id === toastId
-            ? {
-                ...toast,
-                visible: false,
-              }
-            : toast,
-        ),
-      )
-
+      // With AnimatePresence we just remove the toast; the exit animation handles the fade-out
       const removeTimeoutId = window.setTimeout(() => {
         removeToast(toastId)
       }, TOAST_EXIT_DELAY_MS)
@@ -136,6 +143,8 @@ export function ToastProvider({ children }) {
         dismissTimeoutId: 0,
         removeTimeoutId,
       })
+
+      setToasts((previousToasts) => previousToasts.filter((toast) => toast.id !== toastId))
     },
     [clearToastTimeouts, removeToast],
   )
@@ -203,9 +212,11 @@ export function ToastProvider({ children }) {
     <ToastContext.Provider value={contextValue}>
       {children}
       <div className="notification-toast-stack" aria-live="polite" aria-atomic="false">
-        {toasts.map((toast) => (
-          <ToastItem key={toast.id} toast={toast} onDismiss={dismissToast} />
-        ))}
+        <AnimatePresence mode="popLayout">
+          {toasts.map((toast) => (
+            <ToastItem key={toast.id} toast={toast} onDismiss={dismissToast} />
+          ))}
+        </AnimatePresence>
       </div>
     </ToastContext.Provider>
   )

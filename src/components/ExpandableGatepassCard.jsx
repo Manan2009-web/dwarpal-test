@@ -1,4 +1,5 @@
 import { memo, useState, useEffect } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import {
   Check,
   ChevronDown,
@@ -166,6 +167,7 @@ const ExpandableGatepassCard = memo(function ExpandableGatepassCard({
   highlighted = false,
   onOpenQrPreview,
   onToggle,
+  style,
 }) {
   const [timeLeft, setTimeLeft] = useState('')
 
@@ -212,9 +214,14 @@ const ExpandableGatepassCard = memo(function ExpandableGatepassCard({
   const reviewerRole = ROLE_META[currentUserRole]?.title || humanizeLabel(currentUserRole, 'User')
 
   return (
-    <article
+    <motion.article
       className={`expandable-gatepass-card${expanded ? ' expanded' : ''}${highlighted ? ' highlighted' : ''}`}
       data-reference-id={String(displayGatepassId || '').trim().toUpperCase()}
+      initial={{ opacity: 0, y: 10 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-30px' }}
+      transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+      style={style}
     >
       <button
         type="button"
@@ -259,9 +266,15 @@ const ExpandableGatepassCard = memo(function ExpandableGatepassCard({
               </button>
             ) : null}
             <StatusBadge status={gatepass?.status} />
-            <span className={`expandable-gatepass-chevron${expanded ? ' expanded' : ''}`} aria-hidden="true">
+            {/* Animated chevron — rotates 180deg on expand */}
+            <motion.span
+              className={`expandable-gatepass-chevron${expanded ? ' expanded' : ''}`}
+              animate={{ rotate: expanded ? 180 : 0 }}
+              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+              aria-hidden="true"
+            >
               <ChevronDown size={18} />
-            </span>
+            </motion.span>
           </div>
         </div>
 
@@ -275,83 +288,94 @@ const ExpandableGatepassCard = memo(function ExpandableGatepassCard({
         </div>
       </button>
 
-      <div className={`expandable-gatepass-details-shell${expanded ? ' expanded' : ''}`}>
-        <div className="expandable-gatepass-details">
-          <div className="expandable-gatepass-section">
-            <div className="expandable-gatepass-section-head">
-              <div>
-                <span className="eyebrow">Full details</span>
-                <h4>{displayGatepassId}</h4>
-              </div>
-              <div className="expandable-gatepass-quick-facts">
-                <span>
-                  <Clock3 size={14} />
-                  {formatOptionalDateTime(gatepass?.submittedAt, 'Not created yet')}
-                </span>
-                <span>
-                  <ShieldCheck size={14} />
-                  {getWorkflowSummary(gatepass)}
-                </span>
-                <span>
-                  <UserRound size={14} />
-                  {getRequesterRoleLabel(gatepass)}
-                </span>
-              </div>
-            </div>
+      {/* AnimatePresence height animation for the expandable details panel */}
+      <AnimatePresence initial={false}>
+        {expanded ? (
+          <motion.div
+            key="expandable-details"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <div className="expandable-gatepass-details">
+              <div className="expandable-gatepass-section">
+                <div className="expandable-gatepass-section-head">
+                  <div>
+                    <span className="eyebrow">Full details</span>
+                    <h4>{displayGatepassId}</h4>
+                  </div>
+                  <div className="expandable-gatepass-quick-facts">
+                    <span>
+                      <Clock3 size={14} />
+                      {formatOptionalDateTime(gatepass?.submittedAt, 'Not created yet')}
+                    </span>
+                    <span>
+                      <ShieldCheck size={14} />
+                      {getWorkflowSummary(gatepass)}
+                    </span>
+                    <span>
+                      <UserRound size={14} />
+                      {getRequesterRoleLabel(gatepass)}
+                    </span>
+                  </div>
+                </div>
 
-            <div className="expandable-gatepass-reason">
-              <span>Reason</span>
-              <p>{gatepass?.reason || 'No reason provided.'}</p>
-            </div>
+                <div className="expandable-gatepass-reason">
+                  <span>Reason</span>
+                  <p>{gatepass?.reason || 'No reason provided.'}</p>
+                </div>
 
-            <div className="expandable-gatepass-detail-grid">
-              {detailItems.map((item) => (
-                <DetailItem key={`${displayGatepassId}-${item.label}`} label={item.label} value={item.value} />
-              ))}
-            </div>
-          </div>
-
-          {Array.isArray(gatepass?.timeline) && gatepass.timeline.length ? (
-            <div className="expandable-gatepass-section">
-              <div className="expandable-gatepass-section-head compact">
-                <div>
-                  <span className="eyebrow">Timeline</span>
-                  <h4>Approval and movement history</h4>
+                <div className="expandable-gatepass-detail-grid">
+                  {detailItems.map((item) => (
+                    <DetailItem key={`${displayGatepassId}-${item.label}`} label={item.label} value={item.value} />
+                  ))}
                 </div>
               </div>
 
-              <div className="expandable-gatepass-timeline">
-                {gatepass.timeline.map((item, index) => (
-                  <div key={`${displayGatepassId}-timeline-${index}`} className={`timeline-item ${item.tone || 'upcoming'}`}>
-                    <div className="timeline-dot">{item.tone === 'done' ? <Check size={11} /> : null}</div>
-                    <div className="timeline-copy">
-                      <strong>{item.label}</strong>
-                      <p>{item.note}</p>
-                      {item.at ? <span>{formatDateTime(item.at)}</span> : null}
+              {Array.isArray(gatepass?.timeline) && gatepass.timeline.length ? (
+                <div className="expandable-gatepass-section">
+                  <div className="expandable-gatepass-section-head compact">
+                    <div>
+                      <span className="eyebrow">Timeline</span>
+                      <h4>Approval and movement history</h4>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
 
-          {showQrPreview || actions.length ? (
-            <div className="expandable-gatepass-actions">
-              {showQrPreview ? (
-                <ActionButton type="button" tone="secondary" icon={QrCode} onClick={() => onOpenQrPreview?.(gatepass)}>
-                  View QR
-                </ActionButton>
+                  <div className="expandable-gatepass-timeline">
+                    {gatepass.timeline.map((item, index) => (
+                      <div key={`${displayGatepassId}-timeline-${index}`} className={`timeline-item ${item.tone || 'upcoming'}`}>
+                        <div className="timeline-dot">{item.tone === 'done' ? <Check size={11} /> : null}</div>
+                        <div className="timeline-copy">
+                          <strong>{item.label}</strong>
+                          <p>{item.note}</p>
+                          {item.at ? <span>{formatDateTime(item.at)}</span> : null}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               ) : null}
-              {actions.map((action) => (
-                <ActionButton key={`${displayGatepassId}-${action.label}`} tone={action.tone} onClick={action.onClick}>
-                  {action.label}
-                </ActionButton>
-              ))}
+
+              {showQrPreview || actions.length ? (
+                <div className="expandable-gatepass-actions">
+                  {showQrPreview ? (
+                    <ActionButton type="button" tone="secondary" icon={QrCode} onClick={() => onOpenQrPreview?.(gatepass)}>
+                      View QR
+                    </ActionButton>
+                  ) : null}
+                  {actions.map((action) => (
+                    <ActionButton key={`${displayGatepassId}-${action.label}`} tone={action.tone} onClick={action.onClick}>
+                      {action.label}
+                    </ActionButton>
+                  ))}
+                </div>
+              ) : null}
             </div>
-          ) : null}
-        </div>
-      </div>
-    </article>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </motion.article>
   )
 })
 

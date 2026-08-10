@@ -460,7 +460,25 @@ export default function SecurityVerificationPanel({
       {error ? <p className="form-error">{error}</p> : null}
       {!error && statusMessage ? <p className="form-success">{statusMessage}</p> : null}
 
-      {gatepass ? (
+      {isManualVerifying || isScanVerifying ? (
+        <div className="security-verify-result-card" style={{ opacity: 0.85 }}>
+          <div className="security-verify-result-header" style={{ borderBottom: '1px solid var(--app-surface-border)', paddingBottom: '0.85rem' }}>
+            <div style={{ flex: 1, display: 'grid', gap: '0.45rem' }}>
+              <div className="dp-skeleton" style={{ width: '40%', height: '1.1rem' }} />
+              <div className="dp-skeleton" style={{ width: '60%', height: '0.8rem' }} />
+            </div>
+            <div className="dp-skeleton" style={{ width: '5.5rem', height: '1.6rem', borderRadius: '999px' }} />
+          </div>
+          <div className="security-result-grid" style={{ marginTop: '1.1rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.95rem' }}>
+            {Array.from({ length: 9 }).map((_, i) => (
+              <div key={i} style={{ display: 'grid', gap: '0.35rem', padding: '0.45rem 0', borderBottom: '1px solid rgba(23, 52, 73, 0.04)' }}>
+                <div className="dp-skeleton" style={{ width: '50%', height: '0.68rem' }} />
+                <div className="dp-skeleton" style={{ width: '80%', height: '0.85rem' }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : gatepass ? (
         <div className="security-verify-result-card">
           <div className="security-verify-result-header">
             <div>

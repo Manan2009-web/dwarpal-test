@@ -14,6 +14,7 @@ import {
 import { DEPARTMENTS, PROGRAM_OPTIONS, ROUTING_DEPARTMENTS, SEMESTER_OPTIONS } from '../mockData'
 import { useToast } from './ToastProvider'
 import { ActionButton, EmptyState, ModalForm, SelectField } from './ui'
+import { SkeletonTableRows } from './ui/SkeletonLoader'
 
 // ── Error History Hook ──────────────────────────────────────────────────────
 // Persists upload error logs to localStorage per IT user.
@@ -2170,11 +2171,7 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
             </thead>
             <tbody>
               {loading ? (
-                <tr>
-                  <td colSpan={8}>
-                    <div className="admin-empty-state">Loading students...</div>
-                  </td>
-                </tr>
+                <SkeletonTableRows count={8} />
               ) : students.length ? (
                 students.map((student) => (
                   <tr key={student.id}>

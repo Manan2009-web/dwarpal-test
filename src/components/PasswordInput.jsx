@@ -1,5 +1,10 @@
+/**
+ * PasswordInput — Redesigned with AnimatePresence cross-fade eye icon.
+ * All prop signatures unchanged.
+ */
 import { useId, useMemo, useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
 
 export default function PasswordInput({
   id,
@@ -50,7 +55,19 @@ export default function PasswordInput({
         aria-controls={resolvedId}
         disabled={disabled}
       >
-        {isVisible ? <EyeOff size={18} /> : <Eye size={18} />}
+        {/* AnimatePresence cross-fade between Eye and EyeOff */}
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.span
+            key={isVisible ? 'eye-off' : 'eye-on'}
+            initial={{ opacity: 0, scale: 0.8, rotate: -15 }}
+            animate={{ opacity: 1, scale: 1, rotate: 0 }}
+            exit={{ opacity: 0, scale: 0.8, rotate: 15 }}
+            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+            style={{ display: 'inline-flex' }}
+          >
+            {isVisible ? <EyeOff size={18} /> : <Eye size={18} />}
+          </motion.span>
+        </AnimatePresence>
       </button>
     </div>
   )
