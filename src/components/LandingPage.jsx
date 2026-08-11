@@ -80,7 +80,7 @@ export default function LandingPage() {
                   initial={{ y: 70, opacity: 0, letterSpacing: '0.25em' }}
                   animate={{ y: 0, opacity: 1, letterSpacing: '0.05em' }}
                   transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}
-                  className="tw:text-3xl tw:sm:text-5xl tw:md:text-6xl tw:font-black tw:text-[#163247] tw:uppercase tw:leading-none tw:transform-gpu"
+                  className="tw:text-[1.65rem] tw:sm:text-5xl tw:md:text-6xl tw:font-black tw:text-[#163247] tw:uppercase tw:leading-none tw:transform-gpu"
                   style={{ willChange: 'transform, opacity' }}
                 >
                   The Intelligent
@@ -91,7 +91,7 @@ export default function LandingPage() {
                   initial={{ y: 70, opacity: 0, letterSpacing: '0.25em' }}
                   animate={{ y: 0, opacity: 1, letterSpacing: '0.05em' }}
                   transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1], delay: 0.35 }}
-                  className="tw:text-3xl tw:sm:text-5xl tw:md:text-6xl tw:font-black tw:text-[#163247] tw:uppercase tw:leading-none tw:transform-gpu"
+                  className="tw:text-[1.65rem] tw:sm:text-5xl tw:md:text-6xl tw:font-black tw:text-[#163247] tw:uppercase tw:leading-none tw:transform-gpu"
                   style={{ willChange: 'transform, opacity' }}
                 >
                   Gatekeeper.

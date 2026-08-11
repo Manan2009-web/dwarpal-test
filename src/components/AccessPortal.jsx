@@ -115,7 +115,7 @@ export default function AccessPortal({ onAccessGranted }) {
         variants={cardVariants}
         initial="hidden"
         animate="visible"
-        className="auth-panel tw:relative tw:z-10 tw:w-full tw:max-w-md tw:p-8 tw:rounded-2xl"
+        className="auth-panel tw:relative tw:z-10 tw:w-full tw:max-w-md tw:p-6 tw:sm:p-8 tw:rounded-2xl"
       >
         <motion.div variants={itemVariants} className="tw:flex tw:flex-col tw:items-center tw:text-center tw:mb-6">
           <img 
