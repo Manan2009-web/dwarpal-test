@@ -1,183 +1,219 @@
-import React from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ShieldCheck, ChevronLeft, KeyRound, FileText, Eye, CheckCircle2 } from 'lucide-react'
+import { ShieldCheck, ChevronLeft, KeyRound, FileText, Eye, CheckCircle2, Settings } from 'lucide-react'
 import { ActionButton } from './ui'
 
-export default function LegalDocs() {
+const SECTION_ICON_CLASS = 'policy-section-icon'
+
+function PolicySection({ icon: Icon, title, children }) {
+  return (
+    <section className="policy-section">
+      <h2 className="policy-section-heading">
+        <span className={SECTION_ICON_CLASS} aria-hidden="true"><Icon size={16} /></span>
+        {title}
+      </h2>
+      {children}
+    </section>
+  )
+}
+
+function PolicyGrid({ children }) {
+  return <div className="policy-grid">{children}</div>
+}
+
+function PolicyGridCard({ title, children }) {
+  return (
+    <div className="policy-grid-card">
+      <strong className="policy-grid-card-title">{title}</strong>
+      <p>{children}</p>
+    </div>
+  )
+}
+
+export default function LegalDocs({ onManageCookies }) {
   const navigate = useNavigate()
 
   return (
-    <div className="tw:min-h-screen tw:w-full tw:bg-neutral-950 tw:text-neutral-250 tw:font-sans tw:py-12 tw:px-4 sm:tw:px-6 lg:tw:px-8">
-      <div className="tw:max-w-4xl tw:mx-auto tw:bg-neutral-900 tw:border tw:border-neutral-800 tw:rounded-2xl tw:shadow-2xl tw:overflow-hidden">
-        
-        {/* Header */}
-        <div className="tw:bg-gradient-to-r tw:from-purple-950/40 tw:to-neutral-900 tw:p-8 tw:border-b tw:border-neutral-800 tw:relative">
-          <button 
-            onClick={() => navigate(-1)} 
-            className="tw:absolute tw:top-6 tw:left-6 tw:flex tw:items-center tw:gap-2 tw:text-xs tw:font-mono tw:tracking-wider tw:text-purple-400 hover:tw:text-purple-300 tw:bg-neutral-800/60 tw:border tw:border-neutral-700 tw:px-3 tw:py-1.5 tw:rounded-full tw:transition-all tw:cursor-pointer tw:border-none"
+    <div className="legal-page">
+      <div className="legal-container">
+
+        {/* Page header */}
+        <div className="legal-header">
+          <button
+            type="button"
+            className="legal-back-button"
+            onClick={() => navigate(-1)}
           >
-            <ChevronLeft size={14} /> BACK
+            <ChevronLeft size={15} />
+            <span>Back</span>
           </button>
-          
-          <div className="tw:flex tw:items-center tw:gap-4 tw:mt-8">
-            <div className="tw:p-3 tw:bg-purple-950/15 tw:text-purple-400 tw:border tw:border-purple-800/30 tw:rounded-xl">
-              <ShieldCheck size={28} />
+
+          <div className="legal-header-brand">
+            <div className="legal-header-icon">
+              <ShieldCheck size={26} />
             </div>
             <div>
-              <h1 className="tw:text-2xl sm:tw:text-3xl tw:font-black tw:text-white tw:tracking-tight tw:uppercase">Privacy Policy</h1>
-              <p className="tw:text-xs tw:font-mono tw:text-neutral-400 tw:mt-1 tw:tracking-widest">EFFECTIVE DATE: JUNE 28, 2026</p>
+              <h1 className="legal-header-title">Privacy Policy</h1>
+              <p className="legal-header-meta">Effective: 28 June 2026 · DPDP Act 2023 · GDPR Aligned</p>
             </div>
           </div>
         </div>
 
         {/* Content */}
-        <div className="tw:p-8 tw:space-y-8 tw:text-sm tw:leading-relaxed tw:text-neutral-350">
-          
-          {/* Summary / Introduction */}
-          <section className="tw:bg-purple-950/10 tw:border tw:border-purple-900/20 tw:p-6 tw:rounded-xl tw:flex tw:gap-4">
-            <div className="tw:text-purple-450 tw:mt-0.5"><KeyRound size={18} /></div>
+        <div className="legal-body">
+
+          {/* Commitment callout */}
+          <div className="legal-callout">
+            <div className="legal-callout-icon" aria-hidden="true"><KeyRound size={18} /></div>
             <div>
-              <h4 className="tw:text-white tw:font-semibold tw:mb-1">Our Privacy Commitment</h4>
-              <p className="tw:text-neutral-400 tw:text-xs">
-                DwarPal is designed to secure student and faculty gate movements while preserving personal privacy. 
-                We comply with the **Digital Personal Data Protection (DPDP) Act, 2023 (India)** and apply **GDPR** standards globally 
-                to ensure your digital data remains securely under your control.
+              <strong>Our Privacy Commitment</strong>
+              <p>
+                DwarPal is built to secure campus access while protecting your personal data. We comply with
+                India's <strong>Digital Personal Data Protection (DPDP) Act, 2023</strong> and apply
+                <strong> GDPR</strong> principles globally. Your data is never sold or used for advertising.
               </p>
             </div>
-          </section>
+          </div>
 
-          {/* Section 1: Data Collection */}
-          <section className="tw:space-y-3">
-            <h3 className="tw:text-base tw:font-bold tw:text-white tw:uppercase tw:tracking-wider tw:flex tw:items-center tw:gap-2">
-              <span className="tw:text-purple-450"><FileText size={16} /></span> Personal Data We Collect
-            </h3>
-            <p>
-              To operate the digital gatepass system and verify campus access permissions, DwarPal collects the following categories of information:
+          {/* Section 1 */}
+          <PolicySection icon={FileText} title="Personal Data We Collect">
+            <p className="policy-body-text">
+              We collect only what is necessary to operate the campus gatepass system and verify access permissions:
             </p>
-            <ul className="tw:list-disc tw:pl-5 tw:space-y-1.5 tw:text-neutral-400 tw:text-xs">
-              <li><strong>Profile Information:</strong> Full name, official email address, mobile phone number, and account password (securely salted and hashed).</li>
-              <li><strong>Campus Identity Details:</strong> Enrollment Number (for students) or Employee ID (for faculty/coordinators), current academic program, department, and semester.</li>
-              <li><strong>Gatepass Records:</strong> Date, departure time, estimated/actual return time, purpose of departure, coordinator approval/rejection status, approval comments, and security guard scan logs.</li>
-              <li><strong>Verification Media:</strong> Profile photo uploads used exclusively for guard-gate visual validation.</li>
-              <li><strong>Biometric Credentials:</strong> WebAuthn public keys and device identifiers (if biometric authentication is explicitly opted-in). <em>We never store raw biometric data (such as fingerprints or facial geometry) on our servers; these remain securely inside your hardware device.</em></li>
+            <ul className="policy-list">
+              <li><strong>Identity:</strong> Full name, institutional email, mobile number, and securely hashed password.</li>
+              <li><strong>Campus Details:</strong> Enrollment number or Employee ID, academic program, department, and semester.</li>
+              <li><strong>Gatepass Records:</strong> Departure date/time, return time, purpose, approval status, coordinator comments, and security scan timestamps.</li>
+              <li><strong>Verification Photo:</strong> Profile photo uploaded for visual identity checks at campus gates.</li>
+              <li><strong>Biometric Credentials (optional):</strong> WebAuthn public keys and device identifiers when you opt in to passkey login. Raw biometric data — fingerprints, facial geometry — is <em>never</em> transmitted or stored on our servers; it stays inside your device's secure hardware.</li>
             </ul>
-          </section>
+          </PolicySection>
 
-          {/* Section 2: Purpose of Processing */}
-          <section className="tw:space-y-3">
-            <h3 className="tw:text-base tw:font-bold tw:text-white tw:uppercase tw:tracking-wider tw:flex tw:items-center tw:gap-2">
-              <span className="tw:text-purple-450"><Eye size={16} /></span> Purpose of Data Processing
-            </h3>
-            <p>
-              In compliance with Section 4 of the DPDP Act 2023, your personal data is collected and processed only for specified, lawful purposes:
+          {/* Section 2 */}
+          <PolicySection icon={Eye} title="Purpose of Data Processing">
+            <p className="policy-body-text">
+              Under Section 4 of the DPDP Act 2023, we process your data only for the following specified purposes:
             </p>
-            <div className="tw:grid tw:grid-cols-1 md:tw:grid-cols-2 tw:gap-4 tw:text-xs">
-              <div className="tw:bg-neutral-950 tw:p-4 tw:rounded-lg tw:border tw:border-neutral-800">
-                <strong className="tw:text-white tw:block tw:mb-1">Access Authorization</strong>
-                Generating gatepass QR codes, verifying permissions, and recording student/faculty checkout and check-in statuses at campus gates.
-              </div>
-              <div className="tw:bg-neutral-950 tw:p-4 tw:rounded-lg tw:border tw:border-neutral-800">
-                <strong className="tw:text-white tw:block tw:mb-1">Real-time Notifications</strong>
-                Dispatching real-time approval status notifications and email OTPs to students, faculty, and administrative authorities.
-              </div>
-              <div className="tw:bg-neutral-950 tw:p-4 tw:rounded-lg tw:border tw:border-neutral-800">
-                <strong className="tw:text-white tw:block tw:mb-1">Audit Log & Safety</strong>
-                Assisting college administrators (Principals, HODs, CAOs) in monitoring campus attendance, ensuring safety compliance, and resolving entry/exit queries.
-              </div>
-              <div className="tw:bg-neutral-950 tw:p-4 tw:rounded-lg tw:border tw:border-neutral-800">
-                <strong className="tw:text-white tw:block tw:mb-1">System Security</strong>
-                Verifying sign-ins via multi-factor authentication (OTP and WebAuthn biometrics) to prevent unauthorized credential usage.
-              </div>
-            </div>
-          </section>
+            <PolicyGrid>
+              <PolicyGridCard title="Access Authorization">
+                Generating QR-code gatepasses, verifying campus exit permissions, and logging check-in/check-out events at gates.
+              </PolicyGridCard>
+              <PolicyGridCard title="Real-time Notifications">
+                Sending push notifications and email OTPs for approval status changes, security scans, and account events.
+              </PolicyGridCard>
+              <PolicyGridCard title="Audit Log &amp; Safety">
+                Enabling administrators (Principals, HODs, CAOs) to monitor campus attendance, resolve access disputes, and ensure safety compliance.
+              </PolicyGridCard>
+              <PolicyGridCard title="System Security">
+                Authenticating logins via multi-factor verification (OTP + WebAuthn passkeys) to prevent unauthorized access.
+              </PolicyGridCard>
+            </PolicyGrid>
+          </PolicySection>
 
-          {/* Section 3: Cookie Compliance */}
-          <section className="tw:space-y-3">
-            <h3 className="tw:text-base tw:font-bold tw:text-white tw:uppercase tw:tracking-wider tw:flex tw:items-center tw:gap-2">
-              <span className="tw:text-purple-450"><CheckCircle2 size={16} /></span> Cookie Policy & Granular Controls
-            </h3>
-            <p>
-              We utilize secure cookies to run the application shell. You can manage functional and analytical cookie preferences via our consent banner.
+          {/* Section 3 */}
+          <PolicySection icon={CheckCircle2} title="Cookie Policy &amp; Granular Controls">
+            <p className="policy-body-text">
+              We use three categories of cookies. You can manage your preferences at any time from the consent banner or via the button below.
             </p>
-            <ul className="tw:list-disc tw:pl-5 tw:space-y-2 tw:text-neutral-400 tw:text-xs">
-              <li><strong>Strictly Necessary Cookies (Always Active):</strong> Includes our authentication token and WebAuthn state cookies. These cookies use the <code>HttpOnly</code>, <code>Secure</code>, and <code>SameSite=Lax</code> configurations to prevent cross-site scripting (XSS) and cross-site request forgery (CSRF) access.</li>
-              <li><strong>Functional Cookies:</strong> Stores user-interface configuration settings, such as your navigation sidebar preferences and dark mode settings.</li>
-              <li><strong>Analytics Cookies:</strong> Measures system response speeds and gateway scanner latency to optimize performance. No advertising or commercial cookies are utilized.</li>
+            <ul className="policy-list">
+              <li>
+                <strong>Strictly Necessary (Always Active):</strong> Authentication tokens and WebAuthn state cookies required for the app to function.
+                Set with <code>HttpOnly</code>, <code>Secure</code>, and <code>SameSite=Lax</code> flags to prevent XSS and CSRF attacks.
+              </li>
+              <li>
+                <strong>Functional:</strong> Stores your UI preferences — sidebar state, dismissed tips, and dashboard settings.
+                No cross-site tracking; data stays local.
+              </li>
+              <li>
+                <strong>Analytics:</strong> Anonymous performance metrics — response latency, scanner throughput, page load timing.
+                No advertising profiling, no third-party ad networks.
+              </li>
             </ul>
-          </section>
+            {onManageCookies && (
+              <div style={{ marginTop: '1rem' }}>
+                <ActionButton type="button" tone="secondary" icon={Settings} onClick={onManageCookies}>
+                  Manage Cookie Preferences
+                </ActionButton>
+              </div>
+            )}
+          </PolicySection>
 
-          {/* Section 4: Data Retention & Security */}
-          <section className="tw:space-y-3">
-            <h3 className="tw:text-base tw:font-bold tw:text-white tw:uppercase tw:tracking-wider tw:flex tw:items-center tw:gap-2">
-              <span className="tw:text-purple-400"><ShieldCheck size={16} /></span> Retention & Security Standards
-            </h3>
-            <p>
-              Your data is stored in secure database environments using AES encryption for sensitive configuration data and bcrypt for password hashing.
+          {/* Section 4 */}
+          <PolicySection icon={ShieldCheck} title="Retention &amp; Security">
+            <p className="policy-body-text">
+              All sensitive data is stored in encrypted database environments using AES encryption for configuration data
+              and bcrypt for password hashes. We apply TLS in transit for all API communications.
             </p>
-            <p className="tw:text-xs tw:text-neutral-450">
-              <strong>Retention Period:</strong> Academic profiles are preserved for the duration of the student's enrollment or faculty member's tenure. Active gatepass records are preserved for a maximum period of <strong>one academic year</strong>, after which they are archived or permanently purged, except where required by statutory compliance.
+            <p className="policy-body-text">
+              <strong>Retention:</strong> Academic profiles are retained for the duration of your enrollment or tenure.
+              Gatepass records are retained for a maximum of <strong>one academic year</strong>, after which they are archived
+              or permanently deleted — unless statutory requirements mandate longer retention.
             </p>
-          </section>
+          </PolicySection>
 
-          {/* Section 5: Third-Party Sharing */}
-          <section className="tw:space-y-3">
-            <h3 className="tw:text-base tw:font-bold tw:text-white tw:uppercase tw:tracking-wider tw:flex tw:items-center tw:gap-2">
-              <span className="tw:text-purple-450"><FileText size={16} /></span> Sharing with Third Parties
-            </h3>
-            <p>
-              DwarPal does **not** sell, rent, or trade your personal data for advertising or marketing. Data is shared with third-party service providers only when necessary to execute basic application functions:
+          {/* Section 5 */}
+          <PolicySection icon={FileText} title="Sharing with Third Parties">
+            <p className="policy-body-text">
+              DwarPal does <strong>not</strong> sell, rent, or share your personal data for advertising or marketing.
+              Data is shared with the following service providers only as required to run the platform:
             </p>
-            <ul className="tw:list-disc tw:pl-5 tw:space-y-1 tw:text-neutral-400 tw:text-xs">
-              <li><strong>Firebase Messaging (Google):</strong> Used to deliver push notifications regarding gatepass approvals and security scans.</li>
-              <li><strong>NodeMailer Service Providers:</strong> Used to transmit verification emails, password resets, and register OTP tokens.</li>
-              <li><strong>Database Services:</strong> Hosted in highly secure cloud servers matching standard ISO 27001 configurations.</li>
+            <ul className="policy-list">
+              <li><strong>Firebase Cloud Messaging (Google):</strong> Push notifications for gatepass approvals and security scans.</li>
+              <li><strong>Transactional Email Service:</strong> Sending OTPs, verification emails, and password reset links.</li>
+              <li><strong>Cloud Database Provider:</strong> Hosted in ISO 27001-compliant infrastructure with encryption at rest.</li>
             </ul>
-          </section>
-
-          {/* Section 6: User Rights */}
-          <section className="tw:space-y-3">
-            <h3 className="tw:text-base tw:font-bold tw:text-white tw:uppercase tw:tracking-wider tw:flex tw:items-center tw:gap-2">
-              <span className="tw:text-purple-450"><CheckCircle2 size={16} /></span> Your Legal Rights
-            </h3>
-            <p>
-              Under global data rules and Section 11-14 of India's DPDP Act 2023, you hold full authority over your data. You may execute these rights through your profile panel:
+            <p className="policy-body-text">
+              All providers are bound by data processing agreements and are prohibited from using your data for any purpose
+              other than delivering the contracted service.
             </p>
-            <div className="tw:grid tw:grid-cols-1 md:tw:grid-cols-3 tw:gap-4 tw:text-xs">
-              <div className="tw:bg-neutral-950 tw:p-4 tw:rounded-lg tw:border tw:border-neutral-800">
-                <span className="tw:text-purple-450 tw:font-bold tw:block tw:mb-1">Access & Correction</span>
-                The right to view all gatepass history and personal credentials, and request corrections to inaccurate entries.
-              </div>
-              <div className="tw:bg-neutral-950 tw:p-4 tw:rounded-lg tw:border tw:border-neutral-800">
-                <span className="tw:text-purple-450 tw:font-bold tw:block tw:mb-1">Consent Withdrawal</span>
-                The right to disable biometrics or notification permissions at any time, halting future data processing.
-              </div>
-              <div className="tw:bg-neutral-950 tw:p-4 tw:rounded-lg tw:border tw:border-neutral-800">
-                <span className="tw:text-purple-450 tw:font-bold tw:block tw:mb-1">Erasure (Right to be Forgotten)</span>
-                Students/Faculty can request deletion of non-mandatory data upon completion of their academic terms.
-              </div>
-            </div>
-          </section>
+          </PolicySection>
 
-          {/* Section 7: Grievance Redressal */}
-          <section className="tw:space-y-3 tw:border-t tw:border-neutral-800 tw:pt-6">
-            <h3 className="tw:text-base tw:font-bold tw:text-white tw:uppercase tw:tracking-wider tw:flex tw:items-center tw:gap-2">
-              <span className="tw:text-purple-450"><ShieldCheck size={16} /></span> Grievance Officer & Redressal
-            </h3>
-            <p>
-              If you have any questions regarding this Privacy Policy, your cookie preferences, or wish to file a grievance under DPDP Act requirements, please contact our designated Data Protection Officer:
+          {/* Section 6 */}
+          <PolicySection icon={CheckCircle2} title="Your Legal Rights">
+            <p className="policy-body-text">
+              Under Sections 11–14 of the DPDP Act 2023 and GDPR Articles 15–22, you have the following rights.
+              Exercise them from your Profile page or by contacting our Data Protection Officer:
             </p>
-            <div className="tw:bg-neutral-950 tw:p-5 tw:rounded-xl tw:border tw:border-neutral-800 tw:inline-block">
-              <p className="tw:font-semibold tw:text-white tw:text-xs tw:mb-1">DwarPal Grievance & Data Protection Officer</p>
-              <p className="tw:text-xs tw:text-neutral-400">Email: <span className="tw:text-purple-450 tw:font-mono">dwarpalcode@gmail.com</span></p>
-              <p className="tw:text-xs tw:text-neutral-450 tw:mt-2">Responses are typically provided within 48 business hours.</p>
+            <PolicyGrid>
+              <PolicyGridCard title="Access &amp; Correction">
+                View all your personal data and gatepass history. Request corrections to inaccurate entries.
+              </PolicyGridCard>
+              <PolicyGridCard title="Consent Withdrawal">
+                Disable passkey authentication or push notification permissions at any time to stop that processing.
+              </PolicyGridCard>
+              <PolicyGridCard title="Right to Erasure">
+                Request deletion of non-mandatory personal data once your academic enrollment or employment ends.
+              </PolicyGridCard>
+            </PolicyGrid>
+          </PolicySection>
+
+          {/* Section 7 — Grievance */}
+          <section className="policy-section policy-section-bordered">
+            <h2 className="policy-section-heading">
+              <span className={SECTION_ICON_CLASS} aria-hidden="true"><ShieldCheck size={16} /></span>
+              Grievance Officer &amp; Contact
+            </h2>
+            <p className="policy-body-text">
+              For questions about this policy, cookie preferences, or to file a grievance under the DPDP Act,
+              contact our Data Protection Officer:
+            </p>
+            <div className="policy-contact-card">
+              <p className="policy-contact-name">DwarPal Data Protection Officer</p>
+              <p>
+                Email:{' '}
+                <a href="mailto:dwarpalcode@gmail.com" className="policy-link">
+                  dwarpalcode@gmail.com
+                </a>
+              </p>
+              <p className="policy-contact-note">Responses are typically provided within 48 business hours.</p>
             </div>
           </section>
 
         </div>
 
         {/* Footer */}
-        <div className="tw:bg-neutral-950 tw:p-6 tw:border-t tw:border-neutral-800 tw:flex tw:justify-between tw:items-center tw:flex-wrap tw:gap-4">
-          <span className="tw:text-xs tw:font-mono tw:text-neutral-500">DwarPal Security Hub © 2026</span>
+        <div className="legal-footer">
+          <span className="legal-footer-copy">DwarPal Security Hub © 2026</span>
           <ActionButton type="button" onClick={() => navigate('/')}>
             Return to Dashboard
           </ActionButton>

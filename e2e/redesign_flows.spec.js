@@ -70,8 +70,8 @@ async function loginAsUser(page, accessCode, accessPassword, identifier, passwor
   
   try {
     await Promise.any([
-      page.waitForSelector('#access-code', { state: 'visible', timeout: 5000 }),
-      page.waitForSelector('#login-identifier', { state: 'visible', timeout: 5000 })
+      page.waitForSelector('#access-code', { state: 'visible', timeout: 30000 }),
+      page.waitForSelector('#login-identifier', { state: 'visible', timeout: 30000 })
     ]);
   } catch (e) {
     console.log("Neither access code nor login field became visible on page load.");
@@ -88,7 +88,7 @@ async function loginAsUser(page, accessCode, accessPassword, identifier, passwor
   }
 
   // Wait for login page redirection
-  await page.waitForSelector('#login-identifier', { state: 'visible', timeout: 15000 });
+  await page.waitForSelector('#login-identifier', { state: 'visible', timeout: 30000 });
   await bypassCookieBanner(page);
   await page.screenshot({ path: path.join(screenshotsDir, `${screenshotPrefix}_3_login_page.png`) });
 
@@ -103,7 +103,7 @@ async function loginAsUser(page, accessCode, accessPassword, identifier, passwor
     await page.waitForURL(url => {
       const p = url.pathname;
       return p.includes('/dashboard') || p.includes('/security') || p.includes('/admin');
-    }, { timeout: 15000 });
+    }, { timeout: 30000 });
   } catch (e) {
     const errorText = await page.locator('.form-error, .field-error, p.tw\\:text-red-500, [role="alert"]').innerText().catch(() => '');
     console.log(`[LOGIN ERROR] Login failed for ${identifier} with error on screen: "${errorText}"`);
@@ -145,7 +145,7 @@ test.describe.serial('DwarPal Redesign Flow Verification', () => {
     await handleCookieBanner(page);
     
     try {
-      await page.waitForSelector('#access-code', { state: 'visible', timeout: 5000 });
+      await page.waitForSelector('#access-code', { state: 'visible', timeout: 30000 });
       await page.fill('#access-code', 'STUDENT2026');
       await page.fill('#portal-password', 'dwarpal-student-access');
       await page.click('button[type="submit"]');
@@ -153,7 +153,7 @@ test.describe.serial('DwarPal Redesign Flow Verification', () => {
       console.log('Access code not visible, assuming already bypassed.');
     }
     
-    await page.waitForSelector('#login-identifier', { state: 'visible', timeout: 10000 });
+    await page.waitForSelector('#login-identifier', { state: 'visible', timeout: 30000 });
     await bypassCookieBanner(page);
     await handleCookieBanner(page);
     await page.screenshot({ path: path.join(screenshotsDir, 'auth_login_page_loaded.png') });

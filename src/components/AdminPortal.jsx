@@ -255,6 +255,22 @@ function buildExportPayload(filters, activeSection, selectedRows, exportScope) {
 function AdminSidebar({ currentUser, activeSection, isOpen, onLinkClick }) {
   const navItems = getAdminNavItems(currentUser)
 
+  useEffect(() => {
+    if (isOpen) {
+      const scrollY = window.scrollY
+      document.body.style.position = 'fixed'
+      document.body.style.top = `-${scrollY}px`
+      document.body.style.width = '100%'
+      return () => {
+        document.body.style.position = ''
+        document.body.style.top = ''
+        document.body.style.width = ''
+        window.scrollTo(0, scrollY)
+      }
+    }
+    return undefined
+  }, [isOpen])
+
   return (
     <aside className={`admin-sidebar ${isOpen ? 'open' : ''}`}>
       <div className="admin-sidebar-brand">

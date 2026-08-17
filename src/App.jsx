@@ -22,16 +22,11 @@ import './App.css'
 import AppBrand from './components/AppBrand'
 import LandingPage from './components/LandingPage'
 import LoadingPage from './components/LoadingPage'
-import AccessPortal from './components/AccessPortal'
-import AdminPortal from './components/AdminPortal'
-import ChairmanPortal from './components/ChairmanPortal'
 import SupportModal from './components/SupportModal'
 import AuthPage from './components/auth/AuthPage'
 import LoginForm from './components/auth/LoginForm'
 import RegisterForm from './components/auth/RegisterForm'
-import Register from './components/Register'
 import LandingPanel from './components/auth/LandingPanel'
-import FacultyLeaveWizard from './components/FacultyLeaveWizard'
 import FeatureBoundary from './components/FeatureBoundary'
 import GatepassQrModal from './components/GatepassQrModal'
 import NotificationCenterPanel from './components/NotificationCenterPanel'
@@ -47,11 +42,17 @@ import PasswordResetPanel from './components/PasswordResetPanel'
 import NewStudentWelcomeModal from './components/NewStudentWelcomeModal'
 import { SkeletonNotificationList } from './components/ui/SkeletonLoader'
 
-const LegalDocs = lazy(() => import('./components/LegalDocs'))
-const SupportPage = lazy(() => import('./components/SupportPage'))
+import LegalDocs from './components/LegalDocs'
+import SupportPage from './components/SupportPage'
 import Aurora from './components/ui/Aurora'
 import OtpCodeInput from './components/OtpCodeInput'
-import SecurityVerificationPanel from './components/SecurityVerificationPanel'
+
+const AccessPortal = lazy(() => import('./components/AccessPortal'))
+const AdminPortal = lazy(() => import('./components/AdminPortal'))
+const ChairmanPortal = lazy(() => import('./components/ChairmanPortal'))
+const Register = lazy(() => import('./components/Register'))
+const FacultyLeaveWizard = lazy(() => import('./components/FacultyLeaveWizard'))
+const SecurityVerificationPanel = lazy(() => import('./components/SecurityVerificationPanel'))
 import { useToast } from './components/ToastProvider'
 import { usePushSubscription } from './hooks/usePushSubscription'
 import {
@@ -2014,7 +2015,9 @@ function App() {
     return (
       <AdminRoute currentUser={currentUser} authReady={authReady}>
         <div className={requiresEmailVerification ? 'app-shell-lock-surface' : ''} aria-hidden={requiresEmailVerification}>
-          <AdminPortal currentUser={currentUser} onLogout={logout} onOpenSupport={() => setSupportModalOpen(true)} onResign={handleResignCoordinator} />
+          <Suspense fallback={<LoadingSpinner />}>
+            <AdminPortal currentUser={currentUser} onLogout={logout} onOpenSupport={() => setSupportModalOpen(true)} onResign={handleResignCoordinator} />
+          </Suspense>
         </div>
         {/* TEMP_DISABLED_OTP */}
       </AdminRoute>
@@ -2033,7 +2036,9 @@ function App() {
     return (
       <ChairmanRoute currentUser={currentUser} authReady={authReady}>
         <div className={requiresEmailVerification ? 'app-shell-lock-surface' : ''} aria-hidden={requiresEmailVerification}>
-          <ChairmanPortal currentUser={currentUser} onLogout={logout} onOpenSupport={() => setSupportModalOpen(true)} />
+          <Suspense fallback={<LoadingSpinner />}>
+            <ChairmanPortal currentUser={currentUser} onLogout={logout} onOpenSupport={() => setSupportModalOpen(true)} />
+          </Suspense>
         </div>
       </ChairmanRoute>
     )
@@ -2058,7 +2063,9 @@ function App() {
             ) : portalAccess ? (
               <Navigate to="/login" replace />
             ) : (
-              <AccessPortal onAccessGranted={savePortalAccess} />
+              <Suspense fallback={<LoadingSpinner />}>
+                <AccessPortal onAccessGranted={savePortalAccess} />
+              </Suspense>
             )
           }
         />
@@ -2074,14 +2081,16 @@ function App() {
           path="/register"
           element={
             <PublicAuthRoute currentUser={currentUser} authReady={authReady} portalAccess={portalAccess} isRegisterRoute={true}>
-              <Register setCurrentUser={setCurrentUser} onRegister={registerAccount} />
+              <Suspense fallback={<LoadingSpinner />}>
+                <Register setCurrentUser={setCurrentUser} onRegister={registerAccount} />
+              </Suspense>
             </PublicAuthRoute>
           }
         />
         <Route path="/privacy-policy" element={
           <ErrorBoundary>
             <Suspense fallback={<LoadingSpinner />}>
-              <LegalDocs />
+              <LegalDocs onManageCookies={() => setCookieBannerForcedOpen(true)} />
             </Suspense>
           </ErrorBoundary>
         } />
@@ -4544,7 +4553,7 @@ function AppShell({
           {currentPage === 'privacy' ? (
             <ErrorBoundary>
               <Suspense fallback={<LoadingSpinner />}>
-                <LegalDocs />
+                <LegalDocs onManageCookies={() => setCookieBannerForcedOpen(true)} />
               </Suspense>
             </ErrorBoundary>
           ) : null}
@@ -4557,12 +4566,15 @@ function AppShell({
         onClose={() => setModalOpen(false)}
         onSubmit={onAddGatepass}
       />
-      <FacultyLeaveWizard
-        open={currentUser.role === 'faculty' && modalType === 'leave' ? modalOpen : false}
-        currentUser={currentUser}
-        onClose={() => setModalOpen(false)}
-        onSubmit={onAddGatepass}
-      />
+      <Suspense fallback={null}>
+        <FacultyLeaveWizard
+          open={currentUser.role === 'faculty' && modalType === 'leave' ? modalOpen : false}
+          currentUser={currentUser}
+          onClose={() => setModalOpen(false)}
+          onSubmit={onAddGatepass}
+        />
+      </Suspense>
+
       <RejectRequestModal
         open={Boolean(rejectRequest)}
         request={rejectRequest}
@@ -4814,13 +4826,15 @@ function DashboardPage({
 
 
       {currentUser.role === 'security' ? (
-        <SecurityVerificationPanel
-          onVerifyById={verifyGatepassById}
-          onVerifyQr={verifyGatepassQr}
-          onGatepassAction={onGatepassAction}
-          onOpenQrPreview={onOpenQrPreview}
-          securityStation={securityStation}
-        />
+        <Suspense fallback={<LoadingSpinner />}>
+          <SecurityVerificationPanel
+            onVerifyById={verifyGatepassById}
+            onVerifyQr={verifyGatepassQr}
+            onGatepassAction={onGatepassAction}
+            onOpenQrPreview={onOpenQrPreview}
+            securityStation={securityStation}
+          />
+        </Suspense>
       ) : null}
 
       <section className="workspace-card">

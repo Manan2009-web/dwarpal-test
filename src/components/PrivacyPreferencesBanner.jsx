@@ -85,7 +85,7 @@ export default function PrivacyPreferencesBanner({ open, onAccept, onReject }) {
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
         <div className="cookie-consent-copy">
-          <div className="cookie-consent-icon" aria-hidden="true" style={{ background: 'rgba(168, 85, 247, 0.12)', color: '#a855f7' }}>
+          <div className="cookie-consent-icon" aria-hidden="true">
             <Cookie size={18} />
           </div>
           <div>
@@ -133,7 +133,7 @@ export default function PrivacyPreferencesBanner({ open, onAccept, onReject }) {
               </p>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', height: '100%' }}>
-              <input type="checkbox" checked={true} disabled style={{ accentColor: '#a855f7', cursor: 'not-allowed', width: '16px', height: '16px' }} />
+              <input type="checkbox" checked={true} disabled style={{ accentColor: 'var(--app-accent)', cursor: 'not-allowed', width: '16px', height: '16px' }} />
             </div>
           </div>
 
@@ -152,7 +152,7 @@ export default function PrivacyPreferencesBanner({ open, onAccept, onReject }) {
                 type="checkbox" 
                 checked={preferences.functional} 
                 onChange={() => handleToggle('functional')} 
-                style={{ accentColor: '#a855f7', cursor: 'pointer', width: '16px', height: '16px' }} 
+                style={{ accentColor: 'var(--app-accent)', cursor: 'pointer', width: '16px', height: '16px' }} 
               />
             </div>
           </div>
@@ -172,7 +172,7 @@ export default function PrivacyPreferencesBanner({ open, onAccept, onReject }) {
                 type="checkbox" 
                 checked={preferences.analytics} 
                 onChange={() => handleToggle('analytics')} 
-                style={{ accentColor: '#a855f7', cursor: 'pointer', width: '16px', height: '16px' }} 
+                style={{ accentColor: 'var(--app-accent)', cursor: 'pointer', width: '16px', height: '16px' }} 
               />
             </div>
           </div>
