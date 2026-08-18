@@ -438,6 +438,21 @@ const userSchema = new mongoose.Schema(
       type: coordinatorScopeSchema,
       default: () => ({})
     },
+    // ── Multi-program / multi-department coverage for Principal and HOD ──────
+    // principal: array of { program } entries for secondary programs they govern
+    // hod: array of { program, department } pairs for secondary dept assignments
+    additionalScopes: {
+      type: [
+        new mongoose.Schema(
+          {
+            program: { type: String, trim: true, default: null },
+            department: { type: String, trim: true, default: null }
+          },
+          { _id: false }
+        )
+      ],
+      default: []
+    },
     permissions: {
       type: [String],
       default: [],

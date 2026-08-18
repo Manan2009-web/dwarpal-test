@@ -2,6 +2,12 @@ const User = require('../models/User');
 const AppError = require('../utils/appError');
 const pickUser = require('../utils/pickUser');
 const { logAction } = require('./auditService');
+const {
+  STUDENT_PROGRAMS,
+  ROUTING_DEPARTMENTS,
+  normalizeProgram,
+  normalizeDepartment
+} = require('../constants/appConstants');
 
 async function getProfile(user, req) {
   return pickUser(user, req);
@@ -86,8 +92,41 @@ async function updateProfile(user, payload, req, requestMeta) {
       semester: isCoordinator ? Number(assignment.semester) || null : null
     };
   }
+  if (['principal', 'hod'].includes(currentUser.role) && Array.isArray(payload.additionalScopes)) {
+    const rawScopes = payload.additionalScopes;
+    const seenKeys = new Set();
+    const validScopes = [];
+
+    for (const scope of rawScopes) {
+      const program = normalizeProgram(scope.program);
+      const department = normalizeDepartment(scope.department);
+
+      if (currentUser.role === 'principal') {
+        if (!program || !STUDENT_PROGRAMS.includes(program)) continue;
+        const key = program;
+        if (seenKeys.has(key)) continue;
+        seenKeys.add(key);
+        // Skip if same as primary program
+        if (program === normalizeProgram(currentUser.program)) continue;
+        validScopes.push({ program, department: null });
+      } else if (currentUser.role === 'hod') {
+        if (!program || !STUDENT_PROGRAMS.includes(program)) continue;
+        if (!department || !ROUTING_DEPARTMENTS.includes(department)) continue;
+        const key = `${program}::${department}`;
+        if (seenKeys.has(key)) continue;
+        seenKeys.add(key);
+        // Skip if same as primary program+department
+        const primaryKey = `${normalizeProgram(currentUser.program)}::${normalizeDepartment(currentUser.department)}`;
+        if (key === primaryKey) continue;
+        validScopes.push({ program, department });
+      }
+    }
+
+    currentUser.additionalScopes = validScopes;
+  }
 
   await currentUser.save();
+
 
   await logAction({
     actorId: currentUser._id,

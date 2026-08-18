@@ -67,6 +67,11 @@ function pickUser(user, req) {
         : []
     },
     permissions: Array.isArray(source.permissions) ? source.permissions : [],
+    additionalScopes: ['principal', 'hod'].includes(normalizedRole)
+      ? Array.isArray(source.additionalScopes)
+        ? source.additionalScopes.map((s) => ({ program: s.program || null, department: s.department || null }))
+        : []
+      : [],
     lastLoginAt: source.lastLoginAt || null,
     createdAt: source.createdAt,
     updatedAt: source.updatedAt

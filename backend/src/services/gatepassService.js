@@ -1374,17 +1374,35 @@ function buildAccessFilter(actor) {
       return { createdBy: actor._id };
     case 'principal':
       return { applicantType: { $in: ['student', 'faculty'] } };
-    case 'hod':
+    case 'hod': {
       const hodProgram = normalizeProgram(actor.program);
       const hodDepartment = normalizeDepartment(actor.department);
+
+      // Build program+department conditions for primary + all additional scopes
+      const hodScopePairs = [{ program: hodProgram, department: hodDepartment }];
+      if (Array.isArray(actor.additionalScopes)) {
+        for (const scope of actor.additionalScopes) {
+          const sp = normalizeProgram(scope.program);
+          const sd = normalizeDepartment(scope.department);
+          if (sp && sd) {
+            hodScopePairs.push({ program: sp, department: sd });
+          }
+        }
+      }
+
+      const programDeptConditions = hodScopePairs
+        .filter((s) => s.program && s.department)
+        .map((s) => ({ 'routingSnapshot.program': s.program, 'routingSnapshot.department': s.department }));
+
       return {
         applicantType: 'student',
         $or: [
           { forwardedTo: actor._id },
           { 'hodAction.actionBy': actor._id },
-          { 'routingSnapshot.program': hodProgram, 'routingSnapshot.department': hodDepartment }
+          ...programDeptConditions
         ]
       };
+    }
     case 'cao':
       return { applicantType: 'faculty' };
     case 'security':

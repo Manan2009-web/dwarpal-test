@@ -55,6 +55,7 @@ const FacultyLeaveWizard = lazy(() => import('./components/FacultyLeaveWizard'))
 const SecurityVerificationPanel = lazy(() => import('./components/SecurityVerificationPanel'))
 import { useToast } from './components/ToastProvider'
 import { usePushSubscription } from './hooks/usePushSubscription'
+import { useStudentSessionTimeout } from './hooks/useStudentSessionTimeout'
 import {
   DEPARTMENTS,
   PROGRAM_OPTIONS,
@@ -3983,6 +3984,253 @@ function EstablishEnrollmentPanel({ currentUser, onUpdateCurrentUserProfile }) {
   )
 }
 
+// ── Multi-Program / Multi-Department Coverage Panel ─────────────────────────
+// Shown in profile settings for principal and hod roles only.
+// Lets one account govern multiple programs (principal) or multiple
+// program+department pairs (hod) so they see all related gatepasses in one
+// dashboard without needing separate accounts.
+//
+// "No" cooldown: if the user clicks "No I don't manage another program/dept",
+// the prompt is hidden for 10 minutes, then re-appears automatically.
+const MULTIPROGRAM_COOLDOWN_KEY = 'dwarpal.multiprogram.denied_at'
+const MULTIPROGRAM_COOLDOWN_MS = 10 * 60 * 1000 // 10 minutes
+
+function MultiProgramScopePanel({ currentUser, onUpdateCurrentUserProfile }) {
+  const toast = useToast()
+
+  // Compute whether we're inside the cooldown window
+  function isCooldownActive() {
+    const raw = localStorage.getItem(MULTIPROGRAM_COOLDOWN_KEY)
+    if (!raw) return false
+    return Date.now() - Number(raw) < MULTIPROGRAM_COOLDOWN_MS
+  }
+
+  const [cooldown, setCooldown] = useState(() => isCooldownActive())
+  const [hasExtra, setHasExtra] = useState(
+    () => Array.isArray(currentUser?.additionalScopes) && currentUser.additionalScopes.length > 0
+  )
+  // For principal: one extra program at a time (can save multiple via list)
+  // We show existing scopes plus an "Add more" picker
+  const [scopes, setScopes] = useState(
+    () => Array.isArray(currentUser?.additionalScopes) ? currentUser.additionalScopes : []
+  )
+  const [newProgram, setNewProgram] = useState('')
+  const [newDepartment, setNewDepartment] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const role = currentUser?.role
+  const primaryProgram = currentUser?.program || ''
+  const primaryDepartment = currentUser?.department || ''
+
+  // Re-check cooldown every 30 s so the panel auto-shows after timeout
+  useEffect(() => {
+    if (!cooldown) return
+    const id = window.setInterval(() => {
+      if (!isCooldownActive()) {
+        setCooldown(false)
+      }
+    }, 30_000)
+    return () => window.clearInterval(id)
+  }, [cooldown])
+
+  function handleNo() {
+    localStorage.setItem(MULTIPROGRAM_COOLDOWN_KEY, String(Date.now()))
+    setCooldown(true)
+    setHasExtra(false)
+  }
+
+  function handleYes() {
+    localStorage.removeItem(MULTIPROGRAM_COOLDOWN_KEY)
+    setCooldown(false)
+    setHasExtra(true)
+  }
+
+  function removeScope(index) {
+    const next = scopes.filter((_, i) => i !== index)
+    setScopes(next)
+    saveScopes(next)
+  }
+
+  async function addScope() {
+    if (role === 'principal') {
+      if (!newProgram) return
+      if (newProgram === primaryProgram) {
+        toast.warning({ title: 'Already your primary program', message: 'This is already your registered program.' })
+        return
+      }
+      if (scopes.some((s) => s.program === newProgram)) {
+        toast.warning({ title: 'Already added', message: 'This program is already in your list.' })
+        return
+      }
+      const next = [...scopes, { program: newProgram, department: null }]
+      setScopes(next)
+      setNewProgram('')
+      await saveScopes(next)
+    } else if (role === 'hod') {
+      if (!newProgram || !newDepartment) return
+      const key = `${newProgram}::${newDepartment}`
+      const primaryKey = `${primaryProgram}::${primaryDepartment}`
+      if (key === primaryKey) {
+        toast.warning({ title: 'Already your primary assignment', message: 'This program+department is already your main assignment.' })
+        return
+      }
+      if (scopes.some((s) => `${s.program}::${s.department}` === key)) {
+        toast.warning({ title: 'Already added', message: 'This program+department is already in your list.' })
+        return
+      }
+      const next = [...scopes, { program: newProgram, department: newDepartment }]
+      setScopes(next)
+      setNewProgram('')
+      setNewDepartment('')
+      await saveScopes(next)
+    }
+  }
+
+  async function saveScopes(nextScopes) {
+    setSaving(true)
+    try {
+      await onUpdateCurrentUserProfile({ additionalScopes: nextScopes })
+      toast.success({ title: 'Coverage updated', message: 'Your program coverage settings were saved.' })
+    } catch {
+      toast.error({ title: 'Save failed', message: 'Could not save program coverage. Please try again.' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const availablePrograms = PROGRAM_OPTIONS.filter((p) => p !== primaryProgram)
+
+  if (!['principal', 'hod'].includes(role)) return null
+
+  return (
+    <section className="profile-subcard coordinator-card">
+      <div className="coordinator-card-header">
+        <div>
+          <h3>Program Coverage</h3>
+          <p>
+            {role === 'principal'
+              ? 'Manage other programs you are also principal of, so their gatepasses appear in your dashboard.'
+              : 'Manage other program+department combinations you are HOD of, so their gatepasses appear in your dashboard.'}
+          </p>
+        </div>
+        {scopes.length > 0 ? (
+          <span className="status-badge approved">{scopes.length} extra {scopes.length === 1 ? 'scope' : 'scopes'}</span>
+        ) : null}
+      </div>
+
+      {/* Primary scope display */}
+      <div style={{ marginBottom: '0.75rem', fontSize: '0.8125rem', color: 'var(--muted)' }}>
+        <strong style={{ color: 'var(--text)' }}>Primary: </strong>
+        {role === 'principal' ? primaryProgram || '—' : `${primaryProgram || '—'} / ${primaryDepartment || '—'}`}
+      </div>
+
+      {/* Existing additional scopes list */}
+      {scopes.length > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '1rem' }}>
+          {scopes.map((scope, idx) => (
+            <div
+              key={idx}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                background: 'var(--card-bg, rgba(255,255,255,0.04))',
+                border: '1px solid var(--border, rgba(255,255,255,0.08))',
+                borderRadius: '0.5rem', padding: '0.5rem 0.75rem', fontSize: '0.8125rem'
+              }}
+            >
+              <span>
+                {role === 'principal'
+                  ? scope.program
+                  : `${scope.program} / ${scope.department}`}
+              </span>
+              <button
+                type="button"
+                onClick={() => removeScope(idx)}
+                disabled={saving}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'var(--danger, #ef4444)', fontSize: '0.75rem', padding: '0 0.25rem'
+                }}
+                aria-label="Remove scope"
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {/* Cooldown message */}
+      {cooldown && !hasExtra ? (
+        <p style={{ fontSize: '0.8125rem', color: 'var(--muted)', fontStyle: 'italic' }}>
+          Program coverage question hidden. It will reappear in about 10 minutes.
+        </p>
+      ) : !hasExtra ? (
+        /* Yes / No prompt */
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text)' }}>
+            {role === 'principal'
+              ? 'Are you principal of any other program?'
+              : 'Are you HOD of any other program or department?'}
+          </p>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button type="button" className="btn btn-secondary" onClick={handleYes}>
+              Yes
+            </button>
+            <button type="button" className="btn" onClick={handleNo} style={{ opacity: 0.7 }}>
+              No
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* Add additional scope form */
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text)', fontWeight: 500 }}>Add another program{role === 'hod' ? ' + department' : ''}:</p>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <SelectField
+              value={newProgram}
+              onChange={(e) => setNewProgram(e.target.value)}
+              disabled={saving}
+              style={{ minWidth: '180px', flex: '1' }}
+            >
+              <option value="" disabled>Select program</option>
+              {availablePrograms.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </SelectField>
+            {role === 'hod' ? (
+              <SelectField
+                value={newDepartment}
+                onChange={(e) => setNewDepartment(e.target.value)}
+                disabled={saving}
+                style={{ minWidth: '180px', flex: '1' }}
+              >
+                <option value="" disabled>Select department</option>
+                {ROUTING_DEPARTMENTS.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </SelectField>
+            ) : null}
+            <ActionButton
+              tone="secondary"
+              onClick={addScope}
+              disabled={saving || !newProgram || (role === 'hod' && !newDepartment)}
+            >
+              {saving ? 'Saving…' : 'Add'}
+            </ActionButton>
+          </div>
+          <button
+            type="button"
+            onClick={handleNo}
+            style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: 'var(--muted)', fontSize: '0.8125rem', cursor: 'pointer', padding: 0 }}
+          >
+            No, I don't manage another {role === 'principal' ? 'program' : 'department'}
+          </button>
+        </div>
+      )}
+    </section>
+  )
+}
+
 function ProfileSettingsTabs({
   currentUser,
   cookieConsent,
@@ -3997,6 +4245,12 @@ function ProfileSettingsTabs({
   const [activeTab, setActiveTab] = useState(
     initialActiveTab || (currentUser?.isTemporaryPassword || currentUser?.isNewStudent ? 'password' : null)
   )
+
+  useEffect(() => {
+    if (initialActiveTab) {
+      setActiveTab(initialActiveTab)
+    }
+  }, [initialActiveTab])
 
   return (
     <div className="profile-settings-tabs-container">
@@ -4057,6 +4311,13 @@ function ProfileSettingsTabs({
           currentUser={currentUser}
           onUpdateCurrentUserProfile={onUpdateCurrentUserProfile}
           locationLabel="profile"
+        />
+      ) : null}
+
+      {currentUser.role === 'principal' || currentUser.role === 'hod' ? (
+        <MultiProgramScopePanel
+          currentUser={currentUser}
+          onUpdateCurrentUserProfile={onUpdateCurrentUserProfile}
         />
       ) : null}
 
@@ -4129,6 +4390,15 @@ function AppShell({
   const hasSyncedInitialWorkspaceQueryRef = useRef(false)
   const [profileInitialTab, setProfileInitialTab] = useState(null)
   const [showNewStudentWelcome, setShowNewStudentWelcome] = useState(false)
+
+  // Student inactivity auto-logout — no-op for all other roles.
+  useStudentSessionTimeout(currentUser, onLogout, navigate)
+
+  useEffect(() => {
+    if (currentPage !== 'profile') {
+      setProfileInitialTab(null)
+    }
+  }, [currentPage])
 
   useEffect(() => {
     if (
@@ -4453,6 +4723,18 @@ function AppShell({
                   onToggle={onUpdateCurrentUserProfile}
                 />
               ) : null}
+              <button
+                type="button"
+                className={`icon-button ${currentPage === 'profile' ? 'active' : ''}`}
+                onClick={() => {
+                  setProfileInitialTab('preferences')
+                  navigate('/app/profile')
+                }}
+                aria-label="Settings"
+                title="Settings"
+              >
+                <Settings size={18} />
+              </button>
               <div className="notification-wrapper" ref={notificationWrapperRef}>
                 <button
                   type="button"
