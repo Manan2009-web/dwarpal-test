@@ -53,3 +53,8 @@ e2e/debug_hod.spec.js
 e2e/debug_principal.spec.js
 e2e/print_actions.spec.js
 e2e/print_cards.spec.js
+
+# Backups and local test tool runs
+backend/backups/
+strix_runs/
+
