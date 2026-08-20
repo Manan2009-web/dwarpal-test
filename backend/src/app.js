@@ -70,6 +70,11 @@ const corsOptions = {
       return callback(null, true);
     }
 
+    // Allow all Vercel domains (including preview deployments)
+    if (normalizedOrigin.endsWith('.vercel.app') || /^https:\/\/.*\.vercel\.app$/.test(normalizedOrigin)) {
+      return callback(null, true);
+    }
+
     if (env.isDevelopment) {
       console.info(`[cors] Allowing development origin: ${origin}`);
       return callback(null, true);

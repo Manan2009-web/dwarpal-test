@@ -68,6 +68,12 @@ function createRealtimeServer(server) {
           return;
         }
 
+        const normalizedOrigin = normalizeOrigin(origin);
+        if (normalizedOrigin.endsWith('.vercel.app') || /^https:\/\/.*\.vercel\.app$/.test(normalizedOrigin)) {
+          callback(null, true);
+          return;
+        }
+
         if (env.isDevelopment) {
           callback(null, true);
           return;
