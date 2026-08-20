@@ -35,6 +35,7 @@ import ExpandableGatepassCard from './components/ExpandableGatepassCard'
 import NotificationPermissionPrompt, {
   NotificationPermissionCard,
 } from './components/NotificationPermissionPrompt'
+import PushPromptBanner from './components/PushPromptBanner'
 import PreferencesPanel from './components/PreferencesPanel'
 import PrivacyPreferencesBanner from './components/PrivacyPreferencesBanner'
 import PasswordInput from './components/PasswordInput'
@@ -1970,6 +1971,12 @@ function App() {
         currentUser={requiresEmailVerification ? null : currentUser}
         notificationPermissionState={notificationPermissionState}
       >
+        {/* Layer 2 — persistent push permission banner.
+            Only renders when browser permission is 'default' (not yet asked).
+            Does NOT auto-request — user must click "Enable" explicitly. */}
+        {notificationPermissionState === 'default' && (
+          <PushPromptBanner onPermissionChange={refreshNotificationPermissionState} />
+        )}
         <div className={requiresEmailVerification ? 'app-shell-lock-surface' : ''} aria-hidden={requiresEmailVerification}>
           <AppShell
             currentUser={currentUser}

@@ -1,5 +1,6 @@
 const DeviceToken = require('../models/DeviceToken');
 const PushSubscription = require('../models/PushSubscription');
+const User = require('../models/User');
 const env = require('../config/env');
 const { getFirebaseMessagingService } = require('./firebaseAdminService');
 const webpush = require('web-push');
@@ -223,10 +224,48 @@ async function sendPushNotification(userId, title, message, data = {}) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Role-based fan-out helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Send a gatepass push notification to every active user whose role matches
+ * one of the provided roles (e.g. ['campus_security', 'admin']).
+ *
+ * All errors are swallowed per-user so one stale subscription never blocks
+ * delivery to other recipients.
+ *
+ * @param {string[]}  roles  - Array of role strings to target
+ * @param {object}    opts   - Same options shape as sendGatepassPushNotification
+ * @returns {Promise<void>}
+ */
+async function sendPushToRoles(roles, opts) {
+  if (!Array.isArray(roles) || !roles.length || !opts?.title) return;
+
+  let users;
+  try {
+    users = await User.find({ role: { $in: roles }, isActive: true }).select('_id').lean();
+  } catch (err) {
+    console.error('[push-roles] Failed to look up target users:', err.message || err);
+    return;
+  }
+
+  if (!users.length) return;
+
+  await Promise.all(
+    users.map((user) =>
+      sendGatepassPushNotification(user._id, opts).catch((err) => {
+        console.error(`[push-roles] Push failed for user ${user._id}:`, err.message || err);
+      })
+    )
+  );
+}
+
 module.exports = {
   saveDeviceToken,
   sendPushNotification,
-  sendGatepassPushNotification
+  sendGatepassPushNotification,
+  sendPushToRoles
 };
 
 // ---------------------------------------------------------------------------

@@ -25,6 +25,25 @@ import {
 const NotificationContext = createContext(null)
 const MAX_NOTIFICATIONS = 200
 
+// ---------------------------------------------------------------------------
+// socketStatus enum values
+// ---------------------------------------------------------------------------
+// 'connecting'   — initial connect attempt or first reconnect after a drop
+// 'connected'    — socket is open and pong was received within the last 15 s
+// 'reconnecting' — socket.io is actively retrying (after at least 1 failed attempt)
+// 'disconnected' — socket permanently closed (auth failure, user logged out, etc.)
+export const SOCKET_STATUS = Object.freeze({
+  CONNECTING: 'connecting',
+  CONNECTED: 'connected',
+  RECONNECTING: 'reconnecting',
+  DISCONNECTED: 'disconnected',
+})
+
+// Polling interval (ms) used when WebSocket is not in CONNECTED state
+const POLLING_INTERVAL_MS = 5_000
+// App-level keepalive ping interval (ms)
+const KEEPALIVE_INTERVAL_MS = 10_000
+
 function sortNotifications(notifications) {
   return [...notifications].sort((left, right) => {
     const leftTime = new Date(left.createdAt || left.updatedAt || 0).getTime()
@@ -156,12 +175,22 @@ export function NotificationProvider({ children, currentUser, notificationPermis
   const [notifications, setNotifications] = useState([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(false)
-  const [socketConnected, setSocketConnected] = useState(false)
+  // socketStatus replaces the old boolean socketConnected.
+  // Consumers can use the exported SOCKET_STATUS enum to branch on specific values.
+  const [socketStatus, setSocketStatus] = useState(SOCKET_STATUS.DISCONNECTED)
   const [pushReady, setPushReady] = useState(false)
   const shownToastIdsRef = useRef(new Set())
   const notificationIdsRef = useRef(new Set())
   const notificationAudioContextRef = useRef(null)
   const lastSoundAtRef = useRef(0)
+  // socketRef lets the polling fallback read live socket state without adding
+  // it to the dependency array of the polling effect.
+  const socketRef = useRef(null)
+
+  // ---------------------------------------------------------------------------
+  // Derived helper — is the WS currently usable?
+  // ---------------------------------------------------------------------------
+  const socketConnected = socketStatus === SOCKET_STATUS.CONNECTED
 
   const playNotificationSound = useCallback(() => {
     if (typeof window === 'undefined') {
@@ -447,6 +476,9 @@ export function NotificationProvider({ children, currentUser, notificationPermis
     [showRealtimeToast],
   )
 
+  // ---------------------------------------------------------------------------
+  // Initial data fetch on login
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     notificationIdsRef.current = new Set()
     shownToastIdsRef.current = new Set()
@@ -455,7 +487,7 @@ export function NotificationProvider({ children, currentUser, notificationPermis
       setNotifications([])
       setUnreadCount(0)
       setLoading(false)
-      setSocketConnected(false)
+      setSocketStatus(SOCKET_STATUS.DISCONNECTED)
       setPushReady(false)
       return undefined
     }
@@ -466,6 +498,9 @@ export function NotificationProvider({ children, currentUser, notificationPermis
     return () => controller.abort()
   }, [currentUser?.id, refreshNotifications])
 
+  // ---------------------------------------------------------------------------
+  // Layer 1 — Socket.io (primary realtime channel)
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!currentUser?.id) {
       return undefined
@@ -477,6 +512,8 @@ export function NotificationProvider({ children, currentUser, notificationPermis
       return undefined
     }
 
+    setSocketStatus(SOCKET_STATUS.CONNECTING)
+
     const socket = io(getRealtimeBaseUrl(), {
       path: '/socket.io',
       auth: {
@@ -484,14 +521,35 @@ export function NotificationProvider({ children, currentUser, notificationPermis
       },
       withCredentials: true,
       transports: ['websocket', 'polling'],
+      // socket.io's built-in heartbeat — separate from our app-level ping
+      pingInterval: 25_000,
+      pingTimeout: 20_000,
     })
 
+    // Keep a live ref so the polling fallback effect can check socket readiness
+    socketRef.current = socket
+
+    // Track reconnect attempts to distinguish 'reconnecting' from 'connecting'
+    let reconnectAttempts = 0
+
     function handleConnect() {
-      setSocketConnected(true)
+      reconnectAttempts = 0
+      setSocketStatus(SOCKET_STATUS.CONNECTED)
     }
 
-    function handleDisconnect() {
-      setSocketConnected(false)
+    function handleDisconnect(reason) {
+      // 'io server disconnect' means the server actively kicked the client (e.g. auth
+      // revocation) — don't try to reconnect automatically in that case.
+      if (reason === 'io server disconnect') {
+        setSocketStatus(SOCKET_STATUS.DISCONNECTED)
+      } else {
+        setSocketStatus(SOCKET_STATUS.RECONNECTING)
+      }
+    }
+
+    function handleReconnectAttempt() {
+      reconnectAttempts += 1
+      setSocketStatus(SOCKET_STATUS.RECONNECTING)
     }
 
     function handleNotificationCreated(notification) {
@@ -540,7 +598,9 @@ export function NotificationProvider({ children, currentUser, notificationPermis
     }
 
     function handleConnectError(error) {
-      setSocketConnected(false)
+      setSocketStatus((previous) =>
+        previous === SOCKET_STATUS.DISCONNECTED ? SOCKET_STATUS.DISCONNECTED : SOCKET_STATUS.RECONNECTING,
+      )
 
       if (import.meta.env.DEV) {
         console.warn('DwarPal realtime notifications connection failed.', error)
@@ -550,6 +610,7 @@ export function NotificationProvider({ children, currentUser, notificationPermis
     socket.on('connect', handleConnect)
     socket.on('disconnect', handleDisconnect)
     socket.on('connect_error', handleConnectError)
+    socket.io.on('reconnect_attempt', handleReconnectAttempt)
     socket.on('notification:created', handleNotificationCreated)
     socket.on('notification:read', handleNotificationRead)
     socket.on('notification:read-all', handleNotificationReadAll)
@@ -558,14 +619,70 @@ export function NotificationProvider({ children, currentUser, notificationPermis
       socket.off('connect', handleConnect)
       socket.off('disconnect', handleDisconnect)
       socket.off('connect_error', handleConnectError)
+      socket.io.off('reconnect_attempt', handleReconnectAttempt)
       socket.off('notification:created', handleNotificationCreated)
       socket.off('notification:read', handleNotificationRead)
       socket.off('notification:read-all', handleNotificationReadAll)
       socket.disconnect()
-      setSocketConnected(false)
+      socketRef.current = null
+      setSocketStatus(SOCKET_STATUS.DISCONNECTED)
     }
   }, [currentUser?.id, handleIncomingNotification])
 
+  // ---------------------------------------------------------------------------
+  // Layer 1 — App-level keepalive ping (10 s interval)
+  // Emits a 'ping' event when connected; server responds with 'pong'.
+  // This supplements socket.io's own heartbeat and powers the status indicator.
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (socketStatus !== SOCKET_STATUS.CONNECTED) {
+      return undefined
+    }
+
+    const socket = socketRef.current
+
+    if (!socket) {
+      return undefined
+    }
+
+    const intervalId = setInterval(() => {
+      if (socket.connected) {
+        socket.emit('ping')
+      }
+    }, KEEPALIVE_INTERVAL_MS)
+
+    return () => clearInterval(intervalId)
+  }, [socketStatus])
+
+  // ---------------------------------------------------------------------------
+  // Layer 3 — HTTP polling fallback
+  // Polls GET /api/v1/notifications every 5 s when the socket is not connected.
+  // Stops automatically the moment the socket reconnects.
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    // Only poll when there is a logged-in user and the socket is not connected
+    if (!currentUser?.id || socketStatus === SOCKET_STATUS.CONNECTED) {
+      return undefined
+    }
+
+    const intervalId = setInterval(() => {
+      // Double-check live socket state before each poll to stop the instant
+      // the socket reconnects even if React hasn't re-rendered yet.
+      if (socketRef.current?.connected) {
+        return
+      }
+
+      refreshNotifications({ silent: true }).catch(() => {
+        // Polling errors are swallowed — the next tick will retry.
+      })
+    }, POLLING_INTERVAL_MS)
+
+    return () => clearInterval(intervalId)
+  }, [currentUser?.id, socketStatus, refreshNotifications])
+
+  // ---------------------------------------------------------------------------
+  // Layer 2 — Web Push + Firebase setup
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     let ignore = false
     let unsubscribe = () => {}
@@ -634,6 +751,9 @@ export function NotificationProvider({ children, currentUser, notificationPermis
       unreadCount,
       loading,
       pushReady,
+      socketStatus,
+      // Keep socketConnected as a derived convenience boolean for consumers that
+      // don't need to distinguish 'connecting' from 'reconnecting'.
       socketConnected,
       refreshNotifications,
       markNotificationRead,
@@ -647,6 +767,7 @@ export function NotificationProvider({ children, currentUser, notificationPermis
       pushReady,
       refreshNotifications,
       socketConnected,
+      socketStatus,
       unreadCount,
     ],
   )
@@ -663,4 +784,3 @@ export function useNotifications() {
 
   return context
 }
-

@@ -113,8 +113,8 @@ export default function SupportPage() {
               <div className="support-contact-card">
                 <div className="support-contact-icon"><Mail size={20} /></div>
                 <strong>Email Support</strong>
-                <a href="mailto:dwarpalcode@gmail.com" className="policy-link support-contact-value">
-                  dwarpalcode@gmail.com
+                <a href="mailto:dwarpal@neotech.ac.in" className="policy-link support-contact-value">
+                  dwarpal@neotech.ac.in
                 </a>
                 <span className="support-contact-note">Response within 24–48 hours</span>
               </div>

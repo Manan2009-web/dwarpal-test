@@ -97,6 +97,13 @@ function createRealtimeServer(server) {
       role: user.role,
       connectedAt: new Date().toISOString()
     });
+
+    // App-level keepalive: frontend sends 'ping' every 10 s; server echoes 'pong'.
+    // This is in addition to socket.io's own pingInterval/pingTimeout heartbeat and
+    // allows the client's socketStatus indicator to confirm end-to-end liveness.
+    socket.on('ping', () => {
+      socket.emit('pong', { ts: Date.now() });
+    });
   });
 
   return io;

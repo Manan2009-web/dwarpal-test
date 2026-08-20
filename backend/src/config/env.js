@@ -276,7 +276,7 @@ const env = {
   enableWebPush: parseBooleanEnv(process.env.ENABLE_WEB_PUSH, false),
   vapidPublicKey: normalizeEnvString(process.env.VAPID_PUBLIC_KEY),
   vapidPrivateKey: normalizeEnvString(process.env.VAPID_PRIVATE_KEY),
-  vapidEmail: normalizeEnvString(process.env.VAPID_EMAIL) || 'mailto:dwarpalcode@gmail.com',
+  vapidEmail: normalizeEnvString(process.env.VAPID_EMAIL) || 'mailto:dwarpal@neotech.ac.in',
   qrSignSecret:
     normalizeEnvString(process.env.QR_SIGN_SECRET) ||
     normalizeEnvString(process.env.JWT_SESSION_SECRET) ||

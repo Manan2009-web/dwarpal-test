@@ -549,6 +549,12 @@ const gatepassSchema = new mongoose.Schema(
     autoEscalation: {
       type: autoEscalationSchema,
       default: () => ({})
+    },
+    // Set once by the escalation scheduler when an overdue-return push is sent.
+    // Prevents duplicate nudges across sweep intervals.
+    expiryNudgeSentAt: {
+      type: Date,
+      default: null
     }
   },
   {

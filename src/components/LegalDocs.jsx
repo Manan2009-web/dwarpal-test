@@ -201,8 +201,8 @@ export default function LegalDocs({ onManageCookies }) {
               <p className="policy-contact-name">DwarPal Data Protection Officer</p>
               <p>
                 Email:{' '}
-                <a href="mailto:dwarpalcode@gmail.com" className="policy-link">
-                  dwarpalcode@gmail.com
+                <a href="mailto:dwarpal@neotech.ac.in" className="policy-link">
+                  dwarpal@neotech.ac.in
                 </a>
               </p>
               <p className="policy-contact-note">Responses are typically provided within 48 business hours.</p>

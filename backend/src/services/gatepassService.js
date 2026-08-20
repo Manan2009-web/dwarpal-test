@@ -25,7 +25,7 @@ const {
 } = require('../utils/gatepassQr');
 const { logAction } = require('./auditService');
 const { createBulkNotifications } = require('./notificationService');
-const { sendGatepassPushNotification } = require('./pushNotificationService');
+const { sendGatepassPushNotification, sendPushToRoles } = require('./pushNotificationService');
 
 const detailPopulate = [
   {
@@ -3072,6 +3072,56 @@ async function processPendingStudentEscalations({ maxPerSweep = 50 } = {}) {
       }
     }
 
+    // --- Overdue-return sweep: push student + security for expired checked-out gatepasses ----
+    // Find gatepasses that are checked_out and past their expected return time,
+    // where we haven't already sent an overdue nudge.
+    const now = new Date();
+    const overdueGatepasses = await Gatepass.find({
+      status: 'checked_out_by_security',
+      isCompleted: false,
+      isCancelled: false,
+      returnTime: { $lte: now },
+      expiryNudgeSentAt: { $exists: false }   // only nudge once per gatepass
+    })
+      .select('_id passNumber createdBy returnTime applicantSnapshot')
+      .limit(safeLimit)
+      .lean();
+
+    for (const gatepass of overdueGatepasses) {
+      try {
+        // Mark nudge sent before firing push so a slow push never triggers a double-send
+        await Gatepass.updateOne({ _id: gatepass._id }, { $set: { expiryNudgeSentAt: new Date() } });
+
+        const studentId = gatepass.createdBy?._id || gatepass.createdBy;
+
+        // Notify the student
+        sendGatepassPushNotification(studentId, {
+          title: '⚠️ Gatepass Overdue — Please Return',
+          body: `Your gatepass ${gatepass.passNumber} has passed its expected return time. Please return to campus and check in at the gate.`,
+          gatepassId: String(gatepass._id),
+          passNumber: gatepass.passNumber,
+          relatedRoute: '/app/my-gatepasses',
+          tag: `gatepass-overdue-${gatepass._id}`,
+          requireInteraction: true,
+          actions: []
+        }).catch((err) => console.error('[gatepass-expiry] Student push failed:', err.message || err));
+
+        // Notify security + admin
+        sendPushToRoles(['campus_security', 'security', 'admin'], {
+          title: '⚠️ Overdue Return',
+          body: `${gatepass.applicantSnapshot?.fullName || 'A student'} (${gatepass.passNumber}) has not returned within the expected time.`,
+          gatepassId: String(gatepass._id),
+          passNumber: gatepass.passNumber,
+          relatedRoute: '/app/pending-gatepasses',
+          tag: `gatepass-overdue-security-${gatepass._id}`,
+          requireInteraction: true,
+          actions: []
+        }).catch((err) => console.error('[gatepass-expiry] Security push failed:', err.message || err));
+      } catch (err) {
+        console.error('[gatepass-expiry] Overdue nudge failed for', gatepass.passNumber, err.message || err);
+      }
+    }
+
     return stats;
   } finally {
     escalationSweepRunning = false;
@@ -3295,6 +3345,18 @@ async function checkOutGatepass(gatepassId, actor, payload, requestMeta) {
     requestMeta
   });
 
+  // Push to security desk + admin — they need to know the student is now off-campus.
+  // Fire-and-forget; never blocks the API response.
+  sendPushToRoles(['campus_security', 'admin'], {
+    title: '🚪 Student Checked Out',
+    body: `${gatepass.applicantSnapshot?.fullName || 'Student'} checked out on ${gatepass.passNumber}. Student is now off-campus.`,
+    gatepassId: String(gatepass._id),
+    passNumber: gatepass.passNumber,
+    relatedRoute: '/app/pending-gatepasses',
+    tag: `gatepass-checkout-${gatepass._id}`,
+    actions: []
+  }).catch((err) => console.error('[gatepass-push] checkOutGatepass role push failed:', err.message || err));
+
   return getGatepassByIdOrThrow(gatepass._id);
 }
 
@@ -3351,6 +3413,32 @@ async function checkInGatepass(gatepassId, actor, payload, requestMeta) {
     requestMeta
   });
 
+  // Push to security desk + admin — student has returned, trip is complete.
+  // Fire-and-forget; never blocks the API response.
+  sendPushToRoles(['campus_security', 'admin'], {
+    title: '✅ Student Returned',
+    body: `${gatepass.applicantSnapshot?.fullName || 'Student'} returned on ${gatepass.passNumber}. Gatepass completed.`,
+    gatepassId: String(gatepass._id),
+    passNumber: gatepass.passNumber,
+    relatedRoute: '/app/pending-gatepasses',
+    tag: `gatepass-checkin-${gatepass._id}`,
+    actions: []
+  }).catch((err) => console.error('[gatepass-push] checkInGatepass role push failed:', err.message || err));
+
+  // Push to the student — confirmation their trip is logged.
+  {
+    const studentId = gatepass.createdBy?._id || gatepass.createdBy;
+    sendGatepassPushNotification(studentId, {
+      title: '🏠 Welcome Back!',
+      body: `Your gatepass ${gatepass.passNumber} has been marked as completed. Safe return confirmed.`,
+      gatepassId: String(gatepass._id),
+      passNumber: gatepass.passNumber,
+      relatedRoute: '/app/my-gatepasses',
+      tag: `gatepass-completed-${gatepass._id}`,
+      actions: []
+    }).catch((err) => console.error('[gatepass-push] checkInGatepass student push failed:', err.message || err));
+  }
+
   return getGatepassByIdOrThrow(gatepass._id);
 }
 
@@ -3388,6 +3476,32 @@ async function campusClearGatepass(gatepassId, actor, payload, requestMeta) {
     campusClearedBy: actor._id,
   };
   await gatepass.save();
+
+  // Push to the student — they're cleared to leave.
+  // Fire-and-forget; never blocks the API response.
+  {
+    const studentId = gatepass.createdBy?._id || gatepass.createdBy;
+    sendGatepassPushNotification(studentId, {
+      title: '✅ Campus Clearance Granted',
+      body: `Your gatepass ${gatepass.passNumber} has been cleared by campus security. You may proceed.`,
+      gatepassId: String(gatepass._id),
+      passNumber: gatepass.passNumber,
+      relatedRoute: '/app/my-gatepasses',
+      tag: `gatepass-campus-cleared-${gatepass._id}`,
+      actions: [{ action: 'see_qr', title: '🔍 See QR' }]
+    }).catch((err) => console.error('[gatepass-push] campusClearGatepass student push failed:', err.message || err));
+  }
+
+  // Push to security desk + admin — awareness of clearance.
+  sendPushToRoles(['admin'], {
+    title: '🔓 Campus Clearance Issued',
+    body: `${gatepass.applicantSnapshot?.fullName || 'Student'} (${gatepass.passNumber}) was cleared by campus security.`,
+    gatepassId: String(gatepass._id),
+    passNumber: gatepass.passNumber,
+    relatedRoute: '/app/pending-gatepasses',
+    tag: `gatepass-campus-cleared-admin-${gatepass._id}`,
+    actions: []
+  }).catch((err) => console.error('[gatepass-push] campusClearGatepass admin push failed:', err.message || err));
 
   return formatGatepassForUser(gatepass, actor);
 }

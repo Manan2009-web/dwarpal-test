@@ -6654,6 +6654,110 @@ button {
   color: var(--app-shell-muted);
 }
 
+/* ---------------------------------------------------------------------------
+   PushPromptBanner — slim, dismissible top banner
+   --------------------------------------------------------------------------- */
+
+.push-prompt-banner {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  width: 100%;
+  background: linear-gradient(90deg, #1e3a5f 0%, #1a4480 100%);
+  color: #fff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.18);
+}
+
+.push-prompt-banner-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0.6rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.push-prompt-banner-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.push-prompt-banner-text {
+  flex: 1;
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.92);
+  min-width: 0;
+}
+
+.push-prompt-banner-text strong {
+  color: #fff;
+  font-weight: 600;
+}
+
+.push-prompt-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.push-prompt-banner-btn {
+  border: none;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 8px;
+  transition: background 0.15s, opacity 0.15s;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.push-prompt-banner-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.push-prompt-banner-btn-enable {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+}
+
+.push-prompt-banner-btn-enable:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.26);
+}
+
+.push-prompt-banner-btn-dismiss {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  padding: 0.4rem;
+  border-radius: 6px;
+}
+
+.push-prompt-banner-btn-dismiss:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+@media (max-width: 480px) {
+  .push-prompt-banner-text {
+    font-size: 0.8rem;
+  }
+
+  .push-prompt-banner-inner {
+    gap: 0.5rem;
+  }
+}
+
 .notification-toast-stack {
   top: max(1rem, env(safe-area-inset-top));
   right: 1rem;
