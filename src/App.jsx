@@ -674,6 +674,11 @@ function App() {
     resetWorkspace()
   }, [resetWorkspace])
 
+  const handleInactivityTimeout = useCallback(() => {
+    clearSession()
+    logoutUser().catch(() => {})
+  }, [clearSession])
+
   const savePortalAccess = useCallback((nextPortalAccess) => {
     if (!nextPortalAccess?.token || !nextPortalAccess?.accessType) {
       clearPortalAccessSession()
@@ -1984,6 +1989,7 @@ function App() {
             gatepasses={gatepasses}
             gatepassMeta={gatepassMeta}
             onLogout={logout}
+            onInactivityTimeout={handleInactivityTimeout}
             onAddGatepass={addGatepass}
             onCurrentUserPatch={patchCurrentUser}
             onUpdateCurrentUserProfile={saveCurrentUserProfile}
@@ -2068,7 +2074,7 @@ function App() {
           element={
             currentUser ? (
               <Navigate to={getLandingPathForUser(currentUser)} replace />
-            ) : portalAccess ? (
+            ) : (portalAccess || getPortalAccessSession()) ? (
               <Navigate to="/login" replace />
             ) : (
               <Suspense fallback={<LoadingSpinner />}>
@@ -2212,12 +2218,13 @@ function PublicAuthRoute({ currentUser, authReady, portalAccess, isRegisterRoute
   if (currentUser) return <Navigate to={getLandingPathForUser(currentUser)} replace />
 
   // Require portal access session
-  if (!portalAccess) {
+  const effectivePortalAccess = portalAccess || getPortalAccessSession()
+  if (!effectivePortalAccess) {
     return <Navigate to="/access-portal" replace />
   }
 
   // Block students from opening /register
-  if (isRegisterRoute && portalAccess.accessType === 'student') {
+  if (isRegisterRoute && effectivePortalAccess.accessType === 'student') {
     return <Navigate to="/login" replace />
   }
 
@@ -4353,6 +4360,7 @@ function AppShell({
   onCurrentUserPatch,
   onUpdateCurrentUserProfile,
   onLogout,
+  onInactivityTimeout,
   onAddGatepass,
   onGatepassAction,
   onRefreshData,
@@ -4399,7 +4407,7 @@ function AppShell({
   const [showNewStudentWelcome, setShowNewStudentWelcome] = useState(false)
 
   // Student inactivity auto-logout — no-op for all other roles.
-  useStudentSessionTimeout(currentUser, onLogout, navigate)
+  useStudentSessionTimeout(currentUser, onInactivityTimeout, navigate)
 
   useEffect(() => {
     if (currentPage !== 'profile') {
