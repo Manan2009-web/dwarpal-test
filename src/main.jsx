@@ -119,7 +119,10 @@ async function cleanupLegacyBrowserState() {
           const scriptUrl =
             registration.active?.scriptURL || registration.waiting?.scriptURL || registration.installing?.scriptURL || ''
 
-          return !scriptUrl.includes('firebase-messaging-sw.js')
+          // Preserve BOTH the Firebase messaging SW and our own push/caching SW
+          // (/sw.js). Web Push notifications are delivered to /sw.js's push
+          // handler, so unregistering it silently kills all push notifications.
+          return !scriptUrl.includes('firebase-messaging-sw.js') && !scriptUrl.includes('/sw.js')
         })
 
         if (!staleRegistrations.length) {
@@ -170,6 +173,40 @@ function showBootstrapFailure(message) {
     details: message,
     showReload: true,
   })
+}
+
+// ---------------------------------------------------------------------------
+// registerPushServiceWorker — registers /sw.js so Web Push notifications work.
+//
+// Without this call, navigator.serviceWorker.ready never resolves, so no push
+// subscription is ever created and no push notifications are ever delivered.
+// Registers after the window 'load' event so it never competes with the initial
+// app render. Runs once; the browser no-ops repeat register() calls for the same
+// script + scope.
+// ---------------------------------------------------------------------------
+function registerPushServiceWorker() {
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+    return
+  }
+
+  const register = () => {
+    navigator.serviceWorker
+      .register('/sw.js', { scope: '/' })
+      .then((registration) => {
+        logBootstrapStatus('Service worker registered', registration.scope)
+      })
+      .catch((error) => {
+        if (import.meta.env.DEV) {
+          console.warn('DwarPal service worker registration failed.', error)
+        }
+      })
+  }
+
+  if (document.readyState === 'complete') {
+    register()
+  } else {
+    window.addEventListener('load', register, { once: true })
+  }
 }
 
 function showBackendUnavailableScreen() {
@@ -323,6 +360,10 @@ async function bootstrap() {
         </RootErrorBoundary>
       </React.StrictMode>,
     )
+
+    // Register the push/caching service worker AFTER a successful render so
+    // Web Push subscriptions (navigator.serviceWorker.ready) can resolve.
+    registerPushServiceWorker()
   } catch (error) {
     handleBootstrapFailure(error)
   }
