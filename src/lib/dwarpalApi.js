@@ -395,12 +395,12 @@ export function getRealtimeBaseUrl() {
     // Vercel serverless functions do not support WebSockets.
     // If the API base URL resolves to a Vercel domain, connect directly to the Render backend instead.
     if (url.origin.includes('.vercel.app') || window.location.hostname.includes('.vercel.app')) {
-      return 'https://dwarpal-test.onrender.com'
+      return 'https://dwarpal.onrender.com'
     }
     return url.origin
   } catch {
     if (window.location.hostname.includes('.vercel.app')) {
-      return 'https://dwarpal-test.onrender.com'
+      return 'https://dwarpal.onrender.com'
     }
     return window.location.origin
   }
