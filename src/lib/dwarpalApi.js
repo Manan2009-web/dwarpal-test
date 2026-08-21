@@ -4,7 +4,7 @@ function normalizeApiBaseUrl(value) {
   return String(value || '').trim().replace(/\/+$/, '')
 }
 
-const PRODUCTION_API_BASE_URL = 'https://dwarpal-test.onrender.com/api'
+const PRODUCTION_API_BASE_URL = 'https://dwarpal.onrender.com/api'
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
 
 function isLocalHostname(value) {
