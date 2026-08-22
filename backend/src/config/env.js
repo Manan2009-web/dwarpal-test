@@ -226,7 +226,7 @@ const env = {
     process.env.PASSWORD_RESET_OTP_VERIFY_ATTEMPT_LIMIT,
     5
   ),
-  emailFrom: normalizeEnvString(process.env.EMAIL_FROM),
+  emailFrom: normalizeEnvString(process.env.EMAIL_FROM) || 'DwarPal <onboarding@dwarpal.dcpartners.dev>',
   resendApiKey: normalizeEnvString(process.env.RESEND_API_KEY),
   smtpHost: normalizeEnvString(process.env.SMTP_HOST),
   smtpPort: parsePositiveIntegerEnv(process.env.SMTP_PORT, 587),
