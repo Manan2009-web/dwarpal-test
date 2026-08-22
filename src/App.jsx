@@ -2217,9 +2217,12 @@ function PublicAuthRoute({ currentUser, authReady, portalAccess, isRegisterRoute
   if (!authReady) return <AuthBootstrapScreen />
   if (currentUser) return <Navigate to={getLandingPathForUser(currentUser)} replace />
 
-  // Require portal access session
+  // Require portal access session unless performing account activation
+  const queryParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
+  const isActivation = queryParams ? queryParams.get('action') === 'activate' : false
+
   const effectivePortalAccess = portalAccess || getPortalAccessSession()
-  if (!effectivePortalAccess) {
+  if (!effectivePortalAccess && !isActivation) {
     return <Navigate to="/access-portal" replace />
   }
 
@@ -2606,7 +2609,7 @@ function LoginScreen({ onLogin, portalAccess }) {
                     </h1>
                     <p className="tw:text-sm tw:font-medium tw:text-neutral-500">
                       {isActivationFlow
-                        ? 'Enter your enrollment number or employee ID to activate your account'
+                        ? 'Enter your enrollment number or employee ID to activate your account. (If your account is already active, you can still use this page to reset your password.)'
                         : 'Enter your enrollment number or employee ID to reset your password'}
                     </p>
                   </div>

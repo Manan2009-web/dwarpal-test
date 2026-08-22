@@ -237,9 +237,13 @@ const getQueueStats = asyncHandler(async (req, res) => {
   const User = require('../models/User');
   const QueuedEmail = require('../models/QueuedEmail');
   const emailQueueService = require('../services/emailQueueService');
+  const emailService = require('../services/emailService');
 
   const totalStudents = await User.countDocuments({ role: 'student' });
   const isWorkerPaused = emailQueueService.getWorkerPaused();
+  
+  const diagnostics = emailService.getSmtpDiagnostics();
+  const warnings = emailService.getSmtpConfigurationWarnings();
 
   // Aggregate stats from queued_emails
   const statusStats = await QueuedEmail.aggregate([
@@ -277,7 +281,9 @@ const getQueueStats = asyncHandler(async (req, res) => {
       pendingCount: statsMap.pending + statsMap.sending,
       failedCount: statsMap.failed,
       neverSentCount,
-      isWorkerPaused
+      isWorkerPaused,
+      diagnostics,
+      warnings
     }
   });
 });

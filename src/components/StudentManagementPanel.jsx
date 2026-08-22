@@ -516,6 +516,20 @@ function EmailManagementPanel({ currentUser }) {
           </div>
         </div>
 
+        {/* Configuration Warnings Banner */}
+        {stats.warnings && stats.warnings.length > 0 && (
+          <div style={{ background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '12px', padding: '1.25rem', marginBottom: '2rem' }}>
+            <h4 style={{ color: '#991b1b', margin: '0 0 0.5rem', fontWeight: '700', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              ⚠️ Email Configuration Issues Detected
+            </h4>
+            <ul style={{ margin: 0, paddingLeft: '1.25rem', color: '#7f1d1d', fontSize: '0.85rem', lineHeight: '1.6' }}>
+              {stats.warnings.map((warning, idx) => (
+                <li key={idx}>{warning}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {/* Stats Grid */}
         <div className="admin-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
           
