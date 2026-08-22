@@ -350,7 +350,11 @@ function getFromAddressString() {
 }
 
 async function sendViaResend({ to, subject, text, html }) {
-  const fromAddress = getFromAddressString();
+  const fromEmail = env.resendFromEmail || (env.emailFrom?.includes('@resend.dev') ? env.emailFrom : 'onboarding@resend.dev');
+  const name = String(env.smtpFromName || 'DwarPal').trim();
+  const fromAddress = name ? `${name} <${fromEmail}>` : fromEmail;
+  const replyTo = env.emailFrom || getEffectiveFromEmail() || 'dwarpal@neotech.ac.in';
+
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -363,7 +367,7 @@ async function sendViaResend({ to, subject, text, html }) {
       subject,
       text,
       html,
-      reply_to: fromAddress
+      reply_to: replyTo
     })
   });
 
