@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, useRef } from 'react'
-import { Eye, FileDown, Download, GraduationCap, KeyRound, PencilLine, ShieldCheck, Trash2, UserPlus, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, RefreshCw, X, AlertOctagon, History, Clock, FileWarning, Trash } from 'lucide-react'
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
+import { Eye, FileDown, Download, GraduationCap, KeyRound, PencilLine, ShieldCheck, Trash2, UserPlus, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, RefreshCw, X, AlertOctagon, History, Clock, FileWarning, Trash, Mail, Pause, Play, Search } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import Papa from 'papaparse'
 import {
@@ -10,6 +10,11 @@ import {
   fetchAdminStudents,
   getApiErrorMessage,
   updateAdminStudent,
+  fetchEmailQueueStudents,
+  fetchEmailQueueStats,
+  controlEmailQueue,
+  triggerResendAll,
+  triggerResendSelected,
 } from '../lib/dwarpalApi'
 import { DEPARTMENTS, PROGRAM_OPTIONS, ROUTING_DEPARTMENTS, SEMESTER_OPTIONS } from '../mockData'
 import { useToast } from './ToastProvider'
@@ -274,6 +279,450 @@ function StudentFormFields({
         {fieldErrors.temporaryPassword ? <p className="field-error">{fieldErrors.temporaryPassword}</p> : null}
       </label>
     </div>
+  )
+}
+
+function EmailManagementPanel({ currentUser }) {
+  const toast = useToast()
+  const [stats, setStats] = useState({
+    totalStudents: 0,
+    sentCount: 0,
+    pendingCount: 0,
+    failedCount: 0,
+    neverSentCount: 0,
+    isWorkerPaused: false,
+  })
+  const [students, setStudents] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
+  const [selectedIds, setSelectedIds] = useState([])
+  const [resendLimit, setResendLimit] = useState(300)
+  const [resendFilter, setResendFilter] = useState('failed_only') // 'failed_only' | 'all'
+  const [submitting, setSubmitting] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
+
+  // Fetch Stats
+  const loadStats = useCallback(async (signal) => {
+    try {
+      const data = await fetchEmailQueueStats(signal)
+      if (data) {
+        setStats(data)
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        console.error('Failed to load email queue stats:', err)
+      }
+    }
+  }, [])
+
+  // Fetch Students
+  const loadStudents = useCallback(async (signal) => {
+    try {
+      setLoading(true)
+      const response = await fetchEmailQueueStudents(
+        {
+          page,
+          limit: 10,
+          search,
+          status: statusFilter,
+        },
+        signal
+      )
+      setStudents(response.students)
+      setTotalPages(response.totalPages)
+      setTotalCount(response.totalCount)
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        toast.show({
+          type: 'danger',
+          title: 'Error loading queue list',
+          message: getApiErrorMessage(err, 'Could not retrieve student list.'),
+        })
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [page, search, statusFilter, toast])
+
+  // Initial load
+  useEffect(() => {
+    const controller = new AbortController()
+    loadStats(controller.signal)
+    loadStudents(controller.signal)
+    return () => controller.abort()
+  }, [loadStats, loadStudents, reloadKey])
+
+  // Pause / Resume Worker
+  const handleToggleWorker = async () => {
+    if (submitting) return
+    const nextAction = stats.isWorkerPaused ? 'resume' : 'pause'
+    try {
+      setSubmitting(true)
+      await controlEmailQueue(nextAction)
+      toast.show({
+        type: 'success',
+        title: `Worker ${nextAction === 'pause' ? 'paused' : 'resumed'}`,
+        message: `Email background queue worker is now ${nextAction === 'pause' ? 'inactive' : 'active'}.`,
+      })
+      setReloadKey(prev => prev + 1)
+    } catch (err) {
+      toast.show({
+        type: 'danger',
+        title: 'Operation failed',
+        message: getApiErrorMessage(err, `Failed to ${nextAction} the queue worker.`),
+      })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // Queue resend for all / filter
+  const handleQueueAll = async () => {
+    if (submitting) return
+    try {
+      setSubmitting(true)
+      const res = await triggerResendAll({
+        limit: resendLimit,
+        filterType: resendFilter,
+      })
+      toast.show({
+        type: 'success',
+        title: 'Emails Enqueued',
+        message: `Successfully enqueued onboarding emails for ${res?.queuedCount || 0} students.`,
+      })
+      setSelectedIds([])
+      setReloadKey(prev => prev + 1)
+    } catch (err) {
+      toast.show({
+        type: 'danger',
+        title: 'Operation failed',
+        message: getApiErrorMessage(err, 'Failed to queue bulk emails.'),
+      })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // Resend selected
+  const handleQueueSelected = async () => {
+    if (submitting || selectedIds.length === 0) return
+    try {
+      setSubmitting(true)
+      const res = await triggerResendSelected(selectedIds)
+      toast.show({
+        type: 'success',
+        title: 'Selected Emails Enqueued',
+        message: `Successfully enqueued onboarding emails for ${res?.queuedCount || 0} selected students.`,
+      })
+      setSelectedIds([])
+      setReloadKey(prev => prev + 1)
+    } catch (err) {
+      toast.show({
+        type: 'danger',
+        title: 'Operation failed',
+        message: getApiErrorMessage(err, 'Failed to queue selected emails.'),
+      })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // Resend single student
+  const handleQueueSingle = async (studentId) => {
+    if (submitting) return
+    try {
+      setSubmitting(true)
+      await triggerResendSelected([studentId])
+      toast.show({
+        type: 'success',
+        title: 'Email Enqueued',
+        message: 'Student onboarding credentials email has been placed in the queue.',
+      })
+      setReloadKey(prev => prev + 1)
+    } catch (err) {
+      toast.show({
+        type: 'danger',
+        title: 'Operation failed',
+        message: getApiErrorMessage(err, 'Failed to queue onboarding email.'),
+      })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // Selection helpers
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedIds(students.map(s => s._id))
+    } else {
+      setSelectedIds([])
+    }
+  }
+
+  const handleSelectRow = (id, checked) => {
+    if (checked) {
+      setSelectedIds(prev => [...prev, id])
+    } else {
+      setSelectedIds(prev => prev.filter(x => x !== id))
+    }
+  }
+
+  return (
+    <>
+      <section className="admin-wide-panel" style={{ maxWidth: '1000px', margin: '0 auto' }}>
+        
+        {/* Header */}
+        <div className="admin-panel-heading" style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+          <div>
+            <p className="admin-eyebrow">Email Operations</p>
+            <h2>Student Email Delivery Dashboard</h2>
+            <span>Monitor delivery status and manage throttled credential notifications (1 mail/8s).</span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <span className={`admin-status-badge ${stats.isWorkerPaused ? 'warning' : 'success'}`} style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', fontWeight: '600' }}>
+              Queue Worker: {stats.isWorkerPaused ? 'Paused ⏸️' : 'Active Run ▶️'}
+            </span>
+            <button
+              type="button"
+              className="admin-action-button"
+              onClick={handleToggleWorker}
+              disabled={submitting}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: stats.isWorkerPaused ? 'var(--app-color-success)' : 'var(--app-color-warning)', color: '#ffffff', border: 'none', padding: '0.65rem 1.25rem', borderRadius: '10px', fontWeight: '600', cursor: 'pointer' }}
+            >
+              {stats.isWorkerPaused ? <Play size={16} /> : <Pause size={16} />}
+              <span>{stats.isWorkerPaused ? 'Resume Worker' : 'Pause Worker'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Stats Grid */}
+        <div className="admin-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
+          
+          <div className="admin-stat-card" style={{ padding: '1.25rem', background: 'var(--app-surface)', border: '1px solid var(--app-surface-border)', borderRadius: '12px' }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--app-text-muted)', fontWeight: '500' }}>Sent Emails</span>
+            <h3 style={{ fontSize: '1.75rem', margin: '0.5rem 0 0', fontWeight: '700', color: 'var(--app-color-success)' }}>{stats.sentCount}</h3>
+          </div>
+
+          <div className="admin-stat-card" style={{ padding: '1.25rem', background: 'var(--app-surface)', border: '1px solid var(--app-surface-border)', borderRadius: '12px' }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--app-text-muted)', fontWeight: '500' }}>Pending Queue</span>
+            <h3 style={{ fontSize: '1.75rem', margin: '0.5rem 0 0', fontWeight: '700', color: 'var(--app-color-accent)' }}>{stats.pendingCount}</h3>
+          </div>
+
+          <div className="admin-stat-card" style={{ padding: '1.25rem', background: 'var(--app-surface)', border: '1px solid var(--app-surface-border)', borderRadius: '12px' }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--app-text-muted)', fontWeight: '500' }}>Failed Deliveries</span>
+            <h3 style={{ fontSize: '1.75rem', margin: '0.5rem 0 0', fontWeight: '700', color: 'var(--app-color-danger)' }}>{stats.failedCount}</h3>
+          </div>
+
+          <div className="admin-stat-card" style={{ padding: '1.25rem', background: 'var(--app-surface)', border: '1px solid var(--app-surface-border)', borderRadius: '12px' }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--app-text-muted)', fontWeight: '500' }}>Total Students</span>
+            <h3 style={{ fontSize: '1.75rem', margin: '0.5rem 0 0', fontWeight: '700', color: 'var(--app-text)' }}>{stats.totalStudents}</h3>
+          </div>
+
+        </div>
+
+        {/* Resend Bulk Controls */}
+        <div style={{ background: 'var(--app-surface)', border: '1px solid var(--app-surface-border)', borderRadius: '12px', padding: '1.5rem', marginBottom: '2rem' }}>
+          <h3 style={{ fontSize: '1rem', fontWeight: '600', margin: '0 0 1rem' }}>Bulk Resend Onboarding Credentials</h3>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center' }}>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              <label style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--app-text-muted)' }}>Daily / Batch Limit</label>
+              <input
+                type="number"
+                value={resendLimit}
+                onChange={e => setResendLimit(Math.max(parseInt(e.target.value, 10) || 0, 0))}
+                style={{ width: '120px', padding: '0.5rem', border: '1px solid var(--app-surface-border)', borderRadius: '8px', background: 'var(--app-surface-input)' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              <label style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--app-text-muted)' }}>Target Filter</label>
+              <select
+                value={resendFilter}
+                onChange={e => setResendFilter(e.target.value)}
+                style={{ padding: '0.5rem', border: '1px solid var(--app-surface-border)', borderRadius: '8px', background: 'var(--app-surface-input)', minWidth: '220px' }}
+              >
+                <option value="failed_only">Unsent & Failed accounts only (Recommended)</option>
+                <option value="all">Force resend to all accounts (caution)</option>
+              </select>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleQueueAll}
+              disabled={submitting}
+              className="admin-action-button"
+              style={{ alignSelf: 'flex-end', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: 'var(--app-color-accent)', color: '#ffffff', border: 'none', padding: '0.65rem 1.25rem', borderRadius: '10px', fontWeight: '600', cursor: 'pointer' }}
+            >
+              <Mail size={16} />
+              <span>Queue Bulk Resend</span>
+            </button>
+
+          </div>
+        </div>
+
+        {/* Toolbar: Search and Filter */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
+          
+          <div style={{ position: 'relative', minWidth: '250px' }}>
+            <span style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--app-text-muted)' }}>
+              <Search size={16} />
+            </span>
+            <input
+              type="text"
+              placeholder="Search by name, email, or enrollment..."
+              value={search}
+              onChange={e => { setSearch(e.target.value); setPage(1); }}
+              style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2.25rem', border: '1px solid var(--app-surface-border)', borderRadius: '8px', background: 'var(--app-surface-input)', fontSize: '0.9rem' }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--app-text-muted)' }}>Status Filter:</span>
+            <select
+              value={statusFilter}
+              onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
+              style={{ padding: '0.5rem', border: '1px solid var(--app-surface-border)', borderRadius: '8px', background: 'var(--app-surface-input)', fontSize: '0.85rem' }}
+            >
+              <option value="">All Students</option>
+              <option value="sent">Sent</option>
+              <option value="pending">Pending</option>
+              <option value="failed">Failed</option>
+              <option value="none">Not Queued</option>
+            </select>
+          </div>
+
+        </div>
+
+        {/* Table Wrap */}
+        <div className="admin-table-wrap" style={{ minHeight: '300px' }}>
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th style={{ width: '40px' }}>
+                  <input
+                    type="checkbox"
+                    checked={students.length > 0 && selectedIds.length === students.length}
+                    onChange={handleSelectAll}
+                  />
+                </th>
+                <th>Name / Email</th>
+                <th>Enrollment</th>
+                <th>Status</th>
+                <th>Attempts</th>
+                <th>Last Update</th>
+                <th style={{ textAlign: 'right' }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <SkeletonTableRows count={5} />
+              ) : students.length > 0 ? (
+                students.map((student) => (
+                  <tr key={student._id}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(student._id)}
+                        onChange={e => handleSelectRow(student._id, e.target.checked)}
+                      />
+                    </td>
+                    <td>
+                      <div style={{ fontWeight: '600' }}>{student.fullName}</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--app-text-muted)' }}>{student.email}</div>
+                    </td>
+                    <td><code style={{ fontSize: '0.85rem' }}>{student.enrollmentNo}</code></td>
+                    <td>
+                      <span className={`admin-status-badge ${
+                        student.emailStatus === 'sent' ? 'success' :
+                        student.emailStatus === 'pending' || student.emailStatus === 'sending' ? 'info' :
+                        student.emailStatus === 'failed' ? 'danger' : 'neutral'
+                      }`} style={{ fontSize: '0.75rem', padding: '0.25rem 0.6rem' }}>
+                        {student.emailStatus === 'none' ? 'not queued' : student.emailStatus}
+                      </span>
+                    </td>
+                    <td>{student.emailAttempts}</td>
+                    <td>{student.emailUpdatedAt ? new Date(student.emailUpdatedAt).toLocaleDateString() : 'N/A'}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button
+                        type="button"
+                        onClick={() => handleQueueSingle(student._id)}
+                        disabled={submitting}
+                        className="admin-text-button"
+                        style={{ color: 'var(--app-color-accent)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '500' }}
+                      >
+                        Resend
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={7}>
+                    <EmptyState
+                      title="No students matching criteria"
+                      description="Search for a different enrollment number or add a student first."
+                    />
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pager */}
+        {!loading && totalPages > 1 && (
+          <div className="admin-pager" style={{ marginTop: '1.5rem' }}>
+            <button type="button" className="admin-secondary-link" onClick={() => setPage(p => Math.max(p - 1, 1))} disabled={page <= 1}>
+              Previous
+            </button>
+            <span>
+              Page {page} of {totalPages}
+            </span>
+            <button
+              type="button"
+              className="admin-secondary-link"
+              onClick={() => setPage(p => Math.min(p + 1, totalPages))}
+              disabled={page >= totalPages}
+            >
+              Next
+            </button>
+          </div>
+        )}
+
+      </section>
+
+      {/* Selected Action Floating Bar */}
+      {selectedIds.length > 0 && (
+        <div style={{ position: 'fixed', bottom: '2rem', left: '50%', transform: 'translateX(-50%)', background: '#163247', color: '#ffffff', padding: '1rem 2rem', borderRadius: '50px', display: 'flex', alignItems: 'center', gap: '1.5rem', boxShadow: '0 8px 30px rgba(0,0,0,0.2)', zIndex: 100 }}>
+          <span style={{ fontSize: '0.9rem', fontWeight: '500' }}>
+            {selectedIds.length} students selected
+          </span>
+          <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <button
+              type="button"
+              onClick={handleQueueSelected}
+              disabled={submitting}
+              style={{ background: '#2872a1', color: '#ffffff', border: 'none', padding: '0.5rem 1.25rem', borderRadius: '25px', fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem' }}
+            >
+              Send Selected
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedIds([])}
+              style={{ background: 'rgba(255,255,255,0.15)', color: '#ffffff', border: 'none', padding: '0.5rem 1.25rem', borderRadius: '25px', fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem' }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 
@@ -1422,6 +1871,10 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
     } finally {
       setExporting(false)
     }
+  }
+
+  if (currentUser?.role === 'it' && activeSection === 'emails') {
+    return <EmailManagementPanel currentUser={currentUser} />
   }
 
   if (currentUser?.role === 'it' && activeSection === 'students') {

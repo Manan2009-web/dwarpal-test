@@ -65,6 +65,14 @@ router.post('/students/bulk', protect, requireVerifiedEmail, authorize('it', 'ad
 router.post('/students', protect, requireVerifiedEmail, authorize('it', 'admin'), adminStudentCreateValidation, validateRequest, adminController.createStudent);
 router.put('/students/:id', protect, requireVerifiedEmail, authorize('it', 'admin'), adminStudentUpdateValidation, validateRequest, adminController.updateStudent);
 router.delete('/students/:id', protect, requireVerifiedEmail, authorize('it', 'admin'), adminStudentDeleteValidation, validateRequest, adminController.deleteStudent);
+
+// Email Queue & Management Controls
+router.get('/email-queue/students', protect, requireVerifiedEmail, authorize('it', 'admin'), adminController.listQueueStudents);
+router.get('/email-queue/stats', protect, requireVerifiedEmail, authorize('it', 'admin'), adminController.getQueueStats);
+router.post('/email-queue/control', protect, requireVerifiedEmail, authorize('it', 'admin'), adminController.controlQueueWorker);
+router.post('/email-queue/resend-all', protect, requireVerifiedEmail, authorize('it', 'admin'), adminController.queueAllStudents);
+router.post('/email-queue/resend-selected', protect, requireVerifiedEmail, authorize('it', 'admin'), adminController.queueSelectedStudents);
+
 router.get('/export/options', requireAuth, requireVerifiedEmail, allowAdminAccess, scopeFilterMiddleware, exportController.getOptions);
 router.get('/export/preview', requireAuth, requireVerifiedEmail, allowAdminAccess, scopeFilterMiddleware, exportController.getPreview);
 router.post('/export/preview', requireAuth, requireVerifiedEmail, allowAdminAccess, scopeFilterMiddleware, exportController.getPreview);

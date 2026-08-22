@@ -34,6 +34,7 @@ import {
   UserCheck,
   UserPlus,
   XCircle,
+  Mail,
 } from 'lucide-react'
 import AppBrand from './AppBrand'
 import StudentManagementPanel from './StudentManagementPanel'
@@ -120,6 +121,7 @@ function getAdminNavItems(currentUser) {
     return [
       { key: 'students', label: 'Add Student', icon: UserPlus, to: '/admin/students' },
       { key: 'student-history', label: 'Student Reg History', icon: BookOpen, to: '/admin/student-history' },
+      { key: 'emails', label: 'Email Management', icon: Mail, to: '/admin/emails' },
       { key: 'settings', label: 'Settings', icon: SlidersVertical, to: '/admin/settings' }
     ]
   }
@@ -1792,7 +1794,7 @@ export default function AdminPortal({ currentUser, onLogout, onOpenSupport = nul
     if (isCoord && ['faculty', 'coordinators', 'settings', 'history'].includes(activeSection)) {
       navigate('/admin/dashboard', { replace: true })
     }
-    if (currentUser?.role === 'it' && !['students', 'student-history', 'settings'].includes(activeSection)) {
+    if (currentUser?.role === 'it' && !['students', 'student-history', 'emails', 'settings'].includes(activeSection)) {
       navigate('/admin/students', { replace: true })
     }
     if (currentUser?.role === 'cao' && activeSection === 'students') {
@@ -1803,7 +1805,7 @@ export default function AdminPortal({ currentUser, onLogout, onOpenSupport = nul
     }
   }, [activeSection, isCoord, currentUser?.role, navigate])
 
-  const showStudentManagement = (activeSection === 'students' || activeSection === 'student-history') && currentUser?.role === 'it'
+  const showStudentManagement = (activeSection === 'students' || activeSection === 'student-history' || activeSection === 'emails') && currentUser?.role === 'it'
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [options, setOptions] = useState(null)
   const [preview, setPreview] = useState(null)

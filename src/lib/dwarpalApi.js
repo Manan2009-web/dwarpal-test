@@ -3113,6 +3113,45 @@ export async function deleteAdminStudent(studentId) {
   return payload?.data || null
 }
 
+export async function fetchEmailQueueStudents(params = {}, signal) {
+  const payload = await apiRequest(`/admin/email-queue/students${buildQueryString(params)}`, { signal })
+  return {
+    students: Array.isArray(payload?.data?.students) ? payload.data.students : [],
+    meta: payload?.meta || {},
+    totalPages: payload?.data?.totalPages || 1,
+    totalCount: payload?.data?.totalCount || 0
+  }
+}
+
+export async function fetchEmailQueueStats(signal) {
+  const payload = await apiRequest('/admin/email-queue/stats', { signal })
+  return payload?.data || null
+}
+
+export async function controlEmailQueue(action) {
+  const payload = await apiRequest('/admin/email-queue/control', {
+    method: 'POST',
+    body: { action }
+  })
+  return payload?.data || null
+}
+
+export async function triggerResendAll({ limit, filterType }) {
+  const payload = await apiRequest('/admin/email-queue/resend-all', {
+    method: 'POST',
+    body: { limit, filterType }
+  })
+  return payload?.data || null
+}
+
+export async function triggerResendSelected(studentIds = []) {
+  const payload = await apiRequest('/admin/email-queue/resend-selected', {
+    method: 'POST',
+    body: { studentIds }
+  })
+  return payload?.data || null
+}
+
 export async function fetchAdminExportOptions(params = {}, signal) {
   const payload = await apiRequest(`/admin/export/options${buildQueryString(params)}`, { signal })
   return payload?.data || null

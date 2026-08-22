@@ -3,11 +3,24 @@ const env = require('../config/env');
 
 let workerIntervalId = null;
 const QUEUE_WORKER_INTERVAL_MS = 8000; // 8 seconds delay
+let isWorkerPaused = false;
+
+function setWorkerPaused(paused) {
+  isWorkerPaused = Boolean(paused);
+  console.info(`[email-queue] Worker status changed: ${isWorkerPaused ? 'PAUSED' : 'ACTIVE'}`);
+}
+
+function getWorkerPaused() {
+  return isWorkerPaused;
+}
 
 /**
  * Process the next pending email in the queue.
  */
 async function processNextQueuedEmail() {
+  if (isWorkerPaused) {
+    return;
+  }
   try {
     // Find the oldest pending email, lock it by setting status to 'sending'
     const email = await QueuedEmail.findOneAndUpdate(
@@ -118,5 +131,7 @@ function stopEmailQueueWorker() {
 module.exports = {
   queueEmail,
   startEmailQueueWorker,
-  stopEmailQueueWorker
+  stopEmailQueueWorker,
+  getWorkerPaused,
+  setWorkerPaused
 };

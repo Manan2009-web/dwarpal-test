@@ -113,6 +113,312 @@ const exportStudentCredentials = asyncHandler(async (req, res) => {
   return res.status(200).send(result.buffer);
 });
 
+const listQueueStudents = asyncHandler(async (req, res) => {
+  const User = require('../models/User');
+  const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+  const limit = Math.max(parseInt(req.query.limit, 10) || 10, 1);
+  const skip = (page - 1) * limit;
+  const search = String(req.query.search || '').trim();
+  const statusFilter = String(req.query.status || '').trim(); // 'sent' | 'pending' | 'failed' | 'none'
+
+  // Match stage for search
+  const matchStage = { role: 'student' };
+  if (search) {
+    matchStage.$or = [
+      { fullName: { $regex: search, $options: 'i' } },
+      { email: { $regex: search, $options: 'i' } },
+      { enrollmentNo: { $regex: search, $options: 'i' } }
+    ];
+  }
+
+  // Build the aggregation pipeline
+  const pipeline = [
+    { $match: matchStage },
+    {
+      $lookup: {
+        from: 'queued_emails',
+        let: { studentEmail: '$email' },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ['$to', '$$studentEmail'] },
+                  { $eq: ['$context', 'student-onboarding'] }
+                ]
+              }
+            }
+          },
+          { $sort: { createdAt: -1 } },
+          { $limit: 1 }
+        ],
+        as: 'latestEmail'
+      }
+    },
+    {
+      $addFields: {
+        emailStatus: { $ifNull: [{ $arrayElemAt: ['$latestEmail.status', 0] }, 'none'] },
+        emailAttempts: { $ifNull: [{ $arrayElemAt: ['$latestEmail.attempts', 0] }, 0] },
+        emailLastError: { $ifNull: [{ $arrayElemAt: ['$latestEmail.lastError', 0] }, ''] },
+        emailUpdatedAt: { $ifNull: [{ $arrayElemAt: ['$latestEmail.updatedAt', 0] }, null] }
+      }
+    }
+  ];
+
+  // Apply status filter if present
+  if (statusFilter) {
+    pipeline.push({
+      $match: { emailStatus: statusFilter }
+    });
+  }
+
+  // Get total count matching criteria
+  const countPipeline = [...pipeline, { $count: 'total' }];
+  const countResult = await User.aggregate(countPipeline);
+  const totalCount = countResult[0]?.total || 0;
+  const totalPages = Math.ceil(totalCount / limit);
+
+  // Paginated results
+  pipeline.push(
+    { $sort: { fullName: 1 } },
+    { $skip: skip },
+    { $limit: limit },
+    {
+      $project: {
+        _id: 1,
+        fullName: 1,
+        email: 1,
+        enrollmentNo: 1,
+        emailStatus: 1,
+        emailAttempts: 1,
+        emailLastError: 1,
+        emailUpdatedAt: 1
+      }
+    }
+  );
+
+  const students = await User.aggregate(pipeline);
+
+  return sendSuccess(res, {
+    message: 'Queue students fetched successfully.',
+    data: {
+      students,
+      page,
+      totalPages,
+      totalCount
+    }
+  });
+});
+
+const getQueueStats = asyncHandler(async (req, res) => {
+  const User = require('../models/User');
+  const QueuedEmail = require('../models/QueuedEmail');
+  const emailQueueService = require('../services/emailQueueService');
+
+  const totalStudents = await User.countDocuments({ role: 'student' });
+  const isWorkerPaused = emailQueueService.getWorkerPaused();
+
+  // Aggregate stats from queued_emails
+  const statusStats = await QueuedEmail.aggregate([
+    { $match: { context: 'student-onboarding' } },
+    {
+      $group: {
+        _id: '$status',
+        count: { $sum: 1 }
+      }
+    }
+  ]);
+
+  const statsMap = {
+    sent: 0,
+    pending: 0,
+    failed: 0,
+    sending: 0
+  };
+
+  statusStats.forEach(s => {
+    if (statsMap[s._id] !== undefined) {
+      statsMap[s._id] = s.count;
+    }
+  });
+
+  // Calculate "never sent" count
+  const distinctQueuedEmails = await QueuedEmail.distinct('to', { context: 'student-onboarding' });
+  const neverSentCount = Math.max(totalStudents - distinctQueuedEmails.length, 0);
+
+  return sendSuccess(res, {
+    message: 'Email queue stats fetched successfully.',
+    data: {
+      totalStudents,
+      sentCount: statsMap.sent,
+      pendingCount: statsMap.pending + statsMap.sending,
+      failedCount: statsMap.failed,
+      neverSentCount,
+      isWorkerPaused
+    }
+  });
+});
+
+const controlQueueWorker = asyncHandler(async (req, res) => {
+  const { action } = req.body;
+  const emailQueueService = require('../services/emailQueueService');
+
+  if (action === 'pause') {
+    emailQueueService.setWorkerPaused(true);
+  } else if (action === 'resume') {
+    emailQueueService.setWorkerPaused(false);
+  } else {
+    throw new AppError('Invalid control action. Use pause or resume.', 400);
+  }
+
+  return sendSuccess(res, {
+    message: `Email queue worker ${action}d successfully.`,
+    data: {
+      isWorkerPaused: emailQueueService.getWorkerPaused()
+    }
+  });
+});
+
+const queueAllStudents = asyncHandler(async (req, res) => {
+  const User = require('../models/User');
+  const { decryptTemporaryCredential } = require('../utils/temporaryCredential');
+  const { sendStudentOnboardingEmail } = require('../services/emailService');
+
+  const limit = Math.max(parseInt(req.body.limit, 10) || 0, 0);
+  const filterType = String(req.body.filterType || 'failed_only'); // 'all' | 'failed_only'
+
+  // Get all students matching criteria
+  const matchStage = { role: 'student' };
+
+  const pipeline = [
+    { $match: matchStage },
+    {
+      $lookup: {
+        from: 'queued_emails',
+        let: { studentEmail: '$email' },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ['$to', '$$studentEmail'] },
+                  { $eq: ['$context', 'student-onboarding'] }
+                ]
+              }
+            }
+          },
+          { $sort: { createdAt: -1 } },
+          { $limit: 1 }
+        ],
+        as: 'latestEmail'
+      }
+    },
+    {
+      $addFields: {
+        emailStatus: { $ifNull: [{ $arrayElemAt: ['$latestEmail.status', 0] }, 'none'] }
+      }
+    }
+  ];
+
+  if (filterType === 'failed_only') {
+    pipeline.push({
+      $match: { emailStatus: { $in: ['failed', 'none'] } }
+    });
+  }
+
+  pipeline.push({
+    $sort: { fullName: 1 }
+  });
+
+  if (limit > 0) {
+    pipeline.push({ $limit: limit });
+  }
+
+  pipeline.push({
+    $project: {
+      _id: 1,
+      fullName: 1,
+      email: 1,
+      enrollmentNo: 1,
+      temporaryCredentialEncrypted: 1
+    }
+  });
+
+  const students = await User.aggregate(pipeline);
+
+  let queuedCount = 0;
+  for (const student of students) {
+    let tempPassword = '';
+    if (student.temporaryCredentialEncrypted) {
+      try {
+        tempPassword = decryptTemporaryCredential(student.temporaryCredentialEncrypted);
+      } catch (err) {
+        console.warn(`[email-queue] Failed to decrypt credentials for ${student.email}:`, err.message);
+      }
+    }
+
+    await sendStudentOnboardingEmail({
+      email: student.email,
+      fullName: student.fullName,
+      enrollmentNo: student.enrollmentNo,
+      temporaryPassword: tempPassword,
+      collegeName: env.collegeName
+    });
+    queuedCount++;
+  }
+
+  return sendSuccess(res, {
+    message: `Successfully queued onboarding emails for ${queuedCount} students.`,
+    data: {
+      queuedCount
+    }
+  });
+});
+
+const queueSelectedStudents = asyncHandler(async (req, res) => {
+  const User = require('../models/User');
+  const { decryptTemporaryCredential } = require('../utils/temporaryCredential');
+  const { sendStudentOnboardingEmail } = require('../services/emailService');
+  const { studentIds } = req.body;
+
+  if (!Array.isArray(studentIds) || studentIds.length === 0) {
+    throw new AppError('studentIds array is required.', 400);
+  }
+
+  const students = await User.find({
+    _id: { $in: studentIds },
+    role: 'student'
+  }).select('+temporaryCredentialEncrypted');
+
+  let queuedCount = 0;
+  for (const student of students) {
+    let tempPassword = '';
+    if (student.temporaryCredentialEncrypted) {
+      try {
+        tempPassword = decryptTemporaryCredential(student.temporaryCredentialEncrypted);
+      } catch (err) {
+        console.warn(`[email-queue] Failed to decrypt credentials for ${student.email}:`, err.message);
+      }
+    }
+
+    await sendStudentOnboardingEmail({
+      email: student.email,
+      fullName: student.fullName,
+      enrollmentNo: student.enrollmentNo,
+      temporaryPassword: tempPassword,
+      collegeName: env.collegeName
+    });
+    queuedCount++;
+  }
+
+  return sendSuccess(res, {
+    message: `Successfully queued onboarding emails for ${queuedCount} selected students.`,
+    data: {
+      queuedCount
+    }
+  });
+});
+
 module.exports = {
   createStudent,
   bulkCreateStudents,
@@ -123,5 +429,10 @@ module.exports = {
   listUsers,
   seedDefaultAdmins,
   updateStudent,
-  updateUserStatus
+  updateUserStatus,
+  listQueueStudents,
+  getQueueStats,
+  controlQueueWorker,
+  queueAllStudents,
+  queueSelectedStudents
 };
