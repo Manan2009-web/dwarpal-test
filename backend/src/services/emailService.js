@@ -808,5 +808,6 @@ module.exports = {
   sendStudentLoginOtpEmail,
   sendStudentOnboardingEmail,
   sendStaffWelcomeEmail,
-  sendVerificationOtpEmail
+  sendVerificationOtpEmail,
+  sendMail
 };
