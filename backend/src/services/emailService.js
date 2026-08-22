@@ -689,9 +689,14 @@ async function sendStudentOnboardingEmail({ email, fullName, enrollmentNo, tempo
     } catch (sendError) {
       emailDoc.status = 'failed';
       emailDoc.attempts = 1;
-      emailDoc.lastError = sendError.message || String(sendError);
+      const detailedMessage = sendError.smtpFailure?.errorMessage || sendError.message || String(sendError);
+      emailDoc.lastError = detailedMessage;
       await emailDoc.save();
-      throw sendError;
+
+      const detailedError = new Error(detailedMessage);
+      detailedError.smtpFailure = sendError.smtpFailure;
+      detailedError.smtpDiagnostics = sendError.smtpDiagnostics;
+      throw detailedError;
     }
   }
 

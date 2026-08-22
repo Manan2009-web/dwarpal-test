@@ -58,7 +58,7 @@ async function processNextQueuedEmail() {
 
       console.info(`[email-queue] Email successfully delivered to ${recipientLog}`);
     } catch (sendError) {
-      const errorMsg = sendError.message || String(sendError);
+      const errorMsg = sendError.smtpFailure?.errorMessage || sendError.message || String(sendError);
       console.warn(`[email-queue] Failed to deliver email to ${recipientLog}: ${errorMsg}`);
 
       email.attempts += 1;

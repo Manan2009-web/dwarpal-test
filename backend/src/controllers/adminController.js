@@ -444,7 +444,8 @@ const queueSelectedStudents = asyncHandler(async (req, res) => {
         }, { sendDirectly: true });
         sentDirectly = true;
       } catch (err) {
-        throw new AppError(`Direct email delivery failed: ${err.message || err}`, 500);
+        const detailedMsg = err.smtpFailure?.errorMessage || err.message || String(err);
+        throw new AppError(`Direct email delivery failed: ${detailedMsg}`, 500);
       }
     } else {
       await sendStudentOnboardingEmail({
