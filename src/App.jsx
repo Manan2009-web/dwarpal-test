@@ -679,9 +679,9 @@ function App() {
     logoutUser().catch(() => {})
   }, [clearSession])
 
-  const savePortalAccess = useCallback((nextPortalAccess) => {
+  const savePortalAccess = useCallback((nextPortalAccess, forceHardReset = false) => {
     if (!nextPortalAccess?.token || !nextPortalAccess?.accessType) {
-      clearPortalAccessSession()
+      clearPortalAccessSession(forceHardReset)
       setPortalAccess(null)
       return
     }
@@ -1186,7 +1186,7 @@ function App() {
           'ERR_PORTAL_REQUIRED',
         ].includes(errorDetails.code)
       ) {
-        savePortalAccess(null)
+        savePortalAccess(null, true)
       }
 
       toast.error({
@@ -1235,7 +1235,7 @@ function App() {
           'ERR_PORTAL_REQUIRED',
         ].includes(errorDetails.code)
       ) {
-        savePortalAccess(null)
+        savePortalAccess(null, true)
       }
 
       toast.error({
@@ -1280,7 +1280,7 @@ function App() {
           'ERR_PORTAL_REQUIRED',
         ].includes(errorDetails.code)
       ) {
-        savePortalAccess(null)
+        savePortalAccess(null, true)
       }
 
       return {
@@ -1328,7 +1328,7 @@ function App() {
           'ERR_PORTAL_REQUIRED',
         ].includes(errorDetails.code)
       ) {
-        savePortalAccess(null)
+        savePortalAccess(null, true)
       }
 
       return {
