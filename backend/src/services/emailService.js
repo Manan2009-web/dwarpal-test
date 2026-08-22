@@ -52,7 +52,8 @@ function maskEmail(email) {
 }
 
 function looksLikeGmailAddress(email) {
-  return /@gmail\.com$/i.test(normalizeEmailAddress(email));
+  // Allow any valid email address domain since custom domains are used with Google Workspace
+  return email.includes('@');
 }
 
 function looksLikeGmailAppPassword(password) {
@@ -223,10 +224,8 @@ function getTransporter() {
         user: env.smtpUser,
         pass: env.smtpPass
       },
-      // Pool connections for better performance and trust scores
-      pool: true,
-      maxConnections: 3,
-      maxMessages: 100,
+      // Disable connection pooling to prevent socket hangs on Render
+      pool: false,
       // Use DKIM signing if configured
       ...(env.dkimDomainName && env.dkimKeySelector && env.dkimPrivateKey
         ? {
