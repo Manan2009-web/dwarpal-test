@@ -10,6 +10,10 @@ const {
   startGatepassEscalationScheduler,
   stopGatepassEscalationScheduler
 } = require('./services/gatepassService');
+const {
+  startEmailQueueWorker,
+  stopEmailQueueWorker
+} = require('./services/emailQueueService');
 const { closeRealtimeServer, createRealtimeServer } = require('./services/realtimeService');
 
 let shutdownPromise = null;
@@ -150,6 +154,12 @@ function startOptionalRuntimeServices(server) {
   }
 
   try {
+    startEmailQueueWorker();
+  } catch (error) {
+    console.warn(`[startup] Email queue worker did not start: ${error.message || error}`);
+  }
+
+  try {
     createRealtimeServer(server);
   } catch (error) {
     console.warn(`[startup] Realtime server did not start: ${error.message || error}`);
@@ -158,6 +168,7 @@ function startOptionalRuntimeServices(server) {
 
 async function stopOptionalRuntimeServices() {
   stopGatepassEscalationScheduler();
+  stopEmailQueueWorker();
   await closeRealtimeServer();
 }
 

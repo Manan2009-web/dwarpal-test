@@ -692,7 +692,10 @@ async function sendStudentOnboardingEmail({ email, fullName, enrollmentNo, tempo
     'If you did not expect this email, contact your institution admin.'
   ].join('\n');
 
-  return sendMail({
+  // Dynamically require emailQueueService to prevent CommonJS circular dependencies
+  const { queueEmail } = require('./emailQueueService');
+
+  return queueEmail({
     to: email,
     subject: `Your DwarPal account is ready`,
     html,
