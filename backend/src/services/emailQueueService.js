@@ -30,6 +30,9 @@ async function processNextQueuedEmail() {
     );
 
     if (!email) {
+      if (!isWorkerPaused) {
+        setWorkerPaused(true);
+      }
       return; // No pending emails in the queue
     }
 
@@ -89,6 +92,11 @@ async function queueEmail({ to, subject, html, text, context = 'student-onboardi
   });
 
   await email.save();
+
+  if (isWorkerPaused) {
+    setWorkerPaused(false);
+  }
+
   const recipientLog = to.replace(/(.{2}).*(@.*)/, '$1***$2');
   console.info(`[email-queue] Email queued for ${recipientLog} [context: ${context}]`);
   return email;

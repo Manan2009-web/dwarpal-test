@@ -156,11 +156,33 @@ const listQueueStudents = asyncHandler(async (req, res) => {
       }
     },
     {
+      $lookup: {
+        from: 'queued_emails',
+        let: { studentEmail: '$email' },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ['$to', '$$studentEmail'] },
+                  { $eq: ['$context', 'student-onboarding'] },
+                  { $eq: ['$status', 'sent'] }
+                ]
+              }
+            }
+          },
+          { $count: 'count' }
+        ],
+        as: 'sentEmailsCount'
+      }
+    },
+    {
       $addFields: {
         emailStatus: { $ifNull: [{ $arrayElemAt: ['$latestEmail.status', 0] }, 'none'] },
         emailAttempts: { $ifNull: [{ $arrayElemAt: ['$latestEmail.attempts', 0] }, 0] },
         emailLastError: { $ifNull: [{ $arrayElemAt: ['$latestEmail.lastError', 0] }, ''] },
-        emailUpdatedAt: { $ifNull: [{ $arrayElemAt: ['$latestEmail.updatedAt', 0] }, null] }
+        emailUpdatedAt: { $ifNull: [{ $arrayElemAt: ['$latestEmail.updatedAt', 0] }, null] },
+        emailSentCount: { $ifNull: [{ $arrayElemAt: ['$sentEmailsCount.count', 0] }, 0] }
       }
     }
   ];
@@ -192,7 +214,8 @@ const listQueueStudents = asyncHandler(async (req, res) => {
         emailStatus: 1,
         emailAttempts: 1,
         emailLastError: 1,
-        emailUpdatedAt: 1
+        emailUpdatedAt: 1,
+        emailSentCount: 1
       }
     }
   );
@@ -390,7 +413,10 @@ const queueSelectedStudents = asyncHandler(async (req, res) => {
     role: 'student'
   }).select('+temporaryCredentialEncrypted');
 
+  const sendDirectly = studentIds.length === 1;
   let queuedCount = 0;
+  let sentDirectly = false;
+
   for (const student of students) {
     let tempPassword = '';
     if (student.temporaryCredentialEncrypted) {
@@ -401,19 +427,45 @@ const queueSelectedStudents = asyncHandler(async (req, res) => {
       }
     }
 
-    await sendStudentOnboardingEmail({
-      email: student.email,
-      fullName: student.fullName,
-      enrollmentNo: student.enrollmentNo,
-      temporaryPassword: tempPassword,
-      collegeName: env.collegeName
+    if (sendDirectly) {
+      try {
+        await sendStudentOnboardingEmail({
+          email: student.email,
+          fullName: student.fullName,
+          enrollmentNo: student.enrollmentNo,
+          temporaryPassword: tempPassword,
+          collegeName: env.collegeName
+        }, { sendDirectly: true });
+        sentDirectly = true;
+      } catch (err) {
+        throw new AppError(`Direct email delivery failed: ${err.message || err}`, 500);
+      }
+    } else {
+      await sendStudentOnboardingEmail({
+        email: student.email,
+        fullName: student.fullName,
+        enrollmentNo: student.enrollmentNo,
+        temporaryPassword: tempPassword,
+        collegeName: env.collegeName
+      });
+      queuedCount++;
+    }
+  }
+
+  if (sendDirectly) {
+    return sendSuccess(res, {
+      message: `Successfully sent onboarding email directly.`,
+      data: {
+        sentDirectly: true,
+        queuedCount: 0
+      }
     });
-    queuedCount++;
   }
 
   return sendSuccess(res, {
     message: `Successfully queued onboarding emails for ${queuedCount} selected students.`,
     data: {
+      sentDirectly: false,
       queuedCount
     }
   });

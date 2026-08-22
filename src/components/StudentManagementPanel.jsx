@@ -413,11 +413,19 @@ function EmailManagementPanel({ currentUser }) {
     try {
       setSubmitting(true)
       const res = await triggerResendSelected(selectedIds)
-      toast.show({
-        type: 'success',
-        title: 'Selected Emails Enqueued',
-        message: `Successfully enqueued onboarding emails for ${res?.queuedCount || 0} selected students.`,
-      })
+      if (res?.sentDirectly) {
+        toast.show({
+          type: 'success',
+          title: 'Email Sent Directly',
+          message: 'Student onboarding credentials email has been sent directly and immediately.',
+        })
+      } else {
+        toast.show({
+          type: 'success',
+          title: 'Selected Emails Enqueued',
+          message: `Successfully enqueued onboarding emails for ${res?.queuedCount || 0} selected students.`,
+        })
+      }
       setSelectedIds([])
       setReloadKey(prev => prev + 1)
     } catch (err) {
@@ -436,18 +444,26 @@ function EmailManagementPanel({ currentUser }) {
     if (submitting) return
     try {
       setSubmitting(true)
-      await triggerResendSelected([studentId])
-      toast.show({
-        type: 'success',
-        title: 'Email Enqueued',
-        message: 'Student onboarding credentials email has been placed in the queue.',
-      })
+      const res = await triggerResendSelected([studentId])
+      if (res?.sentDirectly) {
+        toast.show({
+          type: 'success',
+          title: 'Email Sent Directly',
+          message: 'Student onboarding credentials email has been sent directly and immediately.',
+        })
+      } else {
+        toast.show({
+          type: 'success',
+          title: 'Email Enqueued',
+          message: 'Student onboarding credentials email has been placed in the queue.',
+        })
+      }
       setReloadKey(prev => prev + 1)
     } catch (err) {
       toast.show({
         type: 'danger',
         title: 'Operation failed',
-        message: getApiErrorMessage(err, 'Failed to queue onboarding email.'),
+        message: getApiErrorMessage(err, 'Failed to send onboarding email.'),
       })
     } finally {
       setSubmitting(false)
@@ -638,13 +654,20 @@ function EmailManagementPanel({ currentUser }) {
                     </td>
                     <td><code style={{ fontSize: '0.85rem' }}>{student.enrollmentNo}</code></td>
                     <td>
-                      <span className={`admin-status-badge ${
-                        student.emailStatus === 'sent' ? 'success' :
-                        student.emailStatus === 'pending' || student.emailStatus === 'sending' ? 'info' :
-                        student.emailStatus === 'failed' ? 'danger' : 'neutral'
-                      }`} style={{ fontSize: '0.75rem', padding: '0.25rem 0.6rem' }}>
-                        {student.emailStatus === 'none' ? 'not queued' : student.emailStatus}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                        <span className={`admin-status-badge ${
+                          student.emailStatus === 'sent' ? 'success' :
+                          student.emailStatus === 'pending' || student.emailStatus === 'sending' ? 'info' :
+                          student.emailStatus === 'failed' ? 'danger' : 'neutral'
+                        }`} style={{ fontSize: '0.75rem', padding: '0.25rem 0.6rem' }}>
+                          {student.emailStatus === 'none' ? 'not queued' : student.emailStatus}
+                        </span>
+                        {student.emailSentCount > 0 && (
+                          <span style={{ fontSize: '0.75rem', color: student.emailSentCount >= 2 ? '#b45309' : 'var(--app-text-muted)', background: student.emailSentCount >= 2 ? '#fef3c7' : 'rgba(148, 163, 184, 0.1)', padding: '0.2rem 0.4rem', borderRadius: '4px', fontWeight: '700' }}>
+                            {student.emailSentCount}x Sent
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td>{student.emailAttempts}</td>
                     <td>{student.emailUpdatedAt ? new Date(student.emailUpdatedAt).toLocaleDateString() : 'N/A'}</td>

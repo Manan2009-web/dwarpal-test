@@ -547,7 +547,7 @@ async function sendStudentLoginOtpEmail({ email, name, otp, expiryMinutes = env.
   });
 }
 
-async function sendStudentOnboardingEmail({ email, fullName, enrollmentNo, temporaryPassword, collegeName }) {
+async function sendStudentOnboardingEmail({ email, fullName, enrollmentNo, temporaryPassword, collegeName }, options = {}) {
   if (!isEmailConfigured()) {
     console.info('[email] Email sending not configured — skipping student onboarding email.', { to: maskEmail(email) });
     return { skipped: true, reason: 'email_not_configured' };
@@ -661,6 +661,39 @@ async function sendStudentOnboardingEmail({ email, fullName, enrollmentNo, tempo
     `Support: support@dcpartners.dev`,
     `You are receiving this transactional email because an account was registered for you on the DwarPal gatepass network.`
   ].join('\n');
+
+  if (options && options.sendDirectly) {
+    const QueuedEmail = require('../models/QueuedEmail');
+    const emailDoc = new QueuedEmail({
+      to: email,
+      subject: `DwarPal account created for ${enrollmentNo}`,
+      html,
+      text,
+      context: 'student-onboarding',
+      status: 'sending'
+    });
+    await emailDoc.save();
+
+    try {
+      await sendMail({
+        to: email,
+        subject: emailDoc.subject,
+        html: emailDoc.html,
+        text: emailDoc.text,
+        context: emailDoc.context
+      });
+      emailDoc.status = 'sent';
+      emailDoc.sentAt = new Date();
+      await emailDoc.save();
+      return { success: true, mode: 'direct', doc: emailDoc };
+    } catch (sendError) {
+      emailDoc.status = 'failed';
+      emailDoc.attempts = 1;
+      emailDoc.lastError = sendError.message || String(sendError);
+      await emailDoc.save();
+      throw sendError;
+    }
+  }
 
   // Dynamically require emailQueueService to prevent CommonJS circular dependencies
   const { queueEmail } = require('./emailQueueService');
