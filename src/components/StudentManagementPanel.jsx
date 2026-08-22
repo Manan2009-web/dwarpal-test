@@ -473,7 +473,7 @@ function EmailManagementPanel({ currentUser }) {
 
   return (
     <>
-      <section className="admin-wide-panel" style={{ maxWidth: '1000px', margin: '0 auto' }}>
+      <section className="admin-wide-panel student-management-panel" style={{ maxWidth: '1000px', margin: '0 auto' }}>
         
         {/* Header */}
         <div className="admin-panel-heading" style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
