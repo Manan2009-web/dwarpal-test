@@ -2297,6 +2297,15 @@ function LoginScreen({ onLogin, portalAccess }) {
   const [forgotPasswordIsSubmitting, setForgotPasswordIsSubmitting] = useState(false)
   const [forgotPasswordError, setForgotPasswordError] = useState('')
   const [forgotPasswordFieldErrors, setForgotPasswordFieldErrors] = useState({})
+  const [isActivationFlow, setIsActivationFlow] = useState(false)
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    if (params.get('action') === 'activate') {
+      setForgotPasswordStep('id')
+      setIsActivationFlow(true)
+    }
+  }, [location.search])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -2593,10 +2602,12 @@ function LoginScreen({ onLogin, portalAccess }) {
                   </div>
                   <div className="tw:space-y-2">
                     <h1 className="tw:font-display tw:text-3xl tw:font-bold tw:leading-none tw:tracking-[-0.05em] tw:text-[#163247]">
-                      Forgot Password
+                      {isActivationFlow ? 'Activate Account' : 'Forgot Password'}
                     </h1>
                     <p className="tw:text-sm tw:font-medium tw:text-neutral-500">
-                      Enter your enrollment number or employee ID to reset your password
+                      {isActivationFlow
+                        ? 'Enter your enrollment number or employee ID to activate your account'
+                        : 'Enter your enrollment number or employee ID to reset your password'}
                     </p>
                   </div>
                 </motion.div>
@@ -2653,6 +2664,7 @@ function LoginScreen({ onLogin, portalAccess }) {
                         setForgotPasswordStep(null)
                         setForgotPasswordIdentifier('')
                         setForgotPasswordError('')
+                        setIsActivationFlow(false)
                       }}
                       disabled={forgotPasswordIsSubmitting}
                       className="tw:flex tw:h-12 tw:w-1/2 tw:items-center tw:justify-center tw:rounded-xl tw:border tw:border-[rgba(105,143,176,0.28)] tw:bg-[rgba(255,255,255,0.74)] tw:text-[#48637c] tw:transition tw:duration-200 hover:tw:bg-white hover:tw:text-[#2f6db5] focus-visible:tw:outline-none disabled:tw:cursor-not-allowed"
