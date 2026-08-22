@@ -124,6 +124,10 @@ function getSmtpConfigurationWarnings() {
     warnings.push('EMAIL_FROM or SMTP_FROM_EMAIL should use the same Gmail address as SMTP_USER.');
   }
 
+  if (!env.resendApiKey && (process.env.RENDER || process.env.RENDER_SERVICE_ID)) {
+    warnings.push('Render Free Tier blocks outbound SMTP ports 587 & 465. Add RESEND_API_KEY to your Render environment variables to deliver emails via HTTPS without port restrictions.');
+  }
+
   return warnings;
 }
 
@@ -138,7 +142,9 @@ function buildSmtpFailureDetails(error) {
   return {
     command: String(error?.command || '').trim(),
     errorCode: String(error?.code || '').trim().toUpperCase(),
-    errorMessage: String(error?.message || '').trim()
+    errorMessage: String(error?.message || error || '').trim(),
+    response: String(error?.response || '').trim(),
+    responseCode: Number(error?.responseCode) || undefined
   };
 }
 
@@ -170,7 +176,11 @@ function createOtpEmailError(code, statusCode = 503, message = OTP_EMAIL_FAILURE
 }
 
 function createSmtpOperationTimeoutError(timeoutMs) {
-  const error = new Error(`SMTP operation timed out after ${timeoutMs}ms.`);
+  const isRender = Boolean(process.env.RENDER || process.env.RENDER_SERVICE_ID);
+  const hint = isRender
+    ? ' (Render Free Tier blocks outbound SMTP ports 587/465. Add RESEND_API_KEY to Render environment variables to send emails via HTTPS).'
+    : '';
+  const error = new Error(`SMTP operation timed out after ${timeoutMs}ms.${hint}`);
   error.code = 'ETIMEDOUT';
   error.command = 'SENDMAIL';
   return error;
