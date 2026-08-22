@@ -3152,6 +3152,13 @@ export async function triggerResendSelected(studentIds = []) {
   return payload?.data || null
 }
 
+export async function triggerRetryFailedEmails() {
+  const payload = await apiRequest('/admin/email-queue/retry-failed', {
+    method: 'POST'
+  })
+  return payload?.data || null
+}
+
 export async function fetchAdminExportOptions(params = {}, signal) {
   const payload = await apiRequest(`/admin/export/options${buildQueryString(params)}`, { signal })
   return payload?.data || null

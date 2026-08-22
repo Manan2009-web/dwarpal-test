@@ -72,6 +72,7 @@ router.get('/email-queue/stats', protect, requireVerifiedEmail, authorize('it', 
 router.post('/email-queue/control', protect, requireVerifiedEmail, authorize('it', 'admin'), adminController.controlQueueWorker);
 router.post('/email-queue/resend-all', protect, requireVerifiedEmail, authorize('it', 'admin'), adminController.queueAllStudents);
 router.post('/email-queue/resend-selected', protect, requireVerifiedEmail, authorize('it', 'admin'), adminController.queueSelectedStudents);
+router.post('/email-queue/retry-failed', protect, requireVerifiedEmail, authorize('it', 'admin'), adminController.retryFailedEmails);
 
 router.get('/export/options', requireAuth, requireVerifiedEmail, allowAdminAccess, scopeFilterMiddleware, exportController.getOptions);
 router.get('/export/preview', requireAuth, requireVerifiedEmail, allowAdminAccess, scopeFilterMiddleware, exportController.getPreview);

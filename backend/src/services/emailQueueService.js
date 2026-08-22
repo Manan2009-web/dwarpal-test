@@ -14,6 +14,31 @@ function getWorkerPaused() {
   return isWorkerPaused;
 }
 
+async function recoverStuckSendingEmails() {
+  try {
+    const res = await QueuedEmail.updateMany(
+      { status: 'sending' },
+      { $set: { status: 'pending' } }
+    );
+    if (res.modifiedCount > 0) {
+      console.info(`[email-queue] Recovered ${res.modifiedCount} stuck sending email(s) back to pending.`);
+    }
+  } catch (err) {
+    console.warn('[email-queue] Failed to recover stuck sending emails:', err.message);
+  }
+}
+
+async function retryAllFailedEmails() {
+  const res = await QueuedEmail.updateMany(
+    { status: 'failed' },
+    { $set: { status: 'pending', attempts: 0, lastError: null } }
+  );
+  if (res.modifiedCount > 0) {
+    setWorkerPaused(false);
+  }
+  return res.modifiedCount || 0;
+}
+
 /**
  * Process the next pending email in the queue.
  */
@@ -30,6 +55,7 @@ async function processNextQueuedEmail() {
     );
 
     if (!email) {
+      await recoverStuckSendingEmails();
       if (!isWorkerPaused) {
         setWorkerPaused(true);
       }
@@ -82,16 +108,28 @@ async function processNextQueuedEmail() {
  * Queue a new email for deferred delivery.
  */
 async function queueEmail({ to, subject, html, text, context = 'student-onboarding' }) {
-  const email = new QueuedEmail({
-    to,
-    subject,
-    html,
-    text,
-    context,
-    status: 'pending'
-  });
+  let email = await QueuedEmail.findOne({ to, context, status: { $in: ['pending', 'failed', 'sending'] } });
 
-  await email.save();
+  if (email) {
+    email.subject = subject;
+    email.html = html;
+    email.text = text;
+    email.status = 'pending';
+    email.attempts = 0;
+    email.lastError = null;
+    await email.save();
+  } else {
+    email = new QueuedEmail({
+      to,
+      subject,
+      html,
+      text,
+      context,
+      status: 'pending',
+      attempts: 0
+    });
+    await email.save();
+  }
 
   if (isWorkerPaused) {
     setWorkerPaused(false);
@@ -109,6 +147,8 @@ function startEmailQueueWorker() {
   if (workerIntervalId) {
     return;
   }
+
+  recoverStuckSendingEmails().catch(() => {});
 
   workerIntervalId = setInterval(() => {
     processNextQueuedEmail().catch((error) => {
@@ -141,5 +181,7 @@ module.exports = {
   startEmailQueueWorker,
   stopEmailQueueWorker,
   getWorkerPaused,
-  setWorkerPaused
+  setWorkerPaused,
+  retryAllFailedEmails,
+  recoverStuckSendingEmails
 };

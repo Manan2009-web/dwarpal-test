@@ -478,6 +478,18 @@ const queueSelectedStudents = asyncHandler(async (req, res) => {
   });
 });
 
+const retryFailedEmails = asyncHandler(async (req, res) => {
+  const emailQueueService = require('../services/emailQueueService');
+  const retriedCount = await emailQueueService.retryAllFailedEmails();
+
+  return sendSuccess(res, {
+    message: `Successfully re-queued ${retriedCount} failed email(s) for delivery.`,
+    data: {
+      retriedCount
+    }
+  });
+});
+
 module.exports = {
   createStudent,
   bulkCreateStudents,
@@ -493,5 +505,6 @@ module.exports = {
   getQueueStats,
   controlQueueWorker,
   queueAllStudents,
-  queueSelectedStudents
+  queueSelectedStudents,
+  retryFailedEmails
 };

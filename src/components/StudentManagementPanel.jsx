@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
-import { Eye, FileDown, Download, GraduationCap, KeyRound, PencilLine, ShieldCheck, Trash2, UserPlus, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, RefreshCw, X, AlertOctagon, History, Clock, FileWarning, Trash, Mail, Pause, Play, Search } from 'lucide-react'
+import { Eye, FileDown, Download, GraduationCap, KeyRound, PencilLine, ShieldCheck, Trash2, UserPlus, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, RefreshCw, X, AlertOctagon, History, Clock, FileWarning, Trash, Mail, Pause, Play, Search, RotateCcw } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import Papa from 'papaparse'
 import {
@@ -15,6 +15,7 @@ import {
   controlEmailQueue,
   triggerResendAll,
   triggerResendSelected,
+  triggerRetryFailedEmails,
 } from '../lib/dwarpalApi'
 import { DEPARTMENTS, PROGRAM_OPTIONS, ROUTING_DEPARTMENTS, SEMESTER_OPTIONS } from '../mockData'
 import { useToast } from './ToastProvider'
@@ -470,6 +471,29 @@ function EmailManagementPanel({ currentUser }) {
     }
   }
 
+  // Retry all failed emails
+  const handleRetryFailed = async () => {
+    if (submitting) return
+    try {
+      setSubmitting(true)
+      const res = await triggerRetryFailedEmails()
+      toast.show({
+        type: 'success',
+        title: 'Failed Emails Re-queued',
+        message: res?.message || 'Successfully re-queued failed emails for delivery.',
+      })
+      setReloadKey(prev => prev + 1)
+    } catch (err) {
+      toast.show({
+        type: 'danger',
+        title: 'Operation failed',
+        message: getApiErrorMessage(err, 'Failed to retry failed emails.'),
+      })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   // Selection helpers
   const handleSelectAll = (e) => {
     if (e.target.checked) {
@@ -499,7 +523,7 @@ function EmailManagementPanel({ currentUser }) {
             <span>Monitor delivery status and manage throttled credential notifications (1 mail/8s).</span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
             <span className={`admin-status-badge ${stats.isWorkerPaused ? 'warning' : 'success'}`} style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', fontWeight: '600' }}>
               Queue Worker: {stats.isWorkerPaused ? 'Paused ⏸️' : 'Active Run ▶️'}
             </span>
@@ -513,6 +537,18 @@ function EmailManagementPanel({ currentUser }) {
               {stats.isWorkerPaused ? <Play size={16} /> : <Pause size={16} />}
               <span>{stats.isWorkerPaused ? 'Resume Worker' : 'Pause Worker'}</span>
             </button>
+            {stats.failedCount > 0 && (
+              <button
+                type="button"
+                className="admin-action-button"
+                onClick={handleRetryFailed}
+                disabled={submitting}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: 'var(--app-color-danger)', color: '#ffffff', border: 'none', padding: '0.65rem 1.25rem', borderRadius: '10px', fontWeight: '600', cursor: 'pointer' }}
+              >
+                <RotateCcw size={16} />
+                <span>Retry Failed ({stats.failedCount})</span>
+              </button>
+            )}
           </div>
         </div>
 
