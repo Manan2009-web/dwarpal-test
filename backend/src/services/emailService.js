@@ -390,6 +390,7 @@ async function sendViaResend({ to, subject, text, html }) {
 
 let currentBrevoKeyIndex = 0;
 const exhaustedBrevoKeys = new Map(); // key -> expiration timestamp (milliseconds)
+const brevoSenderCache = new Map(); // apiKey -> senderEmail
 
 function getAvailableBrevoKeys() {
   const allKeys = Array.isArray(env.brevoApiKeys) && env.brevoApiKeys.length > 0
@@ -414,8 +415,30 @@ function markBrevoKeyExhausted(apiKey, reason = 'limit_exceeded') {
   console.warn(`[email-pool] Brevo key ${shortKey} marked temporarily exhausted (${reason}). Exhausted keys count: ${exhaustedBrevoKeys.size}`);
 }
 
+async function getBrevoSenderEmail(apiKey, fallbackEmail) {
+  if (brevoSenderCache.has(apiKey)) {
+    return brevoSenderCache.get(apiKey);
+  }
+  try {
+    const res = await fetch('https://api.brevo.com/v3/senders', {
+      headers: { 'api-key': apiKey, 'accept': 'application/json' }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const firstActiveSender = data.senders?.find((s) => s.active);
+      if (firstActiveSender?.email) {
+        brevoSenderCache.set(apiKey, firstActiveSender.email);
+        return firstActiveSender.email;
+      }
+    }
+  } catch (err) {
+    // safe fallback
+  }
+  return fallbackEmail;
+}
+
 async function sendViaBrevo({ to, subject, text, html }) {
-  const fromEmail = env.smtpFromEmail || env.smtpUser || env.emailFrom || 'dwarpal@neotech.ac.in';
+  const defaultFromEmail = env.smtpFromEmail || env.smtpUser || env.emailFrom || 'dwarpal@neotech.ac.in';
   const name = String(env.smtpFromName || 'DwarPal').trim();
   const keys = getAvailableBrevoKeys();
 
@@ -437,7 +460,8 @@ async function sendViaBrevo({ to, subject, text, html }) {
 
     try {
       const shortKey = `...${String(apiKey || '').slice(-6)}`;
-      console.info(`[email-pool] Attempting Brevo delivery via Account #${keyIdx + 1}/${keys.length} (${shortKey}) to ${maskEmail(to)}`);
+      const senderEmail = await getBrevoSenderEmail(apiKey, defaultFromEmail);
+      console.info(`[email-pool] Attempting Brevo delivery via Account #${keyIdx + 1}/${keys.length} (sender: ${senderEmail}, key: ${shortKey}) to ${maskEmail(to)}`);
 
       const response = await fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
@@ -447,7 +471,7 @@ async function sendViaBrevo({ to, subject, text, html }) {
           Accept: 'application/json'
         },
         body: JSON.stringify({
-          sender: { name, email: fromEmail },
+          sender: { name, email: senderEmail },
           to: [{ email: String(to || '').trim() }],
           subject,
           htmlContent: html,
@@ -462,6 +486,7 @@ async function sendViaBrevo({ to, subject, text, html }) {
         return {
           mode: 'brevo',
           accountIndex: keyIdx + 1,
+          senderEmail,
           messageId: payload?.messageId,
           providerResponse: payload
         };
