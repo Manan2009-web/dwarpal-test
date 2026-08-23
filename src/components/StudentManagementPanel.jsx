@@ -523,32 +523,29 @@ function EmailManagementPanel({ currentUser }) {
             <span>Monitor delivery status and manage throttled credential notifications (1 mail/8s).</span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <span className={`admin-status-badge ${stats.isWorkerPaused ? 'warning' : 'success'}`} style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', fontWeight: '600' }}>
+          <div className="it-email-actions-group">
+            <span className={`admin-status-badge ${stats.isWorkerPaused ? 'warning' : 'success'}`} style={{ padding: '0.55rem 1rem', fontSize: '0.85rem', fontWeight: '700' }}>
               Queue Worker: {stats.isWorkerPaused ? 'Paused ⏸️' : 'Active Run ▶️'}
             </span>
             <button
               type="button"
-              className="admin-action-button"
+              className={`it-worker-btn ${stats.isWorkerPaused ? 'resume' : 'pause'}`}
               onClick={handleToggleWorker}
               disabled={submitting}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: stats.isWorkerPaused ? 'var(--app-color-success)' : 'var(--app-color-warning)', color: '#ffffff', border: 'none', padding: '0.65rem 1.25rem', borderRadius: '10px', fontWeight: '600', cursor: 'pointer' }}
             >
               {stats.isWorkerPaused ? <Play size={16} /> : <Pause size={16} />}
               <span>{stats.isWorkerPaused ? 'Resume Worker' : 'Pause Worker'}</span>
             </button>
-            {stats.failedCount > 0 && (
-              <button
-                type="button"
-                className="admin-action-button"
-                onClick={handleRetryFailed}
-                disabled={submitting}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: 'var(--app-color-danger)', color: '#ffffff', border: 'none', padding: '0.65rem 1.25rem', borderRadius: '10px', fontWeight: '600', cursor: 'pointer' }}
-              >
-                <RotateCcw size={16} />
-                <span>Retry Failed ({stats.failedCount})</span>
-              </button>
-            )}
+            <button
+              type="button"
+              className={`it-retry-failed-btn ${stats.failedCount === 0 ? 'empty' : ''}`}
+              onClick={handleRetryFailed}
+              disabled={submitting || stats.failedCount === 0}
+            >
+              <RotateCcw size={16} />
+              <span>Retry Failed</span>
+              <span className="it-retry-count-badge">{stats.failedCount || 0}</span>
+            </button>
           </div>
         </div>
 
@@ -592,29 +589,35 @@ function EmailManagementPanel({ currentUser }) {
         </div>
 
         {/* Resend Bulk Controls */}
-        <div style={{ background: 'var(--app-surface)', border: '1px solid var(--app-surface-border)', borderRadius: '12px', padding: '1.5rem', marginBottom: '2rem' }}>
-          <h3 style={{ fontSize: '1rem', fontWeight: '600', margin: '0 0 1rem' }}>Bulk Resend Onboarding Credentials</h3>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center' }}>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-              <label style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--app-text-muted)' }}>Daily / Batch Limit</label>
+        <div className="it-bulk-resend-card">
+          <div className="it-bulk-resend-header">
+            <div>
+              <h3>
+                <Mail size={18} color="#0284c7" />
+                Bulk Resend Onboarding Credentials
+              </h3>
+              <p>Trigger throttled bulk delivery of temporary passwords and portal activation codes to student inboxes.</p>
+            </div>
+          </div>
+          
+          <div className="it-bulk-resend-grid">
+            <div className="it-bulk-field">
+              <label>Daily / Batch Limit</label>
               <input
                 type="number"
                 value={resendLimit}
                 onChange={e => setResendLimit(Math.max(parseInt(e.target.value, 10) || 0, 0))}
-                style={{ width: '120px', padding: '0.5rem', border: '1px solid var(--app-surface-border)', borderRadius: '8px', background: 'var(--app-surface-input)' }}
               />
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-              <label style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--app-text-muted)' }}>Target Filter</label>
+            <div className="it-bulk-field">
+              <label>Target Audience Filter</label>
               <select
                 value={resendFilter}
                 onChange={e => setResendFilter(e.target.value)}
-                style={{ padding: '0.5rem', border: '1px solid var(--app-surface-border)', borderRadius: '8px', background: 'var(--app-surface-input)', minWidth: '220px' }}
               >
                 <option value="failed_only">Unsent & Failed accounts only (Recommended)</option>
-                <option value="all">Force resend to all accounts (caution)</option>
+                <option value="all">Force resend to all accounts (Caution: sends duplicate)</option>
               </select>
             </div>
 
@@ -622,13 +625,11 @@ function EmailManagementPanel({ currentUser }) {
               type="button"
               onClick={handleQueueAll}
               disabled={submitting}
-              className="admin-action-button"
-              style={{ alignSelf: 'flex-end', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: 'var(--app-color-accent)', color: '#ffffff', border: 'none', padding: '0.65rem 1.25rem', borderRadius: '10px', fontWeight: '600', cursor: 'pointer' }}
+              className="it-bulk-resend-btn"
             >
-              <Mail size={16} />
-              <span>Queue Bulk Resend</span>
+              <Mail size={18} />
+              <span>Queue Bulk Resend Credentials</span>
             </button>
-
           </div>
         </div>
 
@@ -772,23 +773,23 @@ function EmailManagementPanel({ currentUser }) {
 
       {/* Selected Action Floating Bar */}
       {selectedIds.length > 0 && (
-        <div style={{ position: 'fixed', bottom: '2rem', left: '50%', transform: 'translateX(-50%)', background: '#163247', color: '#ffffff', padding: '1rem 2rem', borderRadius: '50px', display: 'flex', alignItems: 'center', gap: '1.5rem', boxShadow: '0 8px 30px rgba(0,0,0,0.2)', zIndex: 100 }}>
-          <span style={{ fontSize: '0.9rem', fontWeight: '500' }}>
+        <div className="it-floating-action-bar">
+          <span style={{ fontSize: '0.9rem', fontWeight: '600' }}>
             {selectedIds.length} students selected
           </span>
-          <div style={{ display: 'flex', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', gap: '0.65rem' }}>
             <button
               type="button"
               onClick={handleQueueSelected}
               disabled={submitting}
-              style={{ background: '#2872a1', color: '#ffffff', border: 'none', padding: '0.5rem 1.25rem', borderRadius: '25px', fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem' }}
+              className="it-floating-send-btn"
             >
               Send Selected
             </button>
             <button
               type="button"
               onClick={() => setSelectedIds([])}
-              style={{ background: 'rgba(255,255,255,0.15)', color: '#ffffff', border: 'none', padding: '0.5rem 1.25rem', borderRadius: '25px', fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem' }}
+              className="it-floating-cancel-btn"
             >
               Cancel
             </button>

@@ -9868,4 +9868,266 @@ html, body, #root, .admin-shell, .app-shell, .app-main, .app-scroll-region {
   }
 }
 
+/* ==========================================================================
+   IT EMAIL QUEUE & BULK RESEND CREDENTIALS CONTROLS
+   ========================================================================== */
+
+.it-email-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.it-worker-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.65rem 1.25rem;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.12);
+  white-space: nowrap;
+}
+
+.it-worker-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.it-worker-btn.pause {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+  color: #ffffff;
+  border-color: rgba(217, 119, 6, 0.3);
+}
+
+.it-worker-btn.pause:hover:not(:disabled) {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(217, 119, 6, 0.25);
+}
+
+.it-worker-btn.resume {
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+  color: #ffffff;
+  border-color: rgba(22, 163, 74, 0.3);
+}
+
+.it-worker-btn.resume:hover:not(:disabled) {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(22, 163, 74, 0.25);
+}
+
+.it-retry-failed-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.65rem 1.25rem;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px -2px rgba(220, 38, 38, 0.2);
+  white-space: nowrap;
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  color: #ffffff;
+  border: 1px solid rgba(220, 38, 38, 0.3);
+}
+
+.it-retry-failed-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.35);
+}
+
+.it-retry-failed-btn.empty {
+  background: var(--app-surface-soft, #f1f5f9);
+  color: var(--app-text-muted, #94a3b8);
+  border: 1px solid var(--app-surface-border, #e2e8f0);
+  box-shadow: none;
+  cursor: default;
+}
+
+.it-retry-count-badge {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+  font-size: 0.75rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-weight: 800;
+}
+
+/* Bulk Resend Onboarding Credentials Card */
+.it-bulk-resend-card {
+  background: var(--app-surface, #ffffff);
+  border: 1px solid var(--app-surface-border, rgba(226, 232, 240, 0.9));
+  border-radius: 16px;
+  padding: 1.5rem 1.75rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 4px 18px -4px rgba(15, 23, 42, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.it-bulk-resend-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.it-bulk-resend-header h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--app-text, #0f172a);
+  margin: 0 0 0.25rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.it-bulk-resend-header p {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--app-text-muted, #64748b);
+  line-height: 1.45;
+}
+
+.it-bulk-resend-grid {
+  display: grid;
+  grid-template-columns: minmax(130px, 160px) minmax(240px, 1fr) auto;
+  align-items: flex-end;
+  gap: 1.25rem;
+}
+
+@media (max-width: 900px) {
+  .it-bulk-resend-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.it-bulk-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.it-bulk-field label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--app-text-muted, #64748b);
+}
+
+.it-bulk-field input,
+.it-bulk-field select {
+  padding: 0.65rem 0.85rem;
+  border-radius: 9px;
+  border: 1px solid var(--app-surface-border, rgba(203, 213, 225, 0.9));
+  background: var(--app-surface-soft, #f8fafc);
+  color: var(--app-text, #0f172a);
+  font-size: 0.88rem;
+  font-weight: 500;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.it-bulk-field input:focus,
+.it-bulk-field select:focus {
+  border-color: var(--app-primary, #0284c7);
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+  background: #ffffff;
+}
+
+.it-bulk-resend-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 0.7rem 1.4rem;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #ffffff;
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  border: 1px solid rgba(2, 132, 199, 0.3);
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 3px 10px -2px rgba(2, 132, 199, 0.3);
+  white-space: nowrap;
+}
+
+.it-bulk-resend-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px -2px rgba(2, 132, 199, 0.4);
+}
+
+.it-bulk-resend-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.it-floating-action-bar {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #0f172a;
+  color: #ffffff;
+  padding: 0.85rem 1.75rem;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+  z-index: 100;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  animation: slideUp 0.25s ease-out;
+}
+
+.it-floating-send-btn {
+  background: #0284c7;
+  color: #ffffff;
+  border: none;
+  padding: 0.5rem 1.25rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.it-floating-send-btn:hover:not(:disabled) {
+  background: #0369a1;
+}
+
+.it-floating-cancel-btn {
+  background: rgba(255, 255, 255, 0.12);
+  color: #e2e8f0;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.it-floating-cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+
 
