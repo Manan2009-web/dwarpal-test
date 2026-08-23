@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { buildApiUrl } from '../lib/dwarpalApi'
+import { buildApiUrl, subscribeWebPushNotification } from '../lib/dwarpalApi'
 
 // ---------------------------------------------------------------------------
 // urlBase64ToUint8Array — converts a Base64URL VAPID public key to a
@@ -97,26 +97,22 @@ export function usePushSubscription(currentUser) {
         if (!subscription || cancelled) return
 
         // ----------------------------------------------------------------
-        // 6. Save the subscription to the backend (upsert by endpoint)
+        // 6. Save the subscription to the backend (authenticated API call)
         // ----------------------------------------------------------------
         const subJson = subscription.toJSON()
 
-        const saveRes = await fetch(buildApiUrl('/notifications/subscribe'), {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+        if (subJson?.endpoint && subJson?.keys) {
+          await subscribeWebPushNotification({
             endpoint: subJson.endpoint,
             keys: {
               p256dh: subJson.keys?.p256dh,
-              auth: subJson.keys?.auth
-            }
+              auth: subJson.keys?.auth,
+            },
           })
-        })
-
-        if (saveRes.ok && !cancelled) {
-          subscribedRef.current = true
-          console.info('[push] Web push subscription saved successfully.')
+          if (!cancelled) {
+            subscribedRef.current = true
+            console.info('[push] Web push subscription saved successfully.')
+          }
         }
       } catch (err) {
         // Push subscription is a non-critical enhancement — never throw

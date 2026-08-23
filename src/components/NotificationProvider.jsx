@@ -877,9 +877,13 @@ export function NotificationProvider({ children, currentUser, notificationPermis
     // 4. Request backend Web Push / FCM and Socket.io broadcast to all user sessions
     try {
       const result = await sendTestPushNotification()
+      const deviceCount = result?.activePushDevices ?? (result?.data?.activePushDevices ?? 0)
       toast.info({
         title: 'Test Notification Dispatched',
-        message: 'Test notification triggered with sound, vibration, and push sync.',
+        message:
+          deviceCount > 0
+            ? `Test notification sent to ${deviceCount} registered device(s)!`
+            : 'Test notification triggered. To receive push on phone, open DwarPal on your phone and tap Enable Notifications.',
       })
       return result
     } catch (error) {

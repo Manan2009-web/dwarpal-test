@@ -118,10 +118,18 @@ const sendTestNotification = asyncHandler(async (req, res) => {
     }
   ]);
 
+  const activeSubscriptions = await PushSubscription.countDocuments({ userId: req.user._id });
+
   return sendSuccess(res, {
     statusCode: 201,
-    message: 'Test notification sent to your device(s)',
-    data: createdNotifications[0] || null
+    message:
+      activeSubscriptions > 0
+        ? `Test notification sent to ${activeSubscriptions} registered push device(s)`
+        : 'Test notification created (no push devices registered yet)',
+    data: {
+      notification: createdNotifications[0] || null,
+      activePushDevices: activeSubscriptions
+    }
   });
 });
 
