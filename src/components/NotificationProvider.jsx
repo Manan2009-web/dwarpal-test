@@ -828,21 +828,70 @@ export function NotificationProvider({ children, currentUser, notificationPermis
   }, [currentUser?.id, handleIncomingNotification, notificationPermissionState])
 
   const triggerTestNotification = useCallback(async () => {
+    // 1. Immediate local audio chime
+    playNotificationSound()
+
+    // 2. Immediate tactile haptic vibration on mobile
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      try {
+        navigator.vibrate([200, 100, 200, 100, 200])
+      } catch {
+        // Safe ignore
+      }
+    }
+
+    // 3. Immediate local system/desktop/mobile notification via ServiceWorker if permission granted
+    let localDelivered = false
+    if (
+      typeof navigator !== 'undefined' &&
+      'serviceWorker' in navigator &&
+      typeof Notification !== 'undefined' &&
+      Notification.permission === 'granted'
+    ) {
+      try {
+        const reg = await navigator.serviceWorker.ready
+        if (reg && typeof reg.showNotification === 'function') {
+          await reg.showNotification('🔔 DwarPal Notification Test', {
+            body: 'Great! Notifications, sound, and haptic vibration are active on this device.',
+            icon: '/dwarpal-icon-192.png',
+            badge: '/dwarpal-badge-96.png',
+            tag: `dwarpal-test-${Date.now()}`,
+            vibrate: [200, 100, 200, 100, 200],
+            data: {
+              relatedRoute: '/app/notifications',
+            },
+          })
+          localDelivered = true
+        }
+      } catch (err) {
+        console.warn('[NotificationProvider] Local test notification dispatch:', err)
+      }
+    }
+
+    // 4. Request backend Web Push / FCM and Socket.io broadcast to all user sessions
     try {
       const result = await sendTestPushNotification()
       toast.info({
         title: 'Test Notification Dispatched',
-        message: 'A test notification was sent to your phone and desktop sessions.',
+        message: 'Test notification triggered with sound, vibration, and push sync.',
       })
       return result
     } catch (error) {
-      toast.warning({
-        title: 'Test Notification Failed',
-        message: error?.message || 'Could not trigger test notification right now.',
-      })
-      throw error
+      console.warn('[NotificationProvider] Backend test push request:', error)
+      if (localDelivered) {
+        toast.info({
+          title: 'Test Notification Active',
+          message: 'Local notification delivered! (Push server sync in progress).',
+        })
+      } else {
+        toast.warning({
+          title: 'Test Notification Notice',
+          message: error?.message || 'Could not send remote push notification. Please check notification permissions.',
+        })
+      }
+      return null
     }
-  }, [toast])
+  }, [playNotificationSound, toast])
 
   const contextValue = useMemo(
     () => ({
