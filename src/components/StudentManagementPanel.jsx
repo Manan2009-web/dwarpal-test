@@ -141,7 +141,13 @@ function StudentFormFields({
 }) {
   const isSem1 = Number(form.semester) === 1;
   const progLower = String(form.program || '').toLowerCase();
-  const isSem3DToD = Number(form.semester) === 3 && (progLower.includes('degree') || progLower.includes('d to d') || progLower.includes('dtd') || progLower.includes('d2d'));
+  const isSem3DToD =
+    Number(form.semester) === 3 &&
+    (progLower.includes('degree') ||
+      progLower.includes('d to d') ||
+      progLower.includes('dtd') ||
+      progLower.includes('d2d') ||
+      progLower.includes('diploma to degree'));
   const isEligibleForTemp = isSem1 || isSem3DToD;
 
   return (
@@ -1335,8 +1341,32 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
 
   // Maps of exact aliases to canonical values
   const PROGRAM_ALIASES = {
-    'Diploma Engineering': ['diploma', 'dip', 'diplomaengg', 'diplomaeng', 'di'],
-    'Degree Engineering': ['degree', 'btech', 'be', 'degreeengineering', 'degreeengg', 'degreeeng', 'b.tech', 'b.e', 'b tech', 'b e'],
+    'Diploma Engineering': ['diploma', 'dip', 'diplomaengg', 'diplomaeng', 'di', 'polytechnic', 'diploma engineering'],
+    'Degree Engineering': ['degree', 'btech', 'be', 'degreeengineering', 'degreeengg', 'degreeeng', 'b.tech', 'b.e', 'b tech', 'b e', 'degree engineering', 'btech degree', 'be degree'],
+    'Degree Engineering (D to D)': [
+      'dtod',
+      'd to d',
+      'd2d',
+      'd-to-d',
+      'diploma to degree',
+      'dtd',
+      'direct degree',
+      'lateral entry',
+      'degree (d to d)',
+      'degree - d2d',
+      'degree d to d',
+      'btech (d2d)',
+      'be (d2d)',
+      'b.tech (d2d)',
+      'b.e. (d2d)',
+      'd to d engineering',
+      'd2d engineering',
+      'dtd engineering',
+      'degree engineering (d to d)',
+      'degree engineering d to d',
+      'degree engineering d2d',
+      'diploma to degree engineering'
+    ],
     'Management Studies': ['mba', 'bba', 'management', 'managementstudies', 'businessadministration', 'bms', 'pgdm'],
     'Pharmacy': ['bpharm', 'bpharmacy', 'mpharm', 'mpharmacy', 'pharmacy', 'pharma', 'b.pharm', 'dpharm'],
     'Computer Applications': ['ca', 'mca', 'bca', 'computerapplications', 'computerapplication'],
@@ -1605,13 +1635,21 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
 
       if (!student.enrollmentNo) {
         const isSem1 = semesterNumber === 1;
-        const progLower = String(resolvedProgram.canonical || '').toLowerCase();
-        const isSem3DToD = semesterNumber === 3 && (progLower.includes('degree') || progLower.includes('d to d') || progLower.includes('dtd') || progLower.includes('d2d'));
+        const progLower = String(resolvedProgram.canonical || rawStudent.program || '').toLowerCase();
+        const isSem3DToD =
+          semesterNumber === 3 &&
+          (progLower.includes('degree') ||
+            progLower.includes('d to d') ||
+            progLower.includes('dtd') ||
+            progLower.includes('d2d') ||
+            progLower.includes('diploma to degree'));
         const isEligibleForTemp = isSem1 || isSem3DToD;
 
         if (!isEligibleForTemp) {
-          fieldErrors.enrollmentNumber = 'Enrollment Number is required';
+          fieldErrors.enrollmentNumber = 'Enrollment Number is required (Only Sem 1 & D-to-D Sem 3 can auto-generate enrollment)';
           errors.push('Enrollment Number is required');
+        } else {
+          student.isTemporaryEnrollment = true;
         }
       }
       
@@ -2582,7 +2620,17 @@ export default function StudentManagementPanel({ currentUser, activeSection = 's
                             <tr key={idx} style={{ borderBottom: '1px solid var(--app-surface-border)', background: hasErr ? 'rgba(239, 68, 68, 0.02)' : 'inherit' }}>
                               <td style={{ padding: '0.75rem 1rem', color: 'var(--app-text-muted)' }}>{student.rowNumber}</td>
                               <td style={{ padding: '0.75rem 1rem', fontWeight: '500' }}>{student.fullName || <span style={{color:'var(--danger)'}}>(missing)</span>}</td>
-                              <td style={{ padding: '0.75rem 1rem', fontFamily: 'monospace' }}>{student.enrollmentNo || <span style={{color:'var(--danger)'}}>(missing)</span>}</td>
+                              <td style={{ padding: '0.75rem 1rem', fontFamily: 'monospace' }}>
+                                {student.enrollmentNo ? (
+                                  <code>{student.enrollmentNo}</code>
+                                ) : student.isTemporaryEnrollment ? (
+                                  <span style={{ color: '#0284c7', background: 'rgba(2, 132, 199, 0.1)', padding: '0.2rem 0.5rem', borderRadius: '6px', fontSize: '0.78rem', fontWeight: '600' }}>
+                                    ✨ Auto-Generate (New Student)
+                                  </span>
+                                ) : (
+                                  <span style={{ color: 'var(--danger)' }}>(missing)</span>
+                                )}
+                              </td>
                               <td style={{ padding: '0.75rem 1rem' }}>
                                 <div style={{ fontWeight: '500' }}>{student.email || <span style={{color:'var(--danger)'}}>(missing)</span>}</div>
                                 <div style={{ fontSize: '0.75rem', color: 'var(--app-text-muted)' }}>{student.phone || <span style={{color:'var(--danger)'}}>(missing)</span>}</div>

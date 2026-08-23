@@ -25,7 +25,13 @@ function studentIdentityValidation(field = 'enrollmentNo', required = true) {
       const sem = Number(req.body.semester);
       const prog = String(req.body.program || '').toLowerCase();
       const isSem1 = sem === 1;
-      const isSem3DToD = sem === 3 && (prog.includes('degree') || prog.includes('d to d') || prog.includes('dtd') || prog.includes('d2d'));
+      const isSem3DToD =
+        sem === 3 &&
+        (prog.includes('degree') ||
+          prog.includes('d to d') ||
+          prog.includes('dtd') ||
+          prog.includes('d2d') ||
+          prog.includes('diploma to degree'));
       const isEligibleForTemp = isSem1 || isSem3DToD;
 
       if (!value && !isEligibleForTemp) {

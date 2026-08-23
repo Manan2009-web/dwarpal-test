@@ -66,18 +66,32 @@ async function generateTemporaryEnrollmentNo(program, department, semester) {
   const currentYear = new Date().getFullYear();
   const yy = String(currentYear).slice(-2);
 
-  let ccc = '117';
+  let ccc = '117'; // Default Degree
   const progLower = String(program || '').toLowerCase();
-  if (progLower.includes('diploma')) {
-    ccc = '959';
+  if (
+    progLower.includes('diploma') &&
+    !progLower.includes('degree') &&
+    !progLower.includes('d to d') &&
+    !progLower.includes('d2d') &&
+    !progLower.includes('dtd')
+  ) {
+    ccc = '959'; // Diploma Engineering
   }
 
   const sem = Number(semester);
   let ss = '01';
-  if (progLower.includes('degree')) {
-    ss = sem === 3 ? '31' : '01';
+  if (
+    progLower.includes('d to d') ||
+    progLower.includes('d2d') ||
+    progLower.includes('dtd') ||
+    progLower.includes('diploma to degree') ||
+    (progLower.includes('degree') && sem === 3)
+  ) {
+    ss = '31'; // D-to-D Degree Semester 3
   } else if (progLower.includes('diploma')) {
-    ss = '03';
+    ss = '03'; // Diploma Semester 1
+  } else if (progLower.includes('degree')) {
+    ss = '01'; // Degree Semester 1
   } else if (progLower.includes('pharmacy')) {
     ss = '02';
   } else if (progLower.includes('management') || progLower.includes('mba')) {
@@ -292,7 +306,13 @@ async function createStudent(payload, actor, requestMeta = {}) {
 
   const isSem1 = Number(normalizedPayload.semester) === 1;
   const progLower = String(normalizedPayload.program || '').toLowerCase();
-  const isSem3DToD = Number(normalizedPayload.semester) === 3 && (progLower.includes('degree') || progLower.includes('d to d') || progLower.includes('dtd') || progLower.includes('d2d'));
+  const isSem3DToD =
+    Number(normalizedPayload.semester) === 3 &&
+    (progLower.includes('degree') ||
+      progLower.includes('d to d') ||
+      progLower.includes('dtd') ||
+      progLower.includes('d2d') ||
+      progLower.includes('diploma to degree'));
   const isEligibleForTemp = isSem1 || isSem3DToD;
 
   if (!enrollmentNo) {
@@ -729,8 +749,14 @@ async function bulkCreateStudents(rows, actor, requestMeta = {}) {
     if (!hasBasicErrors) {
       if (!rawEnrollmentNo) {
         const isSem1 = normalizedSemester === 1;
-        const progCleanLower = String(resolvedProgramCanonical || '').toLowerCase();
-        const isSem3DToD = normalizedSemester === 3 && (progCleanLower.includes('degree') || progCleanLower.includes('d to d') || progCleanLower.includes('dtd') || progCleanLower.includes('d2d'));
+        const progCleanLower = String(resolvedProgramCanonical || rawProgram || '').toLowerCase();
+        const isSem3DToD =
+          normalizedSemester === 3 &&
+          (progCleanLower.includes('degree') ||
+            progCleanLower.includes('d to d') ||
+            progCleanLower.includes('dtd') ||
+            progCleanLower.includes('d2d') ||
+            progCleanLower.includes('diploma to degree'));
         const isEligibleForTemp = isSem1 || isSem3DToD;
 
         if (isEligibleForTemp) {
@@ -742,7 +768,7 @@ async function bulkCreateStudents(rows, actor, requestMeta = {}) {
           );
           enrollmentLower = finalEnrollmentNo.toLowerCase();
         } else {
-          fieldErrors.enrollmentNumber = "Missing — required field";
+          fieldErrors.enrollmentNumber = "Missing — required field (Only Sem 1 & D-to-D Sem 3 can auto-generate enrollment)";
           reasons.push("Enrollment Number: missing");
         }
       } else {
