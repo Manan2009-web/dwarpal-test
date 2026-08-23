@@ -4273,6 +4273,8 @@ function ProfileSettingsTabs({
   onOpenNotificationPrompt,
   onCurrentUserPatch,
   onUpdateCurrentUserProfile,
+  onTestNotification,
+  testingNotification = false,
   initialActiveTab = null,
 }) {
   const [activeTab, setActiveTab] = useState(
@@ -4327,6 +4329,8 @@ function ProfileSettingsTabs({
             notificationsSupported={notificationsSupported}
             onManageCookies={onManageCookiePreferences}
             onManageNotifications={onOpenNotificationPrompt}
+            onTestNotification={onTestNotification}
+            testingNotification={testingNotification}
           />
         </FeatureBoundary>
       ) : null}
@@ -4403,6 +4407,7 @@ function AppShell({
     socketConnected,
     markNotificationRead,
     markAllRead,
+    triggerTestNotification,
   } = useNotifications()
   const requestedPage = location.pathname.split('/').pop() || 'dashboard'
   const currentPage = APP_PAGES.has(requestedPage) ? requestedPage : USER_PAGE_ALIASES[requestedPage] || 'dashboard'
@@ -4420,10 +4425,20 @@ function AppShell({
   const [navOpen, setNavOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [qrPreviewGatepass, setQrPreviewGatepass] = useState(null)
+  const [testingNotification, setTestingNotification] = useState(false)
   const notificationWrapperRef = useRef(null)
   const hasSyncedInitialWorkspaceQueryRef = useRef(false)
   const [profileInitialTab, setProfileInitialTab] = useState(null)
   const [showNewStudentWelcome, setShowNewStudentWelcome] = useState(false)
+
+  const handleTriggerTestNotification = useCallback(async () => {
+    setTestingNotification(true)
+    try {
+      await triggerTestNotification()
+    } finally {
+      setTestingNotification(false)
+    }
+  }, [triggerTestNotification])
 
   // Student inactivity auto-logout — no-op for all other roles.
   useStudentSessionTimeout(currentUser, onInactivityTimeout, navigate)
@@ -4789,6 +4804,8 @@ function AppShell({
                   onOpenNotification={handleOpenNotification}
                   onMarkNotificationRead={handleMarkNotificationRead}
                   onMarkAllRead={handleMarkAllNotificationsRead}
+                  onTestNotification={handleTriggerTestNotification}
+                  testingNotification={testingNotification}
                 />
               </div>
             </div>
@@ -4830,6 +4847,8 @@ function AppShell({
                 onOpenNotificationPrompt={onOpenNotificationPrompt}
                 onCurrentUserPatch={onCurrentUserPatch}
                 onUpdateCurrentUserProfile={onUpdateCurrentUserProfile}
+                onTestNotification={handleTriggerTestNotification}
+                testingNotification={testingNotification}
                 initialActiveTab={profileInitialTab}
               />
             </ProfileCard>
@@ -4856,6 +4875,8 @@ function AppShell({
               onOpenNotification={handleOpenNotification}
               onMarkNotificationRead={handleMarkNotificationRead}
               onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
+              onTestNotification={handleTriggerTestNotification}
+              testingNotification={testingNotification}
             />
           ) : null}
 
@@ -4925,6 +4946,8 @@ function NotificationsPage({
   onOpenNotification,
   onMarkNotificationRead,
   onMarkAllNotificationsRead,
+  onTestNotification,
+  testingNotification = false,
 }) {
   const roleTitle = ROLE_META[currentUser.role].title
 
@@ -4955,6 +4978,8 @@ function NotificationsPage({
             status={notificationPermissionState}
             supported={notificationsSupported}
             onManage={onManageNotifications}
+            onTestNotification={onTestNotification}
+            testingNotification={testingNotification}
           />
         </FeatureBoundary>
 

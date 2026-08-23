@@ -15,6 +15,7 @@ router.use(protect, requireVerifiedEmail);
 
 router.post('/save-token', saveNotificationTokenValidation, validateRequest, notificationController.saveToken);
 router.post('/subscribe', subscribePushNotificationValidation, validateRequest, notificationController.subscribePush);
+router.post('/test-push', notificationController.sendTestNotification);
 router.get('/', basePaginationQueryValidation, validateRequest, notificationController.listNotifications);
 router.get('/unread-count', notificationController.getUnreadCount);
 router.patch('/read-all', notificationController.markAllRead);

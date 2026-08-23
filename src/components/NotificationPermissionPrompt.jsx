@@ -6,8 +6,8 @@ export function getNotificationPermissionMeta(status, supported = true) {
     return {
       tone: 'warning',
       badge: 'Not supported',
-      title: 'Browser notifications are unavailable',
-      description: 'This browser or connection cannot show DwarPal notifications. You can still use in-app updates normally.',
+      title: 'Device notifications unavailable',
+      description: 'This browser or connection cannot show system push notifications. Real-time in-app updates will continue to work.',
       actionLabel: 'View details',
     }
   }
@@ -16,8 +16,8 @@ export function getNotificationPermissionMeta(status, supported = true) {
     return {
       tone: 'success',
       badge: 'Enabled',
-      title: 'Browser notifications are enabled',
-      description: 'DwarPal is ready for future browser and push-style workflow notifications on this device.',
+      title: 'Phone & desktop notifications active',
+      description: 'DwarPal is configured to send real-time gatepass approvals, rejections, and security alerts to this device.',
       actionLabel: 'Review status',
     }
   }
@@ -26,8 +26,8 @@ export function getNotificationPermissionMeta(status, supported = true) {
     return {
       tone: 'danger',
       badge: 'Blocked',
-      title: 'Browser notifications are blocked',
-      description: 'Notifications were denied in the browser. You can re-enable them later from your browser site settings.',
+      title: 'Notifications are blocked',
+      description: 'Notifications were denied. You can re-enable them anytime from your browser or device site permissions.',
       actionLabel: 'How to enable',
     }
   }
@@ -36,8 +36,8 @@ export function getNotificationPermissionMeta(status, supported = true) {
     return {
       tone: 'info',
       badge: 'Later',
-      title: 'Browser notifications are not enabled yet',
-      description: 'Turn them on when you want app-like updates for approvals, rejections, and gate verification activity.',
+      title: 'Notifications not enabled yet',
+      description: 'Enable them to receive app-like updates for approvals, rejections, and gate activity on phone and desktop.',
       actionLabel: 'Enable notifications',
     }
   }
@@ -45,28 +45,40 @@ export function getNotificationPermissionMeta(status, supported = true) {
   return {
     tone: 'info',
     badge: 'Available',
-      title: 'Browser notifications are available',
-      description: 'Enable them for smoother push-style approval, rejection, and gate verification updates from DwarPal.',
-      actionLabel: 'Enable notifications',
-    }
+    title: 'Phone & desktop notifications available',
+    description: 'Enable push alerts for instant gatepass status updates even when DwarPal is closed or running in background.',
+    actionLabel: 'Enable notifications',
   }
+}
 
 export function NotificationPermissionCard({
   status,
   supported = true,
   onManage,
+  onTestNotification,
+  testingNotification = false,
 }) {
   const meta = getNotificationPermissionMeta(status, supported)
 
   return (
     <div className={`notification-permission-card notification-permission-card-${meta.tone}`}>
       <div className="notification-permission-card-copy">
-        <span className="eyebrow">Browser Notifications</span>
+        <span className="eyebrow">Device Notifications</span>
         <h4>{meta.title}</h4>
         <p>{meta.description}</p>
       </div>
       <div className="notification-permission-card-actions">
         <span className={`notification-summary-chip notification-summary-chip-${meta.tone}`}>{meta.badge}</span>
+        {status === 'granted' && onTestNotification ? (
+          <ActionButton
+            type="button"
+            tone="secondary"
+            onClick={onTestNotification}
+            disabled={testingNotification}
+          >
+            {testingNotification ? 'Sending test…' : 'Send Test Notification'}
+          </ActionButton>
+        ) : null}
         <ActionButton type="button" tone="secondary" onClick={onManage}>
           {meta.actionLabel}
         </ActionButton>

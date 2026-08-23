@@ -1,11 +1,11 @@
-const CACHE_NAME = 'dwarpal-v1.1'
+const CACHE_NAME = 'dwarpal-v1.3'
 const PRECACHE_URLS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/dwarpal-icon-192.svg',
-  '/dwarpal-icon-512.svg',
-  '/favicon.svg'
+  '/dwarpal-icon-192.png',
+  '/dwarpal-icon-512.png',
+  '/dwarpal-badge-96.png'
 ]
 
 // Install event: cache initial shell assets
@@ -100,8 +100,8 @@ self.addEventListener('push', (event) => {
       payload = {
         title: parsed.title || 'DwarPal',
         body: parsed.body || parsed.message || 'You have a new update.',
-        icon: parsed.icon || '/dwarpal-icon-192.svg',
-        badge: parsed.badge || '/dwarpal-icon-192.svg',
+        icon: parsed.icon || '/dwarpal-icon-192.png',
+        badge: parsed.badge || '/dwarpal-badge-96.png',
         tag: parsed.tag || 'dwarpal-notification',
         renotify: parsed.renotify !== false,
         requireInteraction: parsed.requireInteraction === true,
@@ -110,18 +110,25 @@ self.addEventListener('push', (event) => {
         data: parsed.data || {}
       }
     } catch {
-      payload = { title: 'DwarPal', body: event.data.text(), actions: [], data: {} }
+      payload = {
+        title: 'DwarPal',
+        body: event.data.text(),
+        icon: '/dwarpal-icon-192.png',
+        badge: '/dwarpal-badge-96.png',
+        actions: [],
+        data: {}
+      }
     }
   }
 
   const options = {
     body: payload.body,
-    icon: payload.icon || '/dwarpal-icon-192.svg',
-    badge: payload.badge || '/dwarpal-icon-192.svg',
+    icon: payload.icon || '/dwarpal-icon-192.png',
+    badge: payload.badge || '/dwarpal-badge-96.png',
     tag: payload.tag || 'dwarpal-notification',
     renotify: payload.renotify,
     requireInteraction: payload.requireInteraction,
-    vibrate: [100, 50, 100, 50, 100],
+    vibrate: [200, 100, 200, 100, 200],
     actions: payload.actions,
     data: {
       ...payload.data,

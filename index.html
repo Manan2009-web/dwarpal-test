@@ -48,8 +48,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="DwarPal" />
     <meta name="description" content="Digital gatepass and campus access management system for students and faculty." />
-    <link rel="icon" type="image/png" href="/dwarpal-favicon.png" />
-    <link rel="apple-touch-icon" href="/dwarpal-favicon.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/dwarpal-icon-192.png" />
+    <link rel="shortcut icon" href="/dwarpal-icon-192.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/dwarpal-icon-192.png" />
     <link rel="manifest" href="/manifest.json" />
     <title>DwarPal - Digital Gatepass System</title>
   </head>
@@ -63,10 +64,16 @@
           flex-direction: column;
           align-items: center;
           justify-content: center;
+          gap: 0.75rem;
           background-color: #f6fbff;
           color: #10263e;
           font-family: "Aptos", "Segoe UI Variable Text", "Segoe UI", sans-serif;
           user-select: none;
+        }
+        .initial-loader-logo {
+          width: 56px;
+          height: 56px;
+          object-fit: contain;
         }
         .initial-loader-title {
           font-size: 1.875rem;
@@ -77,6 +84,7 @@
         }
       </style>
       <div class="initial-loader">
+        <img src="/dwarpal-icon-192.png" alt="DwarPal" class="initial-loader-logo" />
         <h1 class="initial-loader-title">DwarPal</h1>
       </div>
     </div>

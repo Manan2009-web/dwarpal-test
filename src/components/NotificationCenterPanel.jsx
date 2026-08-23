@@ -33,6 +33,8 @@ export default function NotificationCenterPanel({
   onOpenNotification,
   onMarkNotificationRead,
   onMarkAllRead,
+  onTestNotification,
+  testingNotification = false,
 }) {
   const recentNotifications = notifications.slice(0, 6)
 
@@ -44,18 +46,31 @@ export default function NotificationCenterPanel({
           <h3>Realtime updates</h3>
           <p>{socketConnected ? 'Live sync connected' : 'Syncing from saved history'}</p>
         </div>
-        {unreadCount ? (
-          <motion.button
-            type="button"
-            className="text-button"
-            onClick={onMarkAllRead}
-            whileHover={{ scale: 1.04 }}
-            whileTap={{ scale: 0.97 }}
-          >
-            <CheckCheck size={16} />
-            <span>Mark all read</span>
-          </motion.button>
-        ) : null}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          {onTestNotification ? (
+            <button
+              type="button"
+              className="text-button"
+              onClick={onTestNotification}
+              disabled={testingNotification}
+              style={{ fontSize: '0.75rem' }}
+            >
+              {testingNotification ? 'Sending…' : 'Test'}
+            </button>
+          ) : null}
+          {unreadCount ? (
+            <motion.button
+              type="button"
+              className="text-button"
+              onClick={onMarkAllRead}
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.97 }}
+            >
+              <CheckCheck size={16} />
+              <span>Mark all read</span>
+            </motion.button>
+          ) : null}
+        </div>
       </div>
 
       <div className="notification-panel-summary">

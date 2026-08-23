@@ -171,6 +171,9 @@ async function sendPushNotification(userId, title, message, data = {}) {
         const pushPayload = JSON.stringify({
           title,
           body: message,
+          icon: '/dwarpal-icon-192.png',
+          badge: '/dwarpal-badge-96.png',
+          vibrate: [200, 100, 200, 100, 200],
           data: {
             ...data,
             relatedRoute,
@@ -289,11 +292,12 @@ function buildGatepassPushPayload({ title, body, gatepassId, passNumber, related
   return JSON.stringify({
     title,
     body,
-    icon: '/dwarpal-icon-192.svg',
-    badge: '/dwarpal-icon-192.svg',
+    icon: '/dwarpal-icon-192.png',
+    badge: '/dwarpal-badge-96.png',
     tag: tag || `gatepass-${gatepassId}`,
     renotify: true,
     requireInteraction: true,
+    vibrate: [200, 100, 200, 100, 200],
     actions,
     data: {
       gatepassId,

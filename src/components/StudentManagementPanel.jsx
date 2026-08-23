@@ -686,17 +686,17 @@ function EmailManagementPanel({ currentUser }) {
                 return (
                   <div
                     key={acc.index}
-                    className={`it-brevo-account-box ${acc.status === 'exhausted' ? 'exhausted' : (acc.isCurrent && acc.status !== 'exhausted') ? 'active' : 'ready'}`}
+                    className={`it-brevo-account-box ${acc.status === 'not_activated' ? 'not-activated' : acc.status === 'exhausted' ? 'exhausted' : (acc.isCurrent && acc.status !== 'exhausted') ? 'active' : 'ready'}`}
                   >
                     <div className="it-brevo-box-top">
                       <span className="it-brevo-account-title">
                         Account #{acc.index}
-                        {acc.isCurrent && acc.status !== 'exhausted' && (
+                        {acc.isCurrent && acc.status !== 'exhausted' && acc.status !== 'not_activated' && (
                           <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} title="Current Active Sender" />
                         )}
                       </span>
-                      <span className={`it-brevo-status-badge ${acc.status === 'exhausted' ? 'exhausted' : (acc.isCurrent && acc.status !== 'exhausted') ? 'active' : 'ready'}`}>
-                        {acc.status === 'exhausted' ? 'Exhausted 🔴' : (acc.isCurrent && acc.status !== 'exhausted') ? 'Active 🟢' : 'Ready ⚪'}
+                      <span className={`it-brevo-status-badge ${acc.status === 'not_activated' ? 'not-activated' : acc.status === 'exhausted' ? 'exhausted' : (acc.isCurrent && acc.status !== 'exhausted') ? 'active' : 'ready'}`}>
+                        {acc.status === 'not_activated' ? 'Needs Activation ⚠️' : acc.status === 'exhausted' ? 'Exhausted 🔴' : (acc.isCurrent && acc.status !== 'exhausted') ? 'Active 🟢' : 'Ready ⚪'}
                       </span>
                     </div>
 

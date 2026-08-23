@@ -93,11 +93,44 @@ const subscribePush = asyncHandler(async (req, res) => {
   });
 });
 
+const sendTestNotification = asyncHandler(async (req, res) => {
+  const testReference = `TEST-${Date.now().toString(36).toUpperCase()}`;
+
+  const createdNotifications = await createBulkNotifications([
+    {
+      recipient: req.user._id,
+      recipientRole: req.user.role,
+      sender: req.user._id,
+      senderRole: req.user.role,
+      title: '🔔 DwarPal Notification Test',
+      message: 'Great! Notifications are fully active on your device with sound, haptic vibration, and real-time sync.',
+      type: 'system',
+      status: 'info',
+      recordType: 'system',
+      referenceId: testReference,
+      relatedRoute: '/app/notifications',
+      detail: 'Mobile and desktop notification verification test',
+      metadata: {
+        isTest: true,
+        source: 'test_notification_button',
+        testedAt: new Date().toISOString()
+      }
+    }
+  ]);
+
+  return sendSuccess(res, {
+    statusCode: 201,
+    message: 'Test notification sent to your device(s)',
+    data: createdNotifications[0] || null
+  });
+});
+
 module.exports = {
   getUnreadCount,
   listNotifications,
   markAllRead,
   markRead,
   saveToken,
+  sendTestNotification,
   subscribePush
 };

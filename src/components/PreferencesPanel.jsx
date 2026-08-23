@@ -32,7 +32,7 @@ function getCookiePreferenceMeta(cookieConsent) {
   }
 }
 
-function PreferenceRow({ icon: Icon, eyebrow, meta, onManage }) {
+function PreferenceRow({ icon: Icon, eyebrow, meta, onManage, onTest, testLabel, isTesting }) {
   return (
     <article className={`preference-row preference-row-${meta.tone}`}>
       <div className="preference-row-copy">
@@ -47,6 +47,11 @@ function PreferenceRow({ icon: Icon, eyebrow, meta, onManage }) {
       </div>
       <div className="preference-row-actions">
         <span className={`notification-summary-chip notification-summary-chip-${meta.tone}`}>{meta.badge}</span>
+        {onTest ? (
+          <ActionButton type="button" tone="secondary" onClick={onTest} disabled={isTesting}>
+            {isTesting ? 'Sending test…' : testLabel || 'Send test'}
+          </ActionButton>
+        ) : null}
         <ActionButton type="button" tone="secondary" onClick={onManage}>
           {meta.actionLabel}
         </ActionButton>
@@ -61,6 +66,8 @@ export default function PreferencesPanel({
   notificationsSupported = true,
   onManageCookies,
   onManageNotifications,
+  onTestNotification,
+  testingNotification = false,
 }) {
   const cookieMeta = getCookiePreferenceMeta(cookieConsent)
   const notificationMeta = getNotificationPermissionMeta(notificationPermissionState, notificationsSupported)
@@ -70,7 +77,7 @@ export default function PreferencesPanel({
       <div className="biometric-card-header">
         <div>
           <h3>Preferences</h3>
-          <p>Review browser-level choices for cookies and future DwarPal notifications.</p>
+          <p>Review device-level choices for cookies and DwarPal push notifications.</p>
         </div>
       </div>
 
@@ -83,9 +90,12 @@ export default function PreferencesPanel({
         />
         <PreferenceRow
           icon={BellRing}
-          eyebrow="Notifications"
+          eyebrow="Device Notifications"
           meta={notificationMeta}
           onManage={onManageNotifications}
+          onTest={notificationPermissionState === 'granted' && onTestNotification ? onTestNotification : null}
+          testLabel="Send Test to Phone"
+          isTesting={testingNotification}
         />
       </div>
     </section>

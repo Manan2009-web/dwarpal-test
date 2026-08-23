@@ -87,8 +87,8 @@
 
         self.registration.showNotification(title, {
           body,
-          icon: '/dwarpal-favicon.png',
-          badge: '/dwarpal-favicon.png',
+          icon: '/dwarpal-icon-192.png',
+          badge: '/dwarpal-icon-192.png',
           tag: data.notificationId || data.referenceId || title,
           data,
         })

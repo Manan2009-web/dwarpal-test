@@ -480,6 +480,7 @@ async function getBrevoPoolStatus() {
       const sendersData = sendersRes.ok ? await sendersRes.json() : {};
 
       const verifiedSender = sendersData.senders?.find((s) => s.active)?.email || accData.email || `Account #${i + 1}`;
+      const isRelayEnabled = accData.relay?.enabled !== false;
       const credits = accData.plan?.[0]?.credits !== undefined ? accData.plan[0].credits : 300;
       const usedCredits = Math.max(0, 300 - credits);
 
@@ -488,10 +489,11 @@ async function getBrevoPoolStatus() {
         credits,
         maxCredits: 300,
         usedCredits,
+        isRelayEnabled,
         lastFetched: now
       });
 
-      if (credits === 0) {
+      if (credits === 0 || !isRelayEnabled) {
         exhaustedBrevoKeys.set(apiKey, now + 6 * 60 * 60 * 1000);
       }
 
@@ -501,7 +503,8 @@ async function getBrevoPoolStatus() {
         email: verifiedSender,
         credits,
         maxCredits: 300,
-        usedCredits
+        usedCredits,
+        isRelayEnabled
       });
     } catch (err) {
       rawAccounts.push({
@@ -510,16 +513,17 @@ async function getBrevoPoolStatus() {
         email: `Account #${i + 1}`,
         credits: 300,
         maxCredits: 300,
-        usedCredits: 0
+        usedCredits: 0,
+        isRelayEnabled: true
       });
     }
   }
 
-  // Find the first account index that has credits > 0 and is not exhausted
+  // Find the first account index that has credits > 0, isRelayEnabled, and is not exhausted
   let firstAvailableIndex = -1;
   for (let i = 0; i < rawAccounts.length; i++) {
     const acc = rawAccounts[i];
-    const isExhausted = acc.credits === 0 || exhaustedBrevoKeys.has(acc.apiKey);
+    const isExhausted = acc.credits === 0 || !acc.isRelayEnabled || exhaustedBrevoKeys.has(acc.apiKey);
     if (!isExhausted && acc.credits > 0) {
       firstAvailableIndex = i;
       break;
@@ -531,9 +535,10 @@ async function getBrevoPoolStatus() {
   }
 
   return rawAccounts.map((acc, i) => {
+    const isNotActivated = acc.isRelayEnabled === false;
     const isExhausted = acc.credits === 0 || exhaustedBrevoKeys.has(acc.apiKey);
-    const isCurrent = i === currentBrevoKeyIndex && !isExhausted && acc.credits > 0;
-    const status = isExhausted ? 'exhausted' : isCurrent ? 'active' : 'ready';
+    const isCurrent = i === currentBrevoKeyIndex && !isExhausted && !isNotActivated && acc.credits > 0;
+    const status = isNotActivated ? 'not_activated' : isExhausted ? 'exhausted' : isCurrent ? 'active' : 'ready';
 
     return {
       index: acc.index,
@@ -552,7 +557,7 @@ async function ensureAccountCredits(apiKey) {
   const now = Date.now();
   const cached = brevoAccountCache.get(apiKey);
   if (cached && now - (cached.lastFetched || 0) < 60000) {
-    return cached.credits;
+    return cached.isRelayEnabled === false ? 0 : cached.credits;
   }
   try {
     const res = await fetch('https://api.brevo.com/v3/account', {
@@ -560,18 +565,20 @@ async function ensureAccountCredits(apiKey) {
     });
     if (res.ok) {
       const data = await res.json();
+      const isRelayEnabled = data.relay?.enabled !== false;
       const credits = data?.plan?.[0]?.credits !== undefined ? data.plan[0].credits : 300;
       const currentObj = cached || { email: data?.email, maxCredits: 300 };
       currentObj.credits = credits;
       currentObj.usedCredits = Math.max(0, 300 - credits);
+      currentObj.isRelayEnabled = isRelayEnabled;
       currentObj.lastFetched = now;
       if (data?.email && !currentObj.email) currentObj.email = data.email;
       brevoAccountCache.set(apiKey, currentObj);
 
-      if (credits === 0) {
+      if (credits === 0 || !isRelayEnabled) {
         exhaustedBrevoKeys.set(apiKey, now + 6 * 60 * 60 * 1000);
       }
-      return credits;
+      return isRelayEnabled ? credits : 0;
     }
   } catch (err) {
     // fallback

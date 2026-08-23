@@ -2730,6 +2730,14 @@ export async function subscribeWebPushNotification({ endpoint, keys }) {
   return response?.data || null
 }
 
+export async function sendTestPushNotification() {
+  const response = await apiRequest('/notifications/test-push', {
+    method: 'POST',
+  })
+
+  return response?.data || null
+}
+
 export function createGatepassPayload(form) {
   const [outDate = '', outTime = ''] = String(form.outTime || '').split('T')
   const [expectedReturnDate = '', expectedReturnTime = ''] = String(form.expectedReturnTime || '').split('T')

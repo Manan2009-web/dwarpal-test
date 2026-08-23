@@ -8,6 +8,7 @@ import {
   markAllNotificationsRead as markAllNotificationsReadRequest,
   markNotificationRead as markNotificationReadRequest,
   saveNotificationDeviceToken,
+  sendTestPushNotification,
 } from '../lib/dwarpalApi'
 import { subscribeUserToPush } from '../lib/webPush'
 import {
@@ -278,44 +279,112 @@ export function NotificationProvider({ children, currentUser, notificationPermis
         dedupeKey: notification.id,
       })
 
+      // 1. Tactile haptic vibration for mobile phones
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        try {
+          navigator.vibrate([150, 60, 150])
+        } catch {
+          // Ignore vibration failures
+        }
+      }
+
+      // 2. Play audio chime when tab is active
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         playNotificationSound()
       }
 
+      // 3. Fallback background notification (safe for mobile and desktop)
       if (
-        typeof window !== 'undefined' &&
         typeof document !== 'undefined' &&
         document.visibilityState === 'hidden' &&
+        typeof window !== 'undefined' &&
         typeof window.Notification !== 'undefined' &&
         window.Notification.permission === 'granted' &&
         !pushReady
       ) {
-        const browserNotification = new window.Notification(notification.title, {
-          body: [notification.message, notification.referenceId].filter(Boolean).join(' | '),
-          tag: notification.id,
-          icon: '/dwarpal-favicon.png',
-        })
+        const title = notification.title || 'DwarPal'
+        const bodyText = [notification.message, notification.referenceId].filter(Boolean).join(' | ')
+        const options = {
+          body: bodyText,
+          tag: notification.id || 'dwarpal-toast',
+          icon: '/dwarpal-icon-192.png',
+          badge: '/dwarpal-badge-96.png',
+          vibrate: [200, 100, 200],
+          data: {
+            relatedRoute: notification.relatedRoute || '/app/notifications',
+          },
+        }
 
-        browserNotification.onclick = () => {
-          window.focus()
-
-          if (notification.relatedRoute) {
-            window.location.assign(notification.relatedRoute)
+        // On mobile Android/Chrome, new Notification() is forbidden in window scope.
+        // Use ServiceWorkerRegistration.showNotification() when available.
+        if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+          navigator.serviceWorker.ready
+            .then((registration) => {
+              return registration.showNotification(title, options)
+            })
+            .catch(() => {
+              try {
+                const browserNotification = new window.Notification(title, options)
+                browserNotification.onclick = () => {
+                  window.focus()
+                  if (notification.relatedRoute) {
+                    window.location.assign(notification.relatedRoute)
+                  }
+                  browserNotification.close()
+                }
+              } catch {
+                // Ignore fallback error
+              }
+            })
+        } else {
+          try {
+            const browserNotification = new window.Notification(title, options)
+            browserNotification.onclick = () => {
+              window.focus()
+              if (notification.relatedRoute) {
+                window.location.assign(notification.relatedRoute)
+              }
+              browserNotification.close()
+            }
+          } catch {
+            // Ignore fallback error
           }
-
-          browserNotification.close()
         }
       }
     },
     [currentUser?.id, playNotificationSound, pushReady, toast],
   )
 
+  // One-time gesture listener to unlock Web Audio AudioContext on mobile devices
   useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+
+    const unlockAudio = () => {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext
+      if (!AudioContextClass) return
+
+      if (!notificationAudioContextRef.current) {
+        try {
+          notificationAudioContextRef.current = new AudioContextClass()
+        } catch {
+          // ignore
+        }
+      }
+
+      if (notificationAudioContextRef.current?.state === 'suspended') {
+        notificationAudioContextRef.current.resume().catch(() => {})
+      }
+    }
+
+    window.addEventListener('pointerdown', unlockAudio, { once: true, passive: true })
+    window.addEventListener('touchstart', unlockAudio, { once: true, passive: true })
+
     return () => {
+      window.removeEventListener('pointerdown', unlockAudio)
+      window.removeEventListener('touchstart', unlockAudio)
       if (notificationAudioContextRef.current?.close) {
         notificationAudioContextRef.current.close().catch(() => {})
       }
-
       notificationAudioContextRef.current = null
     }
   }, [])
@@ -758,6 +827,23 @@ export function NotificationProvider({ children, currentUser, notificationPermis
     }
   }, [currentUser?.id, handleIncomingNotification, notificationPermissionState])
 
+  const triggerTestNotification = useCallback(async () => {
+    try {
+      const result = await sendTestPushNotification()
+      toast.info({
+        title: 'Test Notification Dispatched',
+        message: 'A test notification was sent to your phone and desktop sessions.',
+      })
+      return result
+    } catch (error) {
+      toast.warning({
+        title: 'Test Notification Failed',
+        message: error?.message || 'Could not trigger test notification right now.',
+      })
+      throw error
+    }
+  }, [toast])
+
   const contextValue = useMemo(
     () => ({
       notifications,
@@ -771,6 +857,7 @@ export function NotificationProvider({ children, currentUser, notificationPermis
       refreshNotifications,
       markNotificationRead,
       markAllRead,
+      triggerTestNotification,
     }),
     [
       loading,
@@ -781,6 +868,7 @@ export function NotificationProvider({ children, currentUser, notificationPermis
       refreshNotifications,
       socketConnected,
       socketStatus,
+      triggerTestNotification,
       unreadCount,
     ],
   )
@@ -802,6 +890,7 @@ const defaultNotificationContext = {
   markNotificationRead: async () => {},
   markAllRead: async () => {},
   refreshNotifications: async () => {},
+  triggerTestNotification: async () => {},
   enablePushNotifications: async () => false,
   disablePushNotifications: async () => true,
   playNotificationSound: () => {},

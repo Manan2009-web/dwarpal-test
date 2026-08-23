@@ -41,7 +41,8 @@ export default function LandingPage() {
           className="tw:w-full tw:max-w-7xl tw:mx-auto tw:px-8 tw:py-8 tw:flex tw:items-center tw:justify-between tw:z-30 tw:relative tw:transform-gpu"
         >
           {/* Logo */}
-          <div className="tw:flex tw:items-center tw:gap-2">
+          <div className="tw:flex tw:items-center tw:gap-2.5">
+            <img src="/dwarpal-icon-192.png" alt="DwarPal" className="tw:h-8 tw:w-8 tw:object-contain" />
             <span className="tw:text-[#163247] tw:font-mono tw:text-lg tw:font-black tw:tracking-[0.35em] tw:uppercase">
               Dwarpal
             </span>

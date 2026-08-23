@@ -9674,6 +9674,11 @@ html, body, #root, .admin-shell, .app-shell, .app-main, .app-scroll-region {
   color: #b91c1c;
 }
 
+.it-brevo-status-badge.not-activated {
+  background: rgba(245, 158, 11, 0.15);
+  color: #b45309;
+}
+
 .it-brevo-account-email {
   font-size: 0.78rem;
   color: var(--app-text-muted, #64748b);
