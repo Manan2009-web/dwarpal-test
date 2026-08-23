@@ -75,12 +75,12 @@ export const STATUS_COLORS = {
   Pending: 'pending',
   Submitted: 'pending',
   Forwarded: 'out',
+  Outdated: 'rejected',
   Approved: 'approved',
   Rejected: 'rejected',
   Info: 'out',
   Out: 'out',
   Returned: 'returned',
-  Cancelled: 'rejected',
 }
 
 export const ROLE_OPTIONS = ['student', 'faculty', 'hod', 'cao', 'principal', 'security', 'admin', 'it', 'chairman', 'campus_security']

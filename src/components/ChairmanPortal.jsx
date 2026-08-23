@@ -1077,7 +1077,7 @@ function ApprovalsPage({
   expandedId,
   onToggleExpand
 }) {
-  const statusOptions = ['All', 'Pending', 'Approved', 'Rejected']
+  const statusOptions = ['All', 'Pending', 'Forwarded', 'Approved', 'Rejected', 'Outdated']
 
   const cards = useMemo(() => {
     return gatepasses.map((gp) => {

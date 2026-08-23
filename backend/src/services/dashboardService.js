@@ -77,14 +77,51 @@ function mergeRecentItems(first = [], second = [], limit = 5) {
     .slice(0, limit);
 }
 
+function getNowFilterConditions() {
+  const now = new Date();
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+
+  const endOfToday = new Date(now);
+  endOfToday.setHours(23, 59, 59, 999);
+
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const currentTimeString = `${hours}:${minutes}`;
+
+  const outdatedFilter = {
+    $or: [
+      { outDate: { $lt: startOfToday } },
+      { outDate: { $gte: startOfToday, $lte: endOfToday }, outTime: { $lt: currentTimeString } }
+    ]
+  };
+
+  const activeTimeFilter = {
+    $or: [
+      { outDate: { $gt: endOfToday } },
+      { outDate: { $gte: startOfToday, $lte: endOfToday }, outTime: { $gte: currentTimeString } }
+    ]
+  };
+
+  return { now, startOfToday, endOfToday, currentTimeString, outdatedFilter, activeTimeFilter };
+}
+
 async function getDashboardSummary(user) {
+  const { startOfToday, endOfToday, outdatedFilter, activeTimeFilter } = getNowFilterConditions();
+
   if (user.role === 'student') {
     const baseFilter = { createdBy: user._id };
-    const [totalPasses, pending, approved, rejected, cancelled, recentRequests] = await Promise.all([
+    const [totalPasses, pending, forwarded, approved, rejected, outdated, recentRequests] = await Promise.all([
       Gatepass.countDocuments(baseFilter),
       Gatepass.countDocuments({
         ...baseFilter,
-        status: { $in: ['pending_principal', 'forwarded_to_hod', 'forwarded_to_coordinator', 'pending_cao'] }
+        status: 'pending_principal',
+        ...activeTimeFilter
+      }),
+      Gatepass.countDocuments({
+        ...baseFilter,
+        status: { $in: ['forwarded_to_hod', 'forwarded_to_coordinator', 'forwarded_to_campus_security', 'forwarded_to_chairman', 'pending_cao'] },
+        ...activeTimeFilter
       }),
       Gatepass.countDocuments({
         ...baseFilter,
@@ -96,7 +133,8 @@ async function getDashboardSummary(user) {
       }),
       Gatepass.countDocuments({
         ...baseFilter,
-        status: 'cancelled'
+        status: { $in: ['pending_principal', 'forwarded_to_hod', 'forwarded_to_coordinator', 'forwarded_to_campus_security', 'forwarded_to_chairman', 'pending_cao', ...APPROVED_GATEPASS_STATUSES] },
+        ...outdatedFilter
       }),
       getRecentGatepasses(baseFilter)
     ]);
@@ -106,9 +144,10 @@ async function getDashboardSummary(user) {
       stats: {
         totalPasses,
         pending,
+        forwarded,
         approved,
         rejected,
-        cancelled
+        outdated
       },
       recentRequests
     };
@@ -117,7 +156,7 @@ async function getDashboardSummary(user) {
   if (user.role === 'faculty') {
     const baseFilter = { createdBy: user._id };
     const isCoordinator = Boolean(user.coordinatorAssignment?.isCoordinator);
-    const [totalRequests, pending, approved, rejected, recentRequests, coordinatorPending, coordinatorApproved, coordinatorRejected, coordinatorRecentActions] = await Promise.all([
+    const [totalRequests, pending, approved, rejected, recentRequests, coordinatorPending, coordinatorApproved, coordinatorRejected, coordinatorOutdated, coordinatorRecentActions] = await Promise.all([
       FacultyLeaveRequest.countDocuments(baseFilter),
       FacultyLeaveRequest.countDocuments({ ...baseFilter, overallStatus: 'pending' }),
       FacultyLeaveRequest.countDocuments({ ...baseFilter, overallStatus: 'approved' }),
@@ -127,7 +166,8 @@ async function getDashboardSummary(user) {
         ? Gatepass.countDocuments({
             applicantType: 'student',
             status: 'forwarded_to_coordinator',
-            forwardedTo: user._id
+            forwardedTo: user._id,
+            ...activeTimeFilter
           })
         : Promise.resolve(0),
       isCoordinator
@@ -142,6 +182,14 @@ async function getDashboardSummary(user) {
             applicantType: 'student',
             status: 'rejected_by_coordinator',
             'coordinatorAction.actionBy': user._id
+          })
+        : Promise.resolve(0),
+      isCoordinator
+        ? Gatepass.countDocuments({
+            applicantType: 'student',
+            status: 'forwarded_to_coordinator',
+            forwardedTo: user._id,
+            ...outdatedFilter
           })
         : Promise.resolve(0),
       isCoordinator
@@ -160,10 +208,11 @@ async function getDashboardSummary(user) {
         pending,
         approved,
         rejected,
-        cancelled: 0,
+        outdated: 0,
         coordinatorPending,
         coordinatorApproved,
         coordinatorRejected,
+        coordinatorOutdated,
         coordinatorEnabled: isCoordinator
       },
       recentRequests: mergeRecentItems(recentRequests, coordinatorRecentActions)
@@ -179,16 +228,36 @@ async function getDashboardSummary(user) {
       approvedFacultyCount,
       rejectedStudentCount,
       rejectedFacultyCount,
+      outdatedStudentCount,
       recentStudentActions,
       recentFacultyActions
     ] = await Promise.all([
-      Gatepass.countDocuments({ applicantType: 'student', status: 'pending_principal' }),
+      // Only direct pending requests that are NOT forwarded and NOT outdated
+      Gatepass.countDocuments({
+        applicantType: 'student',
+        status: 'pending_principal',
+        ...activeTimeFilter
+      }),
       FacultyLeaveRequest.countDocuments({ shortLeaveStatus: 'pending_principal' }),
-      Gatepass.countDocuments({ applicantType: 'student', status: { $in: ['forwarded_to_hod', 'forwarded_to_coordinator'] } }),
-      Gatepass.countDocuments({ applicantType: 'student', status: 'approved_final' }),
+      // Forwarded requests that are NOT outdated
+      Gatepass.countDocuments({
+        applicantType: 'student',
+        status: { $in: ['forwarded_to_hod', 'forwarded_to_coordinator', 'forwarded_to_campus_security', 'forwarded_to_chairman'] },
+        ...activeTimeFilter
+      }),
+      Gatepass.countDocuments({
+        applicantType: 'student',
+        status: { $in: [...APPROVED_GATEPASS_STATUSES, 'checked_out_by_security', 'completed'] }
+      }),
       FacultyLeaveRequest.countDocuments({ 'principalAction.status': 'approved' }),
       Gatepass.countDocuments({ applicantType: 'student', status: 'rejected_by_principal' }),
       FacultyLeaveRequest.countDocuments({ shortLeaveStatus: 'rejected_by_principal' }),
+      // Outdated uncompleted student gatepasses
+      Gatepass.countDocuments({
+        applicantType: 'student',
+        status: { $in: ['pending_principal', 'forwarded_to_hod', 'forwarded_to_coordinator', 'forwarded_to_campus_security', 'forwarded_to_chairman', ...APPROVED_GATEPASS_STATUSES] },
+        ...outdatedFilter
+      }),
       getRecentGatepasses({
         applicantType: 'student',
         'principalAction.actionBy': user._id
@@ -206,13 +275,19 @@ async function getDashboardSummary(user) {
       role: user.role,
       stats: {
         pendingRequests,
+        pending: pendingRequests,
         pendingStudentRequests,
         pendingFacultyRequests,
         forwardedCount,
+        forwarded: forwardedCount,
         approvedCount,
+        approved: approvedCount,
         approvedDirectCount: approvedCount,
         finalApprovedCount: approvedCount,
-        rejectedCount
+        rejectedCount,
+        rejected: rejectedCount,
+        outdatedCount: outdatedStudentCount,
+        outdated: outdatedStudentCount
       },
       recentActions: mergeRecentItems(recentStudentActions, recentFacultyActions)
     };
@@ -230,10 +305,11 @@ async function getDashboardSummary(user) {
       approvedFacultyCount,
       rejectedStudentCount,
       rejectedFacultyCount,
+      outdatedStudentCount,
       recentStudentActions,
       recentFacultyActions
     ] = await Promise.all([
-      Gatepass.countDocuments({ ...studentBaseFilter, status: 'forwarded_to_hod' }),
+      Gatepass.countDocuments({ ...studentBaseFilter, status: 'forwarded_to_hod', ...activeTimeFilter }),
       FacultyLeaveRequest.countDocuments({ ...facultyBaseFilter, workloadStatus: 'pending_hod' }),
       Gatepass.countDocuments({
         ...studentBaseFilter,
@@ -247,6 +323,7 @@ async function getDashboardSummary(user) {
       FacultyLeaveRequest.countDocuments({ ...facultyBaseFilter, workloadStatus: 'approved_by_hod' }),
       Gatepass.countDocuments({ ...studentBaseFilter, status: 'rejected_by_hod' }),
       FacultyLeaveRequest.countDocuments({ ...facultyBaseFilter, workloadStatus: 'rejected_by_hod' }),
+      Gatepass.countDocuments({ ...studentBaseFilter, status: 'forwarded_to_hod', ...outdatedFilter }),
       getRecentGatepasses({
         ...studentBaseFilter,
         'hodAction.status': { $ne: 'not_required' }
@@ -266,14 +343,95 @@ async function getDashboardSummary(user) {
       role: user.role,
       stats: {
         pendingReviews,
+        pending: pendingReviews,
         pendingForwardedRequests: pendingReviews,
         totalHandled,
+        handled: totalHandled,
         approvedCount,
+        approved: approvedCount,
         approvedByHod: approvedCount,
         rejectedCount,
-        rejectedByHod: rejectedCount
+        rejected: rejectedCount,
+        rejectedByHod: rejectedCount,
+        outdatedCount: outdatedStudentCount,
+        outdated: outdatedStudentCount
       },
       recentActions: mergeRecentItems(recentStudentActions, recentFacultyActions)
+    };
+  }
+
+  if (user.role === 'chairman') {
+    const [pending, approved, rejected, outdated, recentActions] = await Promise.all([
+      Gatepass.countDocuments({
+        applicantType: 'student',
+        status: 'forwarded_to_chairman',
+        ...activeTimeFilter
+      }),
+      Gatepass.countDocuments({
+        applicantType: 'student',
+        status: 'approved_by_chairman',
+        'chairmanAction.actionBy': user._id
+      }),
+      Gatepass.countDocuments({
+        applicantType: 'student',
+        status: 'rejected_by_chairman',
+        'chairmanAction.actionBy': user._id
+      }),
+      Gatepass.countDocuments({
+        applicantType: 'student',
+        status: 'forwarded_to_chairman',
+        ...outdatedFilter
+      }),
+      getRecentGatepasses({
+        applicantType: 'student',
+        $or: [{ forwardedTo: user._id }, { forwardedToRole: 'chairman' }, { 'chairmanAction.actionBy': user._id }]
+      })
+    ]);
+
+    return {
+      role: user.role,
+      stats: {
+        pending,
+        approved,
+        rejected,
+        outdated,
+        total: pending + approved + rejected + outdated
+      },
+      recentActions
+    };
+  }
+
+  if (user.role === 'campus_security') {
+    const [pending, cleared, outdated, recentActions] = await Promise.all([
+      Gatepass.countDocuments({
+        applicantType: 'student',
+        status: 'forwarded_to_campus_security',
+        ...activeTimeFilter
+      }),
+      Gatepass.countDocuments({
+        applicantType: 'student',
+        'securityAction.campusCleared': true
+      }),
+      Gatepass.countDocuments({
+        applicantType: 'student',
+        status: 'forwarded_to_campus_security',
+        ...outdatedFilter
+      }),
+      getRecentGatepasses({
+        applicantType: 'student',
+        status: { $in: ['forwarded_to_campus_security', ...APPROVED_GATEPASS_STATUSES, 'checked_out_by_security', 'completed'] }
+      })
+    ]);
+
+    return {
+      role: user.role,
+      stats: {
+        pending,
+        cleared,
+        outdated,
+        total: pending + cleared + outdated
+      },
+      recentActions
     };
   }
 
@@ -293,9 +451,14 @@ async function getDashboardSummary(user) {
       role: user.role,
       stats: {
         totalRequests: pendingFacultyRequests + approvedByCao + rejectedByCao,
+        total: pendingFacultyRequests + approvedByCao + rejectedByCao,
         pendingFacultyRequests,
+        pending: pendingFacultyRequests,
         approvedByCao,
-        rejectedByCao
+        approved: approvedByCao,
+        rejectedByCao,
+        rejected: rejectedByCao,
+        outdated: 0
       },
       recentActions
     };
@@ -308,7 +471,7 @@ async function getDashboardSummary(user) {
       { 'leaveDetails.leaveFrom': { $gte: start, $lte: end } }
     ]
   };
-  const [readyStudentGatepasses, readyFacultyGatepasses, checkedOutStudentToday, checkedOutFacultyToday, completedStudentToday, completedFacultyToday, recentStudentVerifications, recentFacultyVerifications] =
+  const [readyStudentGatepasses, readyFacultyGatepasses, checkedOutStudentToday, checkedOutFacultyToday, completedStudentToday, completedFacultyToday, outdatedStudentToday, recentStudentVerifications, recentFacultyVerifications] =
     await Promise.all([
       Gatepass.countDocuments({
         status: { $in: APPROVED_GATEPASS_STATUSES },
@@ -335,6 +498,10 @@ async function getDashboardSummary(user) {
         overallStatus: 'approved',
         'securityAction.checkedInAt': { $gte: start, $lte: end }
       }),
+      Gatepass.countDocuments({
+        status: { $in: APPROVED_GATEPASS_STATUSES },
+        outDate: { $lt: startOfToday }
+      }),
       getRecentGatepasses({
         status: { $in: [...APPROVED_GATEPASS_STATUSES, 'checked_out_by_security', 'completed'] }
       }),
@@ -352,8 +519,12 @@ async function getDashboardSummary(user) {
     role: user.role,
     stats: {
       readyForVerificationToday,
+      ready: readyForVerificationToday,
       checkedOutToday,
-      completedToday
+      out: checkedOutToday,
+      completedToday,
+      returned: completedToday,
+      outdated: outdatedStudentToday
     },
     recentVerifications
   };

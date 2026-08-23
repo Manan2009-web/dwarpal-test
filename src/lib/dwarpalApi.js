@@ -1084,13 +1084,64 @@ function formatDurationLabel(totalMinutes) {
   return [hourLabel, minuteLabel].filter(Boolean).join(' ') || `${minutes}m`
 }
 
-function getDisplayStatus(status) {
+export function isGatepassOutdated(gatepass, now = new Date()) {
+  if (!gatepass) return false
+  if (gatepass.isOutdated === true) return true
+  const status = gatepass.status || gatepass.rawStatus
+  if ([
+    'checked_out_by_security',
+    'completed',
+    'cancelled',
+    'rejected_by_principal',
+    'rejected_by_hod',
+    'rejected_by_coordinator',
+    'rejected_by_cao'
+  ].includes(status)) {
+    return false
+  }
+
+  const outDateVal = gatepass.outDate || gatepass.outTime
+  if (!outDateVal) return false
+  const outDate = new Date(outDateVal)
+  if (Number.isNaN(outDate.getTime())) return false
+
+  const startOfToday = new Date(now)
+  startOfToday.setHours(0, 0, 0, 0)
+
+  if (outDate < startOfToday) {
+    return true
+  }
+
+  const endOfToday = new Date(now)
+  endOfToday.setHours(23, 59, 59, 999)
+
+  if (outDate <= endOfToday && gatepass.outTime && typeof gatepass.outTime === 'string' && gatepass.outTime.includes(':')) {
+    const [h = '23', m = '59'] = gatepass.outTime.split(':')
+    const outDateTime = new Date(outDate)
+    outDateTime.setHours(Number(h), Number(m), 59, 999)
+    return outDateTime.getTime() < now.getTime()
+  }
+
+  return false
+}
+
+function getDisplayStatus(status, gatepass = null) {
+  if (gatepass && isGatepassOutdated(gatepass)) return 'Outdated'
+  if (
+    status === 'forwarded_to_hod' ||
+    status === 'forwarded_to_coordinator' ||
+    status === 'forwarded_to_campus_security' ||
+    status === 'forwarded_to_chairman'
+  ) {
+    return 'Forwarded'
+  }
+  if (status === 'pending_principal' || status === 'pending_cao' || status === 'submitted') return 'Pending'
   if (PENDING_GATEPASS_STATUSES.has(status)) return 'Pending'
   if (APPROVED_GATEPASS_STATUSES.has(status)) return 'Approved'
   if (REJECTED_GATEPASS_STATUSES.has(status)) return 'Rejected'
   if (status === 'checked_out_by_security') return 'Out'
   if (status === 'completed') return 'Returned'
-  if (status === 'cancelled') return 'Cancelled'
+  if (status === 'cancelled') return 'Outdated'
   return 'Pending'
 }
 
@@ -1429,7 +1480,8 @@ export function toUiGatepass(gatepass) {
     expectedReturnTime,
     returnTime: returnTime || null,
     canMarkIn: Boolean(gatepass.canMarkIn ?? returnTime),
-    status: getDisplayStatus(gatepass.status),
+    isOutdated: isGatepassOutdated(gatepass),
+    status: getDisplayStatus(gatepass.status, gatepass),
     rawStatus: gatepass.status,
     stage: getCurrentStage(gatepass),
     rawApprovalLevel: gatepass.currentApprovalLevel,
@@ -2355,7 +2407,19 @@ function buildGatepassStatusQuery(statusFilter, role = '') {
   }
 
   if (statusFilter === 'Pending') {
-    return [...PENDING_GATEPASS_STATUSES].join(',')
+    if (role === 'principal') return 'pending_principal'
+    if (role === 'hod') return 'forwarded_to_hod'
+    if (role === 'chairman') return 'forwarded_to_chairman'
+    if (role === 'campus_security') return 'forwarded_to_campus_security'
+    return 'pending_principal,pending_cao'
+  }
+
+  if (statusFilter === 'Forwarded') {
+    return 'forwarded'
+  }
+
+  if (statusFilter === 'Outdated') {
+    return 'outdated'
   }
 
   if (statusFilter === 'Approved') {
@@ -2374,10 +2438,6 @@ function buildGatepassStatusQuery(statusFilter, role = '') {
     return 'completed'
   }
 
-  if (statusFilter === 'Cancelled') {
-    return 'cancelled'
-  }
-
   return ''
 }
 
@@ -2391,7 +2451,8 @@ function buildFacultyStatusQuery(statusFilter, role = '') {
   if (statusFilter === 'Rejected') return 'rejected'
   if (statusFilter === 'Out') return 'out'
   if (statusFilter === 'Returned') return 'returned'
-  if (statusFilter === 'Cancelled') return '__none__'
+  if (statusFilter === 'Forwarded') return '__none__'
+  if (statusFilter === 'Outdated') return '__none__'
   return ''
 }
 

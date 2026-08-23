@@ -2,6 +2,7 @@ import React, { Component, Suspense, lazy, useCallback, useEffect, useMemo, useR
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 // import logo from "../assets/DwarPal_logo.png";
 import {
+  AlertTriangle,
   Bell,
   CheckCircle2,
   ChevronLeft,
@@ -5184,7 +5185,7 @@ function DashboardPage({
           <FilterTabs
             value={statusFilter}
             onChange={onStatusFilterChange}
-            options={['All', 'Pending', 'Approved', 'Rejected', 'Out', 'Returned', 'Cancelled']}
+            options={['All', 'Pending', 'Forwarded', 'Approved', 'Rejected', 'Outdated', 'Out', 'Returned']}
           />
         </div>
 
@@ -5655,10 +5656,12 @@ function getRoleStats(currentUser, summary, gatepasses) {
 
   if (currentUser.role === 'student') {
     return {
-      total: summaryStats.totalRequests ?? summaryStats.totalPasses ?? gatepasses.length,
+      total: summaryStats.totalPasses ?? summaryStats.totalRequests ?? gatepasses.length,
+      pending: summaryStats.pending ?? gatepasses.filter((item) => item.status === 'Pending').length,
+      forwarded: summaryStats.forwarded ?? gatepasses.filter((item) => item.status === 'Forwarded').length,
       approved: summaryStats.approved ?? gatepasses.filter((item) => item.status === 'Approved').length,
       rejected: summaryStats.rejected ?? gatepasses.filter((item) => item.status === 'Rejected').length,
-      pending: summaryStats.pending ?? gatepasses.filter((item) => item.status === 'Pending').length,
+      outdated: summaryStats.outdated ?? gatepasses.filter((item) => item.status === 'Outdated' || item.isOutdated).length,
     }
   }
 
@@ -5668,41 +5671,65 @@ function getRoleStats(currentUser, summary, gatepasses) {
       Boolean(currentUser.coordinatorAssignment?.isCoordinator)
     const coordinatorPending =
       summaryStats.coordinatorPending ??
-      gatepasses.filter((item) => ['coordinator', 'coordinator_review'].includes(item.stage) && item.status === 'Pending').length
+      gatepasses.filter((item) => ['coordinator', 'coordinator_review'].includes(item.stage) && (item.status === 'Pending' || item.status === 'Forwarded')).length
     const coordinatorApproved = summaryStats.coordinatorApproved ?? 0
     const coordinatorRejected = summaryStats.coordinatorRejected ?? 0
+    const coordinatorOutdated = summaryStats.coordinatorOutdated ?? 0
 
     return {
       total: summaryStats.totalRequests ?? summaryStats.totalPasses ?? gatepasses.length,
       approved: (summaryStats.approved ?? 0) + coordinatorApproved,
       rejected: (summaryStats.rejected ?? 0) + coordinatorRejected,
       pending: (summaryStats.pending ?? 0) + coordinatorPending,
+      outdated: (summaryStats.outdated ?? 0) + coordinatorOutdated,
       coordinatorEnabled,
       coordinatorPending,
+      coordinatorApproved,
+      coordinatorRejected,
+      coordinatorOutdated,
     }
   }
 
   if (currentUser.role === 'principal') {
     return {
-      pending: summaryStats.pendingRequests ?? gatepasses.filter((item) => item.status === 'Pending').length,
-      forwarded: summaryStats.forwardedCount ?? 0,
-      approved: summaryStats.approvedCount ?? summaryStats.finalApprovedCount ?? summaryStats.approvedDirectCount ?? 0,
-      rejected: summaryStats.rejectedCount ?? 0,
+      pending: summaryStats.pending ?? summaryStats.pendingRequests ?? gatepasses.filter((item) => item.status === 'Pending').length,
+      forwarded: summaryStats.forwarded ?? summaryStats.forwardedCount ?? gatepasses.filter((item) => item.status === 'Forwarded').length,
+      approved: summaryStats.approved ?? summaryStats.approvedCount ?? summaryStats.finalApprovedCount ?? 0,
+      rejected: summaryStats.rejected ?? summaryStats.rejectedCount ?? 0,
+      outdated: summaryStats.outdated ?? summaryStats.outdatedCount ?? gatepasses.filter((item) => item.status === 'Outdated' || item.isOutdated).length,
     }
   }
 
   if (currentUser.role === 'hod') {
     return {
-      pending: summaryStats.pendingReviews ?? summaryStats.pendingForwardedRequests ?? gatepasses.filter((item) => item.status === 'Pending').length,
-      handled: summaryStats.totalHandled ?? 0,
-      approved: summaryStats.approvedCount ?? summaryStats.approvedByHod ?? 0,
-      rejected: summaryStats.rejectedCount ?? summaryStats.rejectedByHod ?? 0,
+      pending: summaryStats.pending ?? summaryStats.pendingReviews ?? gatepasses.filter((item) => item.status === 'Pending' || item.status === 'Forwarded').length,
+      handled: summaryStats.handled ?? summaryStats.totalHandled ?? 0,
+      approved: summaryStats.approved ?? summaryStats.approvedCount ?? summaryStats.approvedByHod ?? 0,
+      rejected: summaryStats.rejected ?? summaryStats.rejectedCount ?? summaryStats.rejectedByHod ?? 0,
+      outdated: summaryStats.outdated ?? summaryStats.outdatedCount ?? gatepasses.filter((item) => item.status === 'Outdated' || item.isOutdated).length,
+    }
+  }
+
+  if (currentUser.role === 'chairman') {
+    return {
+      pending: summaryStats.pending ?? gatepasses.filter((item) => item.status === 'Pending' || item.status === 'Forwarded').length,
+      approved: summaryStats.approved ?? 0,
+      rejected: summaryStats.rejected ?? 0,
+      outdated: summaryStats.outdated ?? gatepasses.filter((item) => item.status === 'Outdated' || item.isOutdated).length,
+    }
+  }
+
+  if (currentUser.role === 'campus_security') {
+    return {
+      pending: summaryStats.pending ?? gatepasses.filter((item) => item.status === 'Pending' || item.status === 'Forwarded').length,
+      cleared: summaryStats.cleared ?? 0,
+      outdated: summaryStats.outdated ?? gatepasses.filter((item) => item.status === 'Outdated' || item.isOutdated).length,
     }
   }
 
   if (currentUser.role === 'cao') {
     return {
-      pending: summaryStats.pendingFacultyRequests ?? gatepasses.filter((item) => item.status === 'Pending').length,
+      pending: summaryStats.pendingFacultyRequests ?? summaryStats.pending ?? gatepasses.filter((item) => item.status === 'Pending').length,
       total:
         summary?.stats
           ? summaryStats.totalRequests ??
@@ -5710,19 +5737,32 @@ function getRoleStats(currentUser, summary, gatepasses) {
               (summaryStats.approvedByCao ?? 0) +
               (summaryStats.rejectedByCao ?? 0)
           : gatepasses.length,
-      approved: summaryStats.approvedByCao ?? 0,
-      rejected: summaryStats.rejectedByCao ?? 0,
+      approved: summaryStats.approvedByCao ?? summaryStats.approved ?? 0,
+      rejected: summaryStats.rejectedByCao ?? summaryStats.rejected ?? 0,
+      outdated: summaryStats.outdated ?? 0,
     }
   }
 
   return {
-    ready: summaryStats.readyForVerificationToday ?? gatepasses.filter((item) => item.status === 'Approved').length,
-    out: summaryStats.checkedOutToday ?? gatepasses.filter((item) => item.status === 'Out').length,
-    returned: summaryStats.completedToday ?? gatepasses.filter((item) => item.status === 'Returned').length,
+    ready: summaryStats.ready ?? summaryStats.readyForVerificationToday ?? gatepasses.filter((item) => item.status === 'Approved').length,
+    out: summaryStats.out ?? summaryStats.checkedOutToday ?? gatepasses.filter((item) => item.status === 'Out').length,
+    returned: summaryStats.returned ?? summaryStats.completedToday ?? gatepasses.filter((item) => item.status === 'Returned').length,
+    outdated: summaryStats.outdated ?? gatepasses.filter((item) => item.status === 'Outdated' || item.isOutdated).length,
   }
 }
 
 function getSummaryCards(role, stats) {
+  if (role === 'student') {
+    return [
+      { label: 'Total Passes', value: stats.total, icon: QrCode },
+      { label: 'Pending', value: stats.pending, icon: Clock3, tone: 'warning' },
+      { label: 'Forwarded', value: stats.forwarded, icon: Send, tone: 'info' },
+      { label: 'Approved', value: stats.approved, icon: CheckCircle2, tone: 'success' },
+      { label: 'Rejected', value: stats.rejected, icon: XCircle, tone: 'danger' },
+      { label: 'Outdated', value: stats.outdated, icon: AlertTriangle, tone: 'danger' },
+    ]
+  }
+
   if (role === 'faculty') {
     if (stats.coordinatorEnabled) {
       return [
@@ -5730,6 +5770,7 @@ function getSummaryCards(role, stats) {
         { label: 'Coordinator Queue', value: stats.coordinatorPending, icon: Clock3, tone: 'warning' },
         { label: 'Approved', value: stats.approved, icon: CheckCircle2, tone: 'success' },
         { label: 'Rejected', value: stats.rejected, icon: XCircle, tone: 'danger' },
+        { label: 'Outdated', value: stats.outdated, icon: AlertTriangle, tone: 'danger' },
       ]
     }
 
@@ -5747,6 +5788,7 @@ function getSummaryCards(role, stats) {
       { label: 'Forwarded', value: stats.forwarded, icon: Send, tone: 'info' },
       { label: 'Approved', value: stats.approved, icon: CheckCircle2, tone: 'success' },
       { label: 'Rejected', value: stats.rejected, icon: XCircle, tone: 'danger' },
+      { label: 'Outdated', value: stats.outdated, icon: AlertTriangle, tone: 'danger' },
     ]
   }
 
@@ -5756,6 +5798,24 @@ function getSummaryCards(role, stats) {
       { label: 'Handled', value: stats.handled, icon: QrCode },
       { label: 'Approved', value: stats.approved, icon: CheckCircle2, tone: 'success' },
       { label: 'Rejected', value: stats.rejected, icon: XCircle, tone: 'danger' },
+      { label: 'Outdated', value: stats.outdated, icon: AlertTriangle, tone: 'danger' },
+    ]
+  }
+
+  if (role === 'chairman') {
+    return [
+      { label: 'Pending Review', value: stats.pending, icon: Clock3, tone: 'warning' },
+      { label: 'Approved', value: stats.approved, icon: CheckCircle2, tone: 'success' },
+      { label: 'Rejected', value: stats.rejected, icon: XCircle, tone: 'danger' },
+      { label: 'Outdated', value: stats.outdated, icon: AlertTriangle, tone: 'danger' },
+    ]
+  }
+
+  if (role === 'campus_security') {
+    return [
+      { label: 'Pending Verification', value: stats.pending, icon: Clock3, tone: 'warning' },
+      { label: 'Campus Cleared', value: stats.cleared, icon: CheckCircle2, tone: 'success' },
+      { label: 'Outdated', value: stats.outdated, icon: AlertTriangle, tone: 'danger' },
     ]
   }
 
@@ -5773,6 +5833,7 @@ function getSummaryCards(role, stats) {
       { label: 'Ready for OUT', value: stats.ready, icon: ScanLine, tone: 'info' },
       { label: 'OUT', value: stats.out, icon: QrCode },
       { label: 'Returned', value: stats.returned, icon: CheckCircle2, tone: 'success' },
+      { label: 'Outdated', value: stats.outdated, icon: AlertTriangle, tone: 'danger' },
     ]
   }
 

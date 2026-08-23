@@ -277,6 +277,7 @@ function mapGatepassListItem(gatepass) {
     canMarkIn: canGatepassBeMarkedIn(gatepass),
     vehicleNumber: gatepass.vehicleNumber || '',
     status: gatepass.status,
+    isOutdated: isGatepassOutdated(gatepass),
     currentApprovalLevel: gatepass.currentApprovalLevel || null,
     forwardedTo: mapUserSummary(gatepass.forwardedTo),
     forwardedToRole: gatepass.forwardedToRole || null,
@@ -1242,7 +1243,68 @@ function buildSearchFilter(searchTerm) {
   };
 }
 
+function getNowFilterConditions() {
+  const now = new Date();
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+
+  const endOfToday = new Date(now);
+  endOfToday.setHours(23, 59, 59, 999);
+
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const currentTimeString = `${hours}:${minutes}`;
+
+  const outdatedFilter = {
+    $or: [
+      { outDate: { $lt: startOfToday } },
+      { outDate: { $gte: startOfToday, $lte: endOfToday }, outTime: { $lt: currentTimeString } }
+    ]
+  };
+
+  const activeTimeFilter = {
+    $or: [
+      { outDate: { $gt: endOfToday } },
+      { outDate: { $gte: startOfToday, $lte: endOfToday }, outTime: { $gte: currentTimeString } }
+    ]
+  };
+
+  return { now, startOfToday, endOfToday, currentTimeString, outdatedFilter, activeTimeFilter };
+}
+
+function isGatepassOutdated(gatepass, now = new Date()) {
+  if (!gatepass) return false;
+  const status = gatepass.status || gatepass.rawStatus;
+  if (['checked_out_by_security', 'completed', 'cancelled', 'rejected_by_principal', 'rejected_by_hod', 'rejected_by_coordinator', 'rejected_by_cao'].includes(status)) {
+    return false;
+  }
+  if (!gatepass.outDate) return false;
+  const outDate = new Date(gatepass.outDate);
+  if (Number.isNaN(outDate.getTime())) return false;
+
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+
+  if (outDate < startOfToday) {
+    return true;
+  }
+
+  const endOfToday = new Date(now);
+  endOfToday.setHours(23, 59, 59, 999);
+
+  if (outDate <= endOfToday && gatepass.outTime) {
+    const [h = '23', m = '59'] = String(gatepass.outTime).split(':');
+    const outDateTime = new Date(outDate);
+    outDateTime.setHours(Number(h), Number(m), 59, 999);
+    return outDateTime.getTime() < now.getTime();
+  }
+
+  return false;
+}
+
 function applyStatusFilter(filter, queryStatus, allowedStatuses = null) {
+  const { outdatedFilter, activeTimeFilter } = getNowFilterConditions();
+
   if (!queryStatus) {
     if (allowedStatuses) {
       filter.status = allowedStatuses.length === 1 ? allowedStatuses[0] : { $in: allowedStatuses };
@@ -1256,6 +1318,30 @@ function applyStatusFilter(filter, queryStatus, allowedStatuses = null) {
     .map((value) => value.trim())
     .filter(Boolean);
 
+  if (requestedStatuses.includes('outdated')) {
+    filter.status = {
+      $in: [
+        'pending_principal',
+        'forwarded_to_hod',
+        'forwarded_to_coordinator',
+        'forwarded_to_campus_security',
+        'forwarded_to_chairman',
+        'pending_cao',
+        ...APPROVED_GATEPASS_STATUSES
+      ]
+    };
+    Object.assign(filter, outdatedFilter);
+    return;
+  }
+
+  if (requestedStatuses.includes('forwarded')) {
+    filter.status = {
+      $in: ['forwarded_to_hod', 'forwarded_to_coordinator', 'forwarded_to_campus_security', 'forwarded_to_chairman']
+    };
+    Object.assign(filter, activeTimeFilter);
+    return;
+  }
+
   const safeStatuses = allowedStatuses
     ? requestedStatuses.filter((status) => allowedStatuses.includes(status))
     : requestedStatuses;
@@ -1266,6 +1352,10 @@ function applyStatusFilter(filter, queryStatus, allowedStatuses = null) {
   }
 
   filter.status = safeStatuses.length === 1 ? safeStatuses[0] : { $in: safeStatuses };
+
+  if (safeStatuses.some((s) => s.startsWith('pending_') || s.startsWith('forwarded_'))) {
+    Object.assign(filter, activeTimeFilter);
+  }
 }
 
 function applySinceFilter(filter, since) {
