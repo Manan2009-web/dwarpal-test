@@ -548,6 +548,42 @@ async function getBrevoPoolStatus() {
   });
 }
 
+async function ensureAccountCredits(apiKey) {
+  const now = Date.now();
+  const cached = brevoAccountCache.get(apiKey);
+  if (cached && now - (cached.lastFetched || 0) < 60000) {
+    return cached.credits;
+  }
+  try {
+    const res = await fetch('https://api.brevo.com/v3/account', {
+      headers: { 'api-key': apiKey, 'accept': 'application/json' }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const credits = data?.plan?.[0]?.credits !== undefined ? data.plan[0].credits : 300;
+      const currentObj = cached || { email: data?.email, maxCredits: 300 };
+      currentObj.credits = credits;
+      currentObj.usedCredits = Math.max(0, 300 - credits);
+      currentObj.lastFetched = now;
+      if (data?.email && !currentObj.email) currentObj.email = data.email;
+      brevoAccountCache.set(apiKey, currentObj);
+
+      if (credits === 0) {
+        exhaustedBrevoKeys.set(apiKey, now + 6 * 60 * 60 * 1000);
+      }
+      return credits;
+    }
+  } catch (err) {
+    // fallback
+  }
+  return cached?.credits !== undefined ? cached.credits : 300;
+}
+
+// Auto-warm pool on start
+setTimeout(() => {
+  getBrevoPoolStatus().catch(() => {});
+}, 1000);
+
 async function sendViaBrevo({ to, subject, text, html }) {
   const defaultFromEmail = env.smtpFromEmail || env.smtpUser || env.emailFrom || 'dwarpal@neotech.ac.in';
   const name = String(env.smtpFromName || 'DwarPal').trim();
@@ -563,20 +599,19 @@ async function sendViaBrevo({ to, subject, text, html }) {
   for (let attempt = 0; attempt < keys.length; attempt++) {
     const keyIdx = (currentBrevoKeyIndex + attempt) % keys.length;
     const apiKey = keys[keyIdx];
-    const cachedAcc = brevoAccountCache.get(apiKey);
 
-    // If key is marked exhausted or known to have 0 credits, skip immediately
-    if (
-      (cachedAcc?.credits === 0 || exhaustedBrevoKeys.has(apiKey)) &&
-      exhaustedBrevoKeys.size < keys.length
-    ) {
+    // Pre-validate account live credits
+    const credits = await ensureAccountCredits(apiKey);
+
+    // If key is marked exhausted or known to have 0 credits, skip immediately!
+    if ((credits === 0 || exhaustedBrevoKeys.has(apiKey)) && exhaustedBrevoKeys.size < keys.length) {
       continue;
     }
 
     try {
       const shortKey = `...${String(apiKey || '').slice(-6)}`;
       const senderEmail = await getBrevoSenderEmail(apiKey, defaultFromEmail);
-      console.info(`[email-pool] Attempting Brevo delivery via Account #${keyIdx + 1}/${keys.length} (sender: ${senderEmail}, key: ${shortKey}) to ${maskEmail(to)}`);
+      console.info(`[email-pool] Attempting Brevo delivery via Account #${keyIdx + 1}/${keys.length} (sender: ${senderEmail}, key: ${shortKey}, credits: ${credits}) to ${maskEmail(to)}`);
 
       const response = await fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
