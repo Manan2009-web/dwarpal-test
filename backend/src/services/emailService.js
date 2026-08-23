@@ -388,37 +388,110 @@ async function sendViaResend({ to, subject, text, html }) {
   };
 }
 
+let currentBrevoKeyIndex = 0;
+const exhaustedBrevoKeys = new Map(); // key -> expiration timestamp (milliseconds)
+
+function getAvailableBrevoKeys() {
+  const allKeys = Array.isArray(env.brevoApiKeys) && env.brevoApiKeys.length > 0
+    ? env.brevoApiKeys
+    : (env.brevoApiKey ? [env.brevoApiKey] : []);
+  
+  const now = Date.now();
+  // Clear any expired exhaustion timers
+  for (const [k, exp] of exhaustedBrevoKeys.entries()) {
+    if (now > exp) {
+      exhaustedBrevoKeys.delete(k);
+    }
+  }
+
+  return allKeys;
+}
+
+function markBrevoKeyExhausted(apiKey, reason = 'limit_exceeded') {
+  // Mark exhausted for 6 hours
+  exhaustedBrevoKeys.set(apiKey, Date.now() + 6 * 60 * 60 * 1000);
+  const shortKey = `...${String(apiKey || '').slice(-6)}`;
+  console.warn(`[email-pool] Brevo key ${shortKey} marked temporarily exhausted (${reason}). Exhausted keys count: ${exhaustedBrevoKeys.size}`);
+}
+
 async function sendViaBrevo({ to, subject, text, html }) {
   const fromEmail = env.smtpFromEmail || env.smtpUser || env.emailFrom || 'dwarpal@neotech.ac.in';
   const name = String(env.smtpFromName || 'DwarPal').trim();
+  const keys = getAvailableBrevoKeys();
 
-  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST',
-    headers: {
-      'api-key': env.brevoApiKey,
-      'Content-Type': 'application/json',
-      Accept: 'application/json'
-    },
-    body: JSON.stringify({
-      sender: { name, email: fromEmail },
-      to: [{ email: String(to || '').trim() }],
-      subject,
-      htmlContent: html,
-      textContent: text
-    })
-  });
-
-  const payload = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(payload?.message || payload?.error || `Brevo API returned status ${response.status}`);
+  if (keys.length === 0) {
+    throw new Error('No Brevo API keys configured.');
   }
 
-  return {
-    mode: 'brevo',
-    messageId: payload?.messageId,
-    providerResponse: payload
-  };
+  let lastError = null;
+
+  // Try each key in the pool, starting from currentBrevoKeyIndex
+  for (let attempt = 0; attempt < keys.length; attempt++) {
+    const keyIdx = (currentBrevoKeyIndex + attempt) % keys.length;
+    const apiKey = keys[keyIdx];
+
+    // If key is marked exhausted, skip unless all keys in the pool are exhausted
+    if (exhaustedBrevoKeys.has(apiKey) && exhaustedBrevoKeys.size < keys.length) {
+      continue;
+    }
+
+    try {
+      const shortKey = `...${String(apiKey || '').slice(-6)}`;
+      console.info(`[email-pool] Attempting Brevo delivery via Account #${keyIdx + 1}/${keys.length} (${shortKey}) to ${maskEmail(to)}`);
+
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': apiKey,
+          'Content-Type': 'application/json',
+          Accept: 'application/json'
+        },
+        body: JSON.stringify({
+          sender: { name, email: fromEmail },
+          to: [{ email: String(to || '').trim() }],
+          subject,
+          htmlContent: html,
+          textContent: text
+        })
+      });
+
+      const payload = await response.json().catch(() => ({}));
+
+      if (response.ok) {
+        currentBrevoKeyIndex = keyIdx; // Persist current active working key
+        return {
+          mode: 'brevo',
+          accountIndex: keyIdx + 1,
+          messageId: payload?.messageId,
+          providerResponse: payload
+        };
+      }
+
+      // If not ok, check if limit/quota or auth error
+      const errorMsg = payload?.message || payload?.error || `Brevo API returned status ${response.status}`;
+      const isQuotaOrAuthError =
+        response.status === 400 ||
+        response.status === 401 ||
+        response.status === 402 ||
+        response.status === 403 ||
+        response.status === 429 ||
+        /limit|quota|credit|exceed|unauthoriz|suspend|not allowed|plan/i.test(errorMsg);
+
+      if (isQuotaOrAuthError) {
+        markBrevoKeyExhausted(apiKey, errorMsg);
+        console.warn(`[email-pool] Brevo Account #${keyIdx + 1} limit reached or failed (${errorMsg}). Jumping to next available account...`);
+        lastError = new Error(`Account #${keyIdx + 1} (${shortKey}) error: ${errorMsg}`);
+        continue; // Immediately jump to next account in pool!
+      } else {
+        throw new Error(errorMsg);
+      }
+    } catch (err) {
+      lastError = err;
+      console.warn(`[email-pool] Delivery failed on Brevo Account #${keyIdx + 1}: ${err.message}. Checking next account...`);
+    }
+  }
+
+  throw lastError || new Error('All Brevo accounts in the key pool are exhausted.');
 }
 
 async function sendViaSendGrid({ to, subject, text, html }) {
