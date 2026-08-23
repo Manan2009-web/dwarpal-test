@@ -60,6 +60,7 @@ function getSystemAccountSeedData() {
       employeeId: 'HOD',
       phone: '9999999992',
       department: hodDepartment,
+      program: defaultProgram,
       designation: 'HOD',
       gatepassApprovalEnabled: true
     },

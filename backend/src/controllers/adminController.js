@@ -272,7 +272,6 @@ const getQueueStats = asyncHandler(async (req, res) => {
   // Calculate "never sent" count
   const distinctQueuedEmails = await QueuedEmail.distinct('to', { context: 'student-onboarding' });
   const neverSentCount = Math.max(totalStudents - distinctQueuedEmails.length, 0);
-  const emailQueueService = require('../services/emailQueueService');
   const { batchLimit, batchSentCount } = emailQueueService.getBatchLimit();
 
   return sendSuccess(res, {
