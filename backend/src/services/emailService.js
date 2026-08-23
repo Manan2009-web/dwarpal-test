@@ -24,8 +24,9 @@ function isSmtpConfigured() {
 
 function isEmailConfigured() {
   return (
-    Boolean(env.resendApiKey) ||
+    (Array.isArray(env.brevoApiKeys) && env.brevoApiKeys.length > 0) ||
     Boolean(env.brevoApiKey) ||
+    Boolean(env.resendApiKey) ||
     Boolean(env.sendgridApiKey) ||
     isSmtpConfigured()
   );
@@ -129,8 +130,14 @@ function getSmtpConfigurationWarnings() {
     warnings.push('EMAIL_FROM or SMTP_FROM_EMAIL should use the same Gmail address as SMTP_USER.');
   }
 
-  if (!env.resendApiKey && !env.brevoApiKey && !env.sendgridApiKey && (process.env.RENDER || process.env.RENDER_SERVICE_ID)) {
-    warnings.push('Render Free Tier blocks outbound SMTP ports 587 & 465. Add BREVO_API_KEY or RESEND_API_KEY to your Render environment variables to deliver emails via HTTPS without port restrictions.');
+  const hasHttpsProvider =
+    (Array.isArray(env.brevoApiKeys) && env.brevoApiKeys.length > 0) ||
+    Boolean(env.brevoApiKey) ||
+    Boolean(env.resendApiKey) ||
+    Boolean(env.sendgridApiKey);
+
+  if (!hasHttpsProvider && (process.env.RENDER || process.env.RENDER_SERVICE_ID)) {
+    warnings.push('Render Free Tier blocks outbound SMTP ports 587 & 465. Add BREVO_API_KEYS to your Render environment variables to deliver emails via HTTPS without port restrictions.');
   }
 
   return warnings;
@@ -671,14 +678,15 @@ async function sendViaSendGrid({ to, subject, text, html }) {
 }
 
 async function sendMail({ to, subject, html, text, context = 'otp' }) {
-  if (env.brevoApiKey) {
+  const availableBrevoKeys = getAvailableBrevoKeys();
+  if (availableBrevoKeys.length > 0) {
     try {
-      console.info(`[email] Attempting to send email via Brevo API to ${maskEmail(to)}`);
+      console.info(`[email] Attempting to send email via Brevo Pool (${availableBrevoKeys.length} accounts configured) to ${maskEmail(to)}`);
       const res = await sendViaBrevo({ to, subject, text, html });
-      console.info(`[email] Brevo delivery succeeded for ${maskEmail(to)}`);
+      console.info(`[email] Brevo delivery succeeded via Account #${res?.accountIndex} for ${maskEmail(to)}`);
       return res;
     } catch (error) {
-      console.warn(`[email] Brevo API failed: ${error.message}. Trying next provider.`, { to: maskEmail(to) });
+      console.warn(`[email] Brevo Pool delivery failed: ${error.message}. Trying next provider.`, { to: maskEmail(to) });
     }
   }
 
