@@ -41,28 +41,55 @@ export async function subscribeUserToPush() {
     return null
   }
 
-  const registration = await navigator.serviceWorker.ready
+  try {
+    const registration = await navigator.serviceWorker.ready
 
-  const vapidPublicKey = await getVapidPublicKey()
-  if (!vapidPublicKey) {
-    console.warn('VAPID public key not configured on backend')
+    const vapidPublicKey = await getVapidPublicKey()
+    if (!vapidPublicKey) {
+      console.warn('VAPID public key not configured on backend')
+      return null
+    }
+
+    let subscription = await registration.pushManager.getSubscription()
+
+    if (!subscription) {
+      try {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+        })
+      } catch (subErr) {
+        console.warn('Initial push subscription failed, attempting recovery:', subErr)
+        // If an existing broken subscription is present, try unsubscribing first
+        const existing = await registration.pushManager.getSubscription().catch(() => null)
+        if (existing) {
+          await existing.unsubscribe().catch(() => {})
+        }
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+        })
+      }
+    }
+
+    if (subscription) {
+      const subscriptionJson = subscription.toJSON()
+      if (subscriptionJson?.endpoint && subscriptionJson?.keys) {
+        await subscribeWebPushNotification({
+          endpoint: subscriptionJson.endpoint,
+          keys: {
+            p256dh: subscriptionJson.keys.p256dh,
+            auth: subscriptionJson.keys.auth,
+          },
+        }).catch((apiErr) => {
+          console.warn('Push subscription sync to backend failed:', apiErr)
+        })
+      }
+    }
+
+    return subscription
+  } catch (error) {
+    console.warn('[webPush] Subscription error:', error)
     return null
   }
-
-  const subscription = await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
-  })
-
-  const subscriptionJson = subscription.toJSON()
-
-  await subscribeWebPushNotification({
-    endpoint: subscriptionJson.endpoint,
-    keys: {
-      p256dh: subscriptionJson.keys.p256dh,
-      auth: subscriptionJson.keys.auth
-    }
-  })
-
-  return subscription
 }

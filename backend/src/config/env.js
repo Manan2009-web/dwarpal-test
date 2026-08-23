@@ -291,7 +291,10 @@ const env = {
   firebaseWebVapidKey:
     normalizeEnvString(process.env.FIREBASE_WEB_VAPID_KEY) ||
     normalizeEnvString(process.env.VITE_FIREBASE_VAPID_KEY),
-  enableWebPush: parseBooleanEnv(process.env.ENABLE_WEB_PUSH, false),
+  enableWebPush: parseBooleanEnv(
+    process.env.ENABLE_WEB_PUSH,
+    Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY)
+  ),
   vapidPublicKey: normalizeEnvString(process.env.VAPID_PUBLIC_KEY),
   vapidPrivateKey: normalizeEnvString(process.env.VAPID_PRIVATE_KEY),
   vapidEmail: normalizeEnvString(process.env.VAPID_EMAIL) || 'mailto:dwarpal@neotech.ac.in',

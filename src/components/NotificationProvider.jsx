@@ -770,15 +770,21 @@ export function NotificationProvider({ children, currentUser, notificationPermis
     let unsubscribe = () => {}
 
     async function setupPushNotifications() {
-      if (!currentUser?.id || notificationPermissionState !== 'granted') {
+      const isPermissionGranted =
+        notificationPermissionState === 'granted' ||
+        (typeof Notification !== 'undefined' && Notification.permission === 'granted')
+
+      if (!currentUser?.id || !isPermissionGranted) {
         setPushReady(false)
         return
       }
 
       // 1. Subscribe to standard Web Push (VAPID)
       try {
-        await subscribeUserToPush()
-        setPushReady(true)
+        const sub = await subscribeUserToPush()
+        if (sub) {
+          setPushReady(true)
+        }
       } catch (vapidError) {
         console.warn('[notifications] VAPID Web Push subscription failed:', vapidError)
       }

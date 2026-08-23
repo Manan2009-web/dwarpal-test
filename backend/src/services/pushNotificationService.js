@@ -5,9 +5,11 @@ const env = require('../config/env');
 const { getFirebaseMessagingService } = require('./firebaseAdminService');
 const webpush = require('web-push');
 
-if (env.enableWebPush && env.vapidPublicKey && env.vapidPrivateKey) {
+const isWebPushAvailable = Boolean(env.vapidPublicKey && env.vapidPrivateKey);
+
+if (isWebPushAvailable) {
   webpush.setVapidDetails(
-    env.vapidEmail,
+    env.vapidEmail || 'mailto:dwarpal@neotech.ac.in',
     env.vapidPublicKey,
     env.vapidPrivateKey
   );
@@ -161,7 +163,7 @@ async function sendPushNotification(userId, title, message, data = {}) {
   }
 
   // 2. Web Push (VAPID) notifications (if configured)
-  if (env.enableWebPush && env.vapidPublicKey && env.vapidPrivateKey) {
+  if (isWebPushAvailable) {
     try {
       const subscriptions = await PushSubscription.find({ userId }).lean();
       if (subscriptions.length) {
@@ -362,7 +364,7 @@ async function sendGatepassPushNotification(userId, opts) {
   }
 
   // --- VAPID Web Push path (browser subscriptions) --------------------------
-  if (env.enableWebPush && env.vapidPublicKey && env.vapidPrivateKey) {
+  if (isWebPushAvailable) {
     try {
       const subscriptions = await PushSubscription.find({ userId }).lean();
 
