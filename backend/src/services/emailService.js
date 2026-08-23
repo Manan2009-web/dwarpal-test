@@ -391,6 +391,7 @@ async function sendViaResend({ to, subject, text, html }) {
 let currentBrevoKeyIndex = 0;
 const exhaustedBrevoKeys = new Map(); // key -> expiration timestamp (milliseconds)
 const brevoSenderCache = new Map(); // apiKey -> senderEmail
+const brevoAccountCache = new Map(); // apiKey -> { email, credits, maxCredits, usedCredits, lastFetched }
 
 function getAvailableBrevoKeys() {
   const allKeys = Array.isArray(env.brevoApiKeys) && env.brevoApiKeys.length > 0
@@ -435,6 +436,85 @@ async function getBrevoSenderEmail(apiKey, fallbackEmail) {
     // safe fallback
   }
   return fallbackEmail;
+}
+
+async function getBrevoPoolStatus() {
+  const keys = getAvailableBrevoKeys();
+  const now = Date.now();
+  const results = [];
+
+  for (let i = 0; i < keys.length; i++) {
+    const apiKey = keys[i];
+    const cached = brevoAccountCache.get(apiKey);
+
+    if (cached && now - cached.lastFetched < 60000) {
+      results.push({
+        index: i + 1,
+        email: cached.email,
+        credits: cached.credits,
+        maxCredits: 300,
+        usedCredits: Math.max(0, 300 - (cached.credits !== undefined ? cached.credits : 300)),
+        status: cached.credits === 0 || exhaustedBrevoKeys.has(apiKey) ? 'exhausted' : (i === currentBrevoKeyIndex ? 'active' : 'ready'),
+        isCurrent: i === currentBrevoKeyIndex,
+        keyMasked: `...${String(apiKey).slice(-6)}`
+      });
+      continue;
+    }
+
+    try {
+      const [accRes, sendersRes] = await Promise.all([
+        fetch('https://api.brevo.com/v3/account', {
+          headers: { 'api-key': apiKey, 'accept': 'application/json' }
+        }),
+        fetch('https://api.brevo.com/v3/senders', {
+          headers: { 'api-key': apiKey, 'accept': 'application/json' }
+        })
+      ]);
+
+      const accData = accRes.ok ? await accRes.json() : {};
+      const sendersData = sendersRes.ok ? await sendersRes.json() : {};
+
+      const verifiedSender = sendersData.senders?.find((s) => s.active)?.email || accData.email || `Account #${i + 1}`;
+      const credits = accData.plan?.[0]?.credits !== undefined ? accData.plan[0].credits : 300;
+      const usedCredits = Math.max(0, 300 - credits);
+
+      brevoAccountCache.set(apiKey, {
+        email: verifiedSender,
+        credits,
+        maxCredits: 300,
+        usedCredits,
+        lastFetched: now
+      });
+
+      if (credits === 0) {
+        exhaustedBrevoKeys.set(apiKey, now + 6 * 60 * 60 * 1000);
+      }
+
+      results.push({
+        index: i + 1,
+        email: verifiedSender,
+        credits,
+        maxCredits: 300,
+        usedCredits,
+        status: credits === 0 || exhaustedBrevoKeys.has(apiKey) ? 'exhausted' : (i === currentBrevoKeyIndex ? 'active' : 'ready'),
+        isCurrent: i === currentBrevoKeyIndex,
+        keyMasked: `...${String(apiKey).slice(-6)}`
+      });
+    } catch (err) {
+      results.push({
+        index: i + 1,
+        email: `Account #${i + 1}`,
+        credits: 300,
+        maxCredits: 300,
+        usedCredits: 0,
+        status: i === currentBrevoKeyIndex ? 'active' : 'ready',
+        isCurrent: i === currentBrevoKeyIndex,
+        keyMasked: `...${String(apiKey).slice(-6)}`
+      });
+    }
+  }
+
+  return results;
 }
 
 async function sendViaBrevo({ to, subject, text, html }) {
@@ -483,6 +563,11 @@ async function sendViaBrevo({ to, subject, text, html }) {
 
       if (response.ok) {
         currentBrevoKeyIndex = keyIdx; // Persist current active working key
+        const cached = brevoAccountCache.get(apiKey);
+        if (cached) {
+          cached.credits = Math.max(0, (cached.credits || 300) - 1);
+          cached.usedCredits = Math.min(300, (cached.usedCredits || 0) + 1);
+        }
         return {
           mode: 'brevo',
           accountIndex: keyIdx + 1,
@@ -1044,6 +1129,7 @@ module.exports = {
   getSmtpConfigurationWarnings,
   getSmtpDiagnostics,
   isSmtpConfigured,
+  getBrevoPoolStatus,
   sendDebugEmail,
   sendPasswordResetOtpEmail,
   sendStudentLoginOtpEmail,

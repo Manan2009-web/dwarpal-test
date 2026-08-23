@@ -26,13 +26,20 @@ async function getQueueStatsData() {
     QueuedEmail.countDocuments({ status: { $in: ['pending', 'sending'] } }),
     QueuedEmail.countDocuments({ status: 'failed' })
   ]);
+  let poolStatus = [];
+  try {
+    const { getBrevoPoolStatus } = require('./emailService');
+    poolStatus = await getBrevoPoolStatus();
+  } catch (err) {}
+
   return {
     sentCount,
     pendingCount,
     failedCount,
     isWorkerPaused,
     batchSentCount,
-    batchLimit
+    batchLimit,
+    poolStatus
   };
 }
 

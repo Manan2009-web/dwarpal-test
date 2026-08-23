@@ -9502,6 +9502,199 @@ html, body, #root, .admin-shell, .app-shell, .app-main, .app-scroll-region {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+  max-height: calc(100vh - 300px);
+  min-height: 380px;
+  overflow-y: auto;
+  padding-right: 0.4rem;
+  scroll-behavior: smooth;
+}
+
+.it-feed-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.it-feed-list::-webkit-scrollbar-track {
+  background: var(--app-surface-soft, #f1f5f9);
+  border-radius: 999px;
+}
+
+.it-feed-list::-webkit-scrollbar-thumb {
+  background: var(--app-surface-border, #cbd5e1);
+  border-radius: 999px;
+}
+
+.it-feed-list::-webkit-scrollbar-thumb:hover {
+  background: var(--app-text-muted, #94a3b8);
+}
+
+/* Brevo Multi-Account Pool Widget */
+.it-brevo-pool-card {
+  background: var(--app-surface, #ffffff);
+  border: 1px solid var(--app-surface-border, rgba(226, 232, 240, 0.9));
+  border-radius: 16px;
+  padding: 1.5rem 1.75rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 2px 12px -2px rgba(15, 23, 42, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.it-brevo-pool-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.it-brevo-pool-header h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--app-text, #0f172a);
+  margin: 0 0 0.25rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.it-brevo-pool-header p {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--app-text-muted, #64748b);
+}
+
+.it-brevo-pool-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.it-brevo-account-box {
+  background: var(--app-surface-soft, #f8fafc);
+  border: 1px solid var(--app-surface-border, rgba(226, 232, 240, 0.8));
+  border-radius: 12px;
+  padding: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.it-brevo-account-box.active {
+  border-color: #22c55e;
+  background: rgba(34, 197, 94, 0.03);
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.2);
+}
+
+.it-brevo-account-box.exhausted {
+  opacity: 0.75;
+  border-color: rgba(220, 38, 38, 0.3);
+  background: rgba(220, 38, 38, 0.02);
+}
+
+.it-brevo-box-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.it-brevo-account-title {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--app-text, #0f172a);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.it-brevo-status-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.it-brevo-status-badge.active {
+  background: rgba(34, 197, 94, 0.15);
+  color: #15803d;
+}
+
+.it-brevo-status-badge.ready {
+  background: var(--app-surface-soft, #e2e8f0);
+  color: #475569;
+}
+
+.it-brevo-status-badge.exhausted {
+  background: rgba(220, 38, 38, 0.12);
+  color: #b91c1c;
+}
+
+.it-brevo-account-email {
+  font-size: 0.78rem;
+  color: var(--app-text-muted, #64748b);
+  word-break: break-all;
+  font-family: monospace;
+}
+
+.it-brevo-quota-stats {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 0.25rem;
+}
+
+.it-brevo-quota-numbers {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--app-text, #0f172a);
+}
+
+.it-brevo-quota-numbers span {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--app-text-muted, #64748b);
+}
+
+.it-brevo-remaining-label {
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.it-brevo-remaining-label.good {
+  color: #16a34a;
+}
+
+.it-brevo-remaining-label.empty {
+  color: #dc2626;
+}
+
+.it-brevo-progress-track {
+  height: 6px;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.it-brevo-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.it-brevo-progress-fill.active {
+  background: linear-gradient(90deg, #22c55e, #16a34a);
+}
+
+.it-brevo-progress-fill.ready {
+  background: #0284c7;
+}
+
+.it-brevo-progress-fill.exhausted {
+  background: #dc2626;
 }
 
 .it-feed-item-card {

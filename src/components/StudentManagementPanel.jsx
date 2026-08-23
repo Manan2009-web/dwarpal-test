@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
-import { Eye, FileDown, Download, GraduationCap, KeyRound, PencilLine, ShieldCheck, Trash2, UserPlus, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, RefreshCw, X, AlertOctagon, History, Clock, FileWarning, Trash, Mail, Pause, Play, Search, RotateCcw } from 'lucide-react'
+import { Eye, FileDown, Download, GraduationCap, KeyRound, PencilLine, ShieldCheck, Trash2, UserPlus, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, RefreshCw, X, AlertOctagon, History, Clock, FileWarning, Trash, Mail, Pause, Play, Search, RotateCcw, Layers } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import Papa from 'papaparse'
 import {
@@ -631,6 +631,71 @@ function EmailManagementPanel({ currentUser }) {
           </div>
 
         </div>
+
+        {/* Multi-Account Brevo Limits Pool */}
+        {stats.poolStatus && stats.poolStatus.length > 0 && (
+          <div className="it-brevo-pool-card">
+            <div className="it-brevo-pool-header">
+              <div>
+                <h3>
+                  <Layers size={18} color="#0284c7" />
+                  Brevo Multi-Account Quota &amp; Limit Monitor
+                </h3>
+                <p>Live real-time limit tracking across your Brevo API key pool. The system automatically jumps to the next account when an account's 300 daily limit is reached.</p>
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: '700', padding: '0.3rem 0.75rem', borderRadius: '8px', background: 'rgba(2, 132, 199, 0.1)', color: '#0284c7', border: '1px solid rgba(2, 132, 199, 0.2)' }}>
+                  Total Capacity: {stats.poolStatus.length * 300} emails/day
+                </span>
+              </div>
+            </div>
+
+            <div className="it-brevo-pool-grid">
+              {stats.poolStatus.map((acc) => {
+                const used = acc.usedCredits !== undefined ? acc.usedCredits : Math.max(0, 300 - (acc.credits !== undefined ? acc.credits : 300))
+                const remaining = acc.credits !== undefined ? acc.credits : 300
+                const percent = Math.min(100, Math.max(0, Math.round((used / 300) * 100)))
+
+                return (
+                  <div
+                    key={acc.index}
+                    className={`it-brevo-account-box ${acc.status === 'exhausted' ? 'exhausted' : acc.isCurrent ? 'active' : 'ready'}`}
+                  >
+                    <div className="it-brevo-box-top">
+                      <span className="it-brevo-account-title">
+                        Account #{acc.index}
+                        {acc.isCurrent && <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} title="Current Active Sender" />}
+                      </span>
+                      <span className={`it-brevo-status-badge ${acc.status === 'exhausted' ? 'exhausted' : acc.isCurrent ? 'active' : 'ready'}`}>
+                        {acc.status === 'exhausted' ? 'Exhausted 🔴' : acc.isCurrent ? 'Active 🟢' : 'Ready ⚪'}
+                      </span>
+                    </div>
+
+                    <div className="it-brevo-account-email" title={acc.email}>
+                      {acc.email}
+                    </div>
+
+                    <div className="it-brevo-quota-stats">
+                      <div className="it-brevo-quota-numbers">
+                        {used} <span>/ 300 sent</span>
+                      </div>
+                      <div className={`it-brevo-remaining-label ${remaining > 0 ? 'good' : 'empty'}`}>
+                        {remaining} left
+                      </div>
+                    </div>
+
+                    <div className="it-brevo-progress-track">
+                      <div
+                        className={`it-brevo-progress-fill ${acc.status === 'exhausted' ? 'exhausted' : acc.isCurrent ? 'active' : 'ready'}`}
+                        style={{ width: `${percent}%` }}
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Resend Bulk Controls */}
         <div className="it-bulk-resend-card">

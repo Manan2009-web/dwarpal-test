@@ -273,6 +273,7 @@ const getQueueStats = asyncHandler(async (req, res) => {
   const distinctQueuedEmails = await QueuedEmail.distinct('to', { context: 'student-onboarding' });
   const neverSentCount = Math.max(totalStudents - distinctQueuedEmails.length, 0);
   const { batchLimit, batchSentCount } = emailQueueService.getBatchLimit();
+  const poolStatus = await emailService.getBrevoPoolStatus().catch(() => []);
 
   return sendSuccess(res, {
     message: 'Email queue stats fetched successfully.',
@@ -285,6 +286,7 @@ const getQueueStats = asyncHandler(async (req, res) => {
       isWorkerPaused,
       batchLimit,
       batchSentCount,
+      poolStatus,
       diagnostics,
       warnings
     }
