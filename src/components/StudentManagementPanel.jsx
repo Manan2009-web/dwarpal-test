@@ -335,12 +335,33 @@ function EmailManagementPanel({ currentUser }) {
   useEffect(() => {
     function handleEmailQueueEvent(event) {
       const data = event?.detail || event
-      if (data?.stats) {
-        setStats((prev) => ({
-          ...prev,
-          ...data.stats,
-          isWorkerPaused: data.isWorkerPaused !== undefined ? data.isWorkerPaused : prev.isWorkerPaused,
-        }))
+      if (data?.stats || data?.type === 'sent') {
+        setStats((prev) => {
+          let updatedPool = data?.stats?.poolStatus;
+          if (!updatedPool && data?.accountIndex && Array.isArray(prev.poolStatus)) {
+            updatedPool = prev.poolStatus.map((acc) => {
+              if (acc.index === data.accountIndex) {
+                const newUsed = Math.min(300, (acc.usedCredits || 0) + 1);
+                const newCredits = Math.max(0, (acc.credits !== undefined ? acc.credits : 300) - 1);
+                const isExh = newCredits === 0;
+                return {
+                  ...acc,
+                  usedCredits: newUsed,
+                  credits: newCredits,
+                  status: isExh ? 'exhausted' : 'active',
+                  isCurrent: !isExh
+                };
+              }
+              return acc;
+            });
+          }
+          return {
+            ...prev,
+            ...(data.stats || {}),
+            poolStatus: updatedPool || prev.poolStatus,
+            isWorkerPaused: data.isWorkerPaused !== undefined ? data.isWorkerPaused : prev.isWorkerPaused,
+          };
+        });
       }
       if (data?.to) {
         setStudents((prev) =>
@@ -659,15 +680,17 @@ function EmailManagementPanel({ currentUser }) {
                 return (
                   <div
                     key={acc.index}
-                    className={`it-brevo-account-box ${acc.status === 'exhausted' ? 'exhausted' : acc.isCurrent ? 'active' : 'ready'}`}
+                    className={`it-brevo-account-box ${acc.status === 'exhausted' ? 'exhausted' : (acc.isCurrent && acc.status !== 'exhausted') ? 'active' : 'ready'}`}
                   >
                     <div className="it-brevo-box-top">
                       <span className="it-brevo-account-title">
                         Account #{acc.index}
-                        {acc.isCurrent && <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} title="Current Active Sender" />}
+                        {acc.isCurrent && acc.status !== 'exhausted' && (
+                          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} title="Current Active Sender" />
+                        )}
                       </span>
-                      <span className={`it-brevo-status-badge ${acc.status === 'exhausted' ? 'exhausted' : acc.isCurrent ? 'active' : 'ready'}`}>
-                        {acc.status === 'exhausted' ? 'Exhausted 🔴' : acc.isCurrent ? 'Active 🟢' : 'Ready ⚪'}
+                      <span className={`it-brevo-status-badge ${acc.status === 'exhausted' ? 'exhausted' : (acc.isCurrent && acc.status !== 'exhausted') ? 'active' : 'ready'}`}>
+                        {acc.status === 'exhausted' ? 'Exhausted 🔴' : (acc.isCurrent && acc.status !== 'exhausted') ? 'Active 🟢' : 'Ready ⚪'}
                       </span>
                     </div>
 

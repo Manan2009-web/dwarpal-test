@@ -441,22 +441,20 @@ async function getBrevoSenderEmail(apiKey, fallbackEmail) {
 async function getBrevoPoolStatus() {
   const keys = getAvailableBrevoKeys();
   const now = Date.now();
-  const results = [];
+  const rawAccounts = [];
 
   for (let i = 0; i < keys.length; i++) {
     const apiKey = keys[i];
     const cached = brevoAccountCache.get(apiKey);
 
-    if (cached && now - cached.lastFetched < 60000) {
-      results.push({
+    if (cached && now - cached.lastFetched < 30000) {
+      rawAccounts.push({
         index: i + 1,
+        apiKey,
         email: cached.email,
         credits: cached.credits,
         maxCredits: 300,
-        usedCredits: Math.max(0, 300 - (cached.credits !== undefined ? cached.credits : 300)),
-        status: cached.credits === 0 || exhaustedBrevoKeys.has(apiKey) ? 'exhausted' : (i === currentBrevoKeyIndex ? 'active' : 'ready'),
-        isCurrent: i === currentBrevoKeyIndex,
-        keyMasked: `...${String(apiKey).slice(-6)}`
+        usedCredits: Math.max(0, 300 - (cached.credits !== undefined ? cached.credits : 300))
       });
       continue;
     }
@@ -490,31 +488,57 @@ async function getBrevoPoolStatus() {
         exhaustedBrevoKeys.set(apiKey, now + 6 * 60 * 60 * 1000);
       }
 
-      results.push({
+      rawAccounts.push({
         index: i + 1,
+        apiKey,
         email: verifiedSender,
         credits,
         maxCredits: 300,
-        usedCredits,
-        status: credits === 0 || exhaustedBrevoKeys.has(apiKey) ? 'exhausted' : (i === currentBrevoKeyIndex ? 'active' : 'ready'),
-        isCurrent: i === currentBrevoKeyIndex,
-        keyMasked: `...${String(apiKey).slice(-6)}`
+        usedCredits
       });
     } catch (err) {
-      results.push({
+      rawAccounts.push({
         index: i + 1,
+        apiKey,
         email: `Account #${i + 1}`,
         credits: 300,
         maxCredits: 300,
-        usedCredits: 0,
-        status: i === currentBrevoKeyIndex ? 'active' : 'ready',
-        isCurrent: i === currentBrevoKeyIndex,
-        keyMasked: `...${String(apiKey).slice(-6)}`
+        usedCredits: 0
       });
     }
   }
 
-  return results;
+  // Find the first account index that has credits > 0 and is not exhausted
+  let firstAvailableIndex = -1;
+  for (let i = 0; i < rawAccounts.length; i++) {
+    const acc = rawAccounts[i];
+    const isExhausted = acc.credits === 0 || exhaustedBrevoKeys.has(acc.apiKey);
+    if (!isExhausted && acc.credits > 0) {
+      firstAvailableIndex = i;
+      break;
+    }
+  }
+
+  if (firstAvailableIndex !== -1) {
+    currentBrevoKeyIndex = firstAvailableIndex;
+  }
+
+  return rawAccounts.map((acc, i) => {
+    const isExhausted = acc.credits === 0 || exhaustedBrevoKeys.has(acc.apiKey);
+    const isCurrent = i === currentBrevoKeyIndex && !isExhausted && acc.credits > 0;
+    const status = isExhausted ? 'exhausted' : isCurrent ? 'active' : 'ready';
+
+    return {
+      index: acc.index,
+      email: acc.email,
+      credits: acc.credits,
+      maxCredits: acc.maxCredits,
+      usedCredits: acc.usedCredits,
+      status,
+      isCurrent,
+      keyMasked: `...${String(acc.apiKey).slice(-6)}`
+    };
+  });
 }
 
 async function sendViaBrevo({ to, subject, text, html }) {
@@ -532,9 +556,13 @@ async function sendViaBrevo({ to, subject, text, html }) {
   for (let attempt = 0; attempt < keys.length; attempt++) {
     const keyIdx = (currentBrevoKeyIndex + attempt) % keys.length;
     const apiKey = keys[keyIdx];
+    const cachedAcc = brevoAccountCache.get(apiKey);
 
-    // If key is marked exhausted, skip unless all keys in the pool are exhausted
-    if (exhaustedBrevoKeys.has(apiKey) && exhaustedBrevoKeys.size < keys.length) {
+    // If key is marked exhausted or known to have 0 credits, skip immediately
+    if (
+      (cachedAcc?.credits === 0 || exhaustedBrevoKeys.has(apiKey)) &&
+      exhaustedBrevoKeys.size < keys.length
+    ) {
       continue;
     }
 
@@ -563,11 +591,17 @@ async function sendViaBrevo({ to, subject, text, html }) {
 
       if (response.ok) {
         currentBrevoKeyIndex = keyIdx; // Persist current active working key
-        const cached = brevoAccountCache.get(apiKey);
-        if (cached) {
-          cached.credits = Math.max(0, (cached.credits || 300) - 1);
-          cached.usedCredits = Math.min(300, (cached.usedCredits || 0) + 1);
+        const cached = brevoAccountCache.get(apiKey) || { credits: 300, usedCredits: 0 };
+        cached.credits = Math.max(0, (cached.credits !== undefined ? cached.credits : 300) - 1);
+        cached.usedCredits = Math.min(300, (cached.usedCredits || 0) + 1);
+        cached.lastFetched = Date.now();
+        brevoAccountCache.set(apiKey, cached);
+
+        if (cached.credits === 0) {
+          markBrevoKeyExhausted(apiKey, 'daily_limit_reached');
+          currentBrevoKeyIndex = (keyIdx + 1) % keys.length;
         }
+
         return {
           mode: 'brevo',
           accountIndex: keyIdx + 1,

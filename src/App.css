@@ -6957,11 +6957,52 @@ button {
   .admin-main > .admin-page-stack,
   .admin-main > .admin-export-page,
   .admin-main > .admin-history-panel,
-  .admin-main > .student-management-panel {
+  .admin-main > .admin-wide-panel,
+  .admin-main > .it-notifications-panel,
+  .admin-main > .student-management-panel,
+  .admin-main > section,
+  .admin-main > div:not(.admin-header) {
     flex: 1;
     overflow-y: auto;
     min-height: 0;
-    padding-bottom: 1.25rem;
+    padding-bottom: 2.5rem;
+    padding-right: 0.35rem;
+    scroll-behavior: smooth;
+  }
+
+  .admin-main > .admin-page-stack::-webkit-scrollbar,
+  .admin-main > .admin-export-page::-webkit-scrollbar,
+  .admin-main > .admin-history-panel::-webkit-scrollbar,
+  .admin-main > .admin-wide-panel::-webkit-scrollbar,
+  .admin-main > .it-notifications-panel::-webkit-scrollbar,
+  .admin-main > .student-management-panel::-webkit-scrollbar,
+  .admin-main > section::-webkit-scrollbar,
+  .admin-main > div::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .admin-main > .admin-page-stack::-webkit-scrollbar-track,
+  .admin-main > .admin-export-page::-webkit-scrollbar-track,
+  .admin-main > .admin-history-panel::-webkit-scrollbar-track,
+  .admin-main > .admin-wide-panel::-webkit-scrollbar-track,
+  .admin-main > .it-notifications-panel::-webkit-scrollbar-track,
+  .admin-main > .student-management-panel::-webkit-scrollbar-track,
+  .admin-main > section::-webkit-scrollbar-track,
+  .admin-main > div::-webkit-scrollbar-track {
+    background: var(--app-surface-soft, #f1f5f9);
+    border-radius: 999px;
+  }
+
+  .admin-main > .admin-page-stack::-webkit-scrollbar-thumb,
+  .admin-main > .admin-export-page::-webkit-scrollbar-thumb,
+  .admin-main > .admin-history-panel::-webkit-scrollbar-thumb,
+  .admin-main > .admin-wide-panel::-webkit-scrollbar-thumb,
+  .admin-main > .it-notifications-panel::-webkit-scrollbar-thumb,
+  .admin-main > .student-management-panel::-webkit-scrollbar-thumb,
+  .admin-main > section::-webkit-scrollbar-thumb,
+  .admin-main > div::-webkit-scrollbar-thumb {
+    background: var(--app-surface-border, #cbd5e1);
+    border-radius: 999px;
   }
   
   .admin-table-wrap {
