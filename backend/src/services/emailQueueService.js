@@ -93,6 +93,27 @@ async function processNextQueuedEmail() {
       if (email.attempts >= 3) {
         email.status = 'failed';
         console.error(`[email-queue] Permanent delivery failure for email to ${recipientLog} after 3 attempts.`);
+        try {
+          const { notifyItStaff } = require('./notificationService');
+          notifyItStaff({
+            title: 'Email Delivery Failure',
+            message: `Permanent delivery failure for onboarding email to ${email.to} after 3 attempts: ${errorMsg}`,
+            type: 'system',
+            severity: 'error',
+            category: 'email',
+            referenceId: email._id.toString(),
+            metadata: {
+              to: email.to,
+              context: email.context,
+              lastError: errorMsg,
+              attempts: email.attempts,
+              subject: email.subject
+            },
+            relatedRoute: '/admin/emails'
+          }).catch(() => {});
+        } catch (alertErr) {
+          // fail safe
+        }
       } else {
         email.status = 'pending'; // Re-queue for next worker run
       }

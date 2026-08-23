@@ -74,6 +74,12 @@ router.post('/email-queue/resend-all', protect, requireVerifiedEmail, authorize(
 router.post('/email-queue/resend-selected', protect, requireVerifiedEmail, authorize('it', 'admin'), adminController.queueSelectedStudents);
 router.post('/email-queue/retry-failed', protect, requireVerifiedEmail, authorize('it', 'admin'), adminController.retryFailedEmails);
 
+// IT Notifications & System Errors
+router.get('/it-notifications', protect, requireVerifiedEmail, authorize('it', 'admin'), adminController.listItNotifications);
+router.get('/it-notifications/stats', protect, requireVerifiedEmail, authorize('it', 'admin'), adminController.getItNotificationStats);
+router.post('/it-notifications/test', protect, requireVerifiedEmail, authorize('it', 'admin'), adminController.createTestItNotification);
+router.post('/it-notifications/clear', protect, requireVerifiedEmail, authorize('it', 'admin'), adminController.clearItNotifications);
+
 router.get('/export/options', requireAuth, requireVerifiedEmail, allowAdminAccess, scopeFilterMiddleware, exportController.getOptions);
 router.get('/export/preview', requireAuth, requireVerifiedEmail, allowAdminAccess, scopeFilterMiddleware, exportController.getPreview);
 router.post('/export/preview', requireAuth, requireVerifiedEmail, allowAdminAccess, scopeFilterMiddleware, exportController.getPreview);

@@ -228,6 +228,8 @@ const env = {
   ),
   emailFrom: normalizeEnvString(process.env.EMAIL_FROM) || 'DwarPal <onboarding@dwarpal.dcpartners.dev>',
   resendApiKey: normalizeEnvString(process.env.RESEND_API_KEY),
+  brevoApiKey: normalizeEnvString(process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY),
+  sendgridApiKey: normalizeEnvString(process.env.SENDGRID_API_KEY),
   smtpHost: normalizeEnvString(process.env.SMTP_HOST),
   smtpPort: parsePositiveIntegerEnv(process.env.SMTP_PORT, 587),
   smtpUser: normalizeEnvString(process.env.SMTP_USER).toLowerCase(),

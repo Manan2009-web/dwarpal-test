@@ -553,10 +553,13 @@ export function NotificationProvider({ children, currentUser, notificationPermis
     }
 
     function handleNotificationCreated(notification) {
-      if (!notification?.id) {
-        return
-      }
+      handleIncomingNotification(notification)
+    }
 
+    function handleItNotificationCreated(notification) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('dwarpal:it_notification', { detail: notification }))
+      }
       handleIncomingNotification(notification)
     }
 
@@ -612,6 +615,7 @@ export function NotificationProvider({ children, currentUser, notificationPermis
     socket.on('connect_error', handleConnectError)
     socket.io.on('reconnect_attempt', handleReconnectAttempt)
     socket.on('notification:created', handleNotificationCreated)
+    socket.on('it:notification:created', handleItNotificationCreated)
     socket.on('notification:read', handleNotificationRead)
     socket.on('notification:read-all', handleNotificationReadAll)
 
@@ -621,6 +625,7 @@ export function NotificationProvider({ children, currentUser, notificationPermis
       socket.off('connect_error', handleConnectError)
       socket.io.off('reconnect_attempt', handleReconnectAttempt)
       socket.off('notification:created', handleNotificationCreated)
+      socket.off('it:notification:created', handleItNotificationCreated)
       socket.off('notification:read', handleNotificationRead)
       socket.off('notification:read-all', handleNotificationReadAll)
       socket.disconnect()

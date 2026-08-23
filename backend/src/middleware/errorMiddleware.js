@@ -86,6 +86,32 @@ function errorHandler(err, req, res, next) {
       message: originalError.message || 'Internal server error',
       stack: originalError.stack || null
     }));
+
+    try {
+      const { emitItAlert } = require('../services/realtimeService');
+      emitItAlert({
+        id: `err_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        title: `Server Error ${error.statusCode || 500}: ${req.method} ${req.originalUrl}`,
+        message: originalError.message || 'Internal server error occurred',
+        type: 'system',
+        severity: 'critical',
+        category: 'system',
+        referenceId: correlationId,
+        metadata: {
+          correlationId,
+          method: req.method,
+          path: req.originalUrl,
+          statusCode: error.statusCode || 500,
+          errorCode: error.publicErrorCode || 'ERR_INTERNAL',
+          timestamp: new Date().toISOString()
+        },
+        relatedRoute: '/admin/notifications',
+        createdAt: new Date().toISOString(),
+        isRead: false
+      });
+    } catch (e) {
+      // safe fallback
+    }
   } else {
     console.warn(JSON.stringify({
       level: 'warn',

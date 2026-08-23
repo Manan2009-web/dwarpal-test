@@ -23,7 +23,12 @@ function isSmtpConfigured() {
 }
 
 function isEmailConfigured() {
-  return isSmtpConfigured() || Boolean(env.resendApiKey && (env.emailFrom || env.smtpFromEmail));
+  return (
+    Boolean(env.resendApiKey) ||
+    Boolean(env.brevoApiKey) ||
+    Boolean(env.sendgridApiKey) ||
+    isSmtpConfigured()
+  );
 }
 
 function normalizeEmailAddress(value) {
@@ -124,8 +129,8 @@ function getSmtpConfigurationWarnings() {
     warnings.push('EMAIL_FROM or SMTP_FROM_EMAIL should use the same Gmail address as SMTP_USER.');
   }
 
-  if (!env.resendApiKey && (process.env.RENDER || process.env.RENDER_SERVICE_ID)) {
-    warnings.push('Render Free Tier blocks outbound SMTP ports 587 & 465. Add RESEND_API_KEY to your Render environment variables to deliver emails via HTTPS without port restrictions.');
+  if (!env.resendApiKey && !env.brevoApiKey && !env.sendgridApiKey && (process.env.RENDER || process.env.RENDER_SERVICE_ID)) {
+    warnings.push('Render Free Tier blocks outbound SMTP ports 587 & 465. Add BREVO_API_KEY or RESEND_API_KEY to your Render environment variables to deliver emails via HTTPS without port restrictions.');
   }
 
   return warnings;
@@ -178,7 +183,7 @@ function createOtpEmailError(code, statusCode = 503, message = OTP_EMAIL_FAILURE
 function createSmtpOperationTimeoutError(timeoutMs) {
   const isRender = Boolean(process.env.RENDER || process.env.RENDER_SERVICE_ID);
   const hint = isRender
-    ? ' (Render Free Tier blocks outbound SMTP ports 587/465. Add RESEND_API_KEY to Render environment variables to send emails via HTTPS).'
+    ? ' (Render Free Tier blocks outbound SMTP ports 587/465. Add BREVO_API_KEY or RESEND_API_KEY to Render environment variables to send emails via HTTPS).'
     : '';
   const error = new Error(`SMTP operation timed out after ${timeoutMs}ms.${hint}`);
   error.code = 'ETIMEDOUT';
@@ -383,7 +388,83 @@ async function sendViaResend({ to, subject, text, html }) {
   };
 }
 
+async function sendViaBrevo({ to, subject, text, html }) {
+  const fromEmail = env.smtpFromEmail || env.smtpUser || env.emailFrom || 'dwarpal@neotech.ac.in';
+  const name = String(env.smtpFromName || 'DwarPal').trim();
+
+  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': env.brevoApiKey,
+      'Content-Type': 'application/json',
+      Accept: 'application/json'
+    },
+    body: JSON.stringify({
+      sender: { name, email: fromEmail },
+      to: [{ email: String(to || '').trim() }],
+      subject,
+      htmlContent: html,
+      textContent: text
+    })
+  });
+
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(payload?.message || payload?.error || `Brevo API returned status ${response.status}`);
+  }
+
+  return {
+    mode: 'brevo',
+    messageId: payload?.messageId,
+    providerResponse: payload
+  };
+}
+
+async function sendViaSendGrid({ to, subject, text, html }) {
+  const fromEmail = env.smtpFromEmail || env.smtpUser || env.emailFrom || 'dwarpal@neotech.ac.in';
+  const name = String(env.smtpFromName || 'DwarPal').trim();
+
+  const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.sendgridApiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      personalizations: [{ to: [{ email: String(to || '').trim() }] }],
+      from: { name, email: fromEmail },
+      subject,
+      content: [
+        { type: 'text/plain', value: text },
+        { type: 'text/html', value: html }
+      ]
+    })
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload?.errors?.[0]?.message || `SendGrid API returned status ${response.status}`);
+  }
+
+  return {
+    mode: 'sendgrid',
+    status: response.status
+  };
+}
+
 async function sendMail({ to, subject, html, text, context = 'otp' }) {
+  if (env.brevoApiKey) {
+    try {
+      console.info(`[email] Attempting to send email via Brevo API to ${maskEmail(to)}`);
+      const res = await sendViaBrevo({ to, subject, text, html });
+      console.info(`[email] Brevo delivery succeeded for ${maskEmail(to)}`);
+      return res;
+    } catch (error) {
+      console.warn(`[email] Brevo API failed: ${error.message}. Trying next provider.`, { to: maskEmail(to) });
+    }
+  }
+
   if (env.resendApiKey) {
     try {
       console.info(`[email] Attempting to send email via Resend API to ${maskEmail(to)}`);
@@ -391,7 +472,18 @@ async function sendMail({ to, subject, html, text, context = 'otp' }) {
       console.info(`[email] Resend delivery succeeded for ${maskEmail(to)}`);
       return res;
     } catch (error) {
-      console.warn(`[email] Resend API failed: ${error.message}. Falling back to SMTP.`, { to: maskEmail(to) });
+      console.warn(`[email] Resend API failed: ${error.message}. Trying next provider.`, { to: maskEmail(to) });
+    }
+  }
+
+  if (env.sendgridApiKey) {
+    try {
+      console.info(`[email] Attempting to send email via SendGrid API to ${maskEmail(to)}`);
+      const res = await sendViaSendGrid({ to, subject, text, html });
+      console.info(`[email] SendGrid delivery succeeded for ${maskEmail(to)}`);
+      return res;
+    } catch (error) {
+      console.warn(`[email] SendGrid API failed: ${error.message}. Falling back to SMTP.`, { to: maskEmail(to) });
     }
   }
 

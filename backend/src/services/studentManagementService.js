@@ -950,6 +950,33 @@ async function bulkCreateStudents(rows, actor, requestMeta = {}) {
     requestMeta
   });
 
+  if (rejected.length > 0 || added.length > 0) {
+    try {
+      const { notifyItStaff } = require('./notificationService');
+      notifyItStaff({
+        title: rejected.length > 0
+          ? `Bulk Upload: ${rejected.length} Row(s) Rejected`
+          : `Bulk Upload: ${added.length} Students Registered`,
+        message: `Processed ${rows.length} rows: ${added.length} added, ${rejected.length} rejected with validation errors.`,
+        type: 'system',
+        severity: rejected.length > 0 ? (added.length === 0 ? 'critical' : 'warning') : 'info',
+        category: 'upload',
+        referenceId: batchId,
+        metadata: {
+          batchId,
+          totalRows: rows.length,
+          addedCount: added.length,
+          rejectedCount: rejected.length,
+          actor: actor?.fullName || actor?.email,
+          rejectedPreview: rejected.slice(0, 5)
+        },
+        relatedRoute: '/admin/students'
+      }).catch(() => {});
+    } catch (notifyErr) {
+      // safe fallback
+    }
+  }
+
   return {
     added,
     rejected,

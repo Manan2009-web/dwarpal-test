@@ -35,9 +35,11 @@ import {
   UserPlus,
   XCircle,
   Mail,
+  Bell,
 } from 'lucide-react'
 import AppBrand from './AppBrand'
 import StudentManagementPanel from './StudentManagementPanel'
+import ItNotificationsPanel from './ItNotificationsPanel'
 import { useToast } from './ToastProvider'
 import { SkeletonTableRows, SkeletonGatepassCard } from './ui/SkeletonLoader'
 import {
@@ -122,6 +124,7 @@ function getAdminNavItems(currentUser) {
       { key: 'students', label: 'Add Student', icon: UserPlus, to: '/admin/students' },
       { key: 'student-history', label: 'Student Reg History', icon: BookOpen, to: '/admin/student-history' },
       { key: 'emails', label: 'Email Management', icon: Mail, to: '/admin/emails' },
+      { key: 'notifications', label: 'IT Notifications & Errors', icon: Bell, to: '/admin/notifications' },
       { key: 'settings', label: 'Settings', icon: SlidersVertical, to: '/admin/settings' }
     ]
   }
@@ -363,6 +366,15 @@ function AdminHeader({ currentUser, title, subtitle, onRefresh, refreshing, onTo
             <CircleHelp size={18} strokeWidth={1.5} />
           </button>
         ) : null}
+
+        <Link
+          className="admin-icon-button"
+          to={currentUser?.role === 'it' ? '/admin/notifications' : '/admin/notifications'}
+          title="IT Notifications & Error Center"
+          aria-label="IT Notifications & Error Center"
+        >
+          <Bell size={18} strokeWidth={1.5} />
+        </Link>
         
         <Link
           className="admin-icon-button"
@@ -1794,7 +1806,7 @@ export default function AdminPortal({ currentUser, onLogout, onOpenSupport = nul
     if (isCoord && ['faculty', 'coordinators', 'settings', 'history'].includes(activeSection)) {
       navigate('/admin/dashboard', { replace: true })
     }
-    if (currentUser?.role === 'it' && !['students', 'student-history', 'emails', 'settings'].includes(activeSection)) {
+    if (currentUser?.role === 'it' && !['students', 'student-history', 'emails', 'notifications', 'settings'].includes(activeSection)) {
       navigate('/admin/students', { replace: true })
     }
     if (currentUser?.role === 'cao' && activeSection === 'students') {
@@ -2031,6 +2043,8 @@ export default function AdminPortal({ currentUser, onLogout, onOpenSupport = nul
     gatepasses: 'Gatepass Operations',
     students: currentUser?.role === 'it' ? 'Add Student' : 'Students',
     'student-history': 'Student Registration History',
+    emails: 'Email Queue Management',
+    notifications: 'IT Notifications & Error Center',
     faculty: 'Faculty',
     coordinators: 'Coordinators',
     reports: 'Reports',
@@ -2092,6 +2106,13 @@ export default function AdminPortal({ currentUser, onLogout, onOpenSupport = nul
         {activeSection === 'reports' ? <ReportsPage preview={preview} /> : null}
 
         {showStudentManagement ? <StudentManagementPanel currentUser={currentUser} activeSection={activeSection} /> : null}
+
+        {activeSection === 'notifications' ? (
+          <ItNotificationsPanel
+            currentUser={currentUser}
+            onNavigateSection={(sec) => navigate(`/admin/${sec}`)}
+          />
+        ) : null}
 
         {activeSection === 'settings' ? <SettingsPage currentUser={currentUser} options={options} /> : null}
 

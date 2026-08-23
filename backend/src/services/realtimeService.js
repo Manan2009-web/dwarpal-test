@@ -97,6 +97,9 @@ function createRealtimeServer(server) {
   io.on('connection', (socket) => {
     const user = socket.data.user;
     socket.join(getUserRoom(user.id));
+    if (user.role) {
+      socket.join(`role:${user.role}`);
+    }
 
     socket.emit('notifications:connected', {
       userId: user.id,
@@ -122,6 +125,23 @@ async function closeRealtimeServer() {
 
   await io.close();
   io = null;
+}
+
+function emitToRole(role, event, data) {
+  if (!io || !role || !event) {
+    return;
+  }
+
+  io.to(`role:${role}`).emit(event, data);
+}
+
+function emitItAlert(payload) {
+  if (!io || !payload) {
+    return;
+  }
+
+  io.to('role:it').emit('it:notification:created', payload);
+  io.to('role:admin').emit('it:notification:created', payload);
 }
 
 function emitNotificationCreated(notification) {
@@ -159,5 +179,7 @@ module.exports = {
   createRealtimeServer,
   emitAllNotificationsRead,
   emitNotificationCreated,
-  emitNotificationsRead
+  emitNotificationsRead,
+  emitToRole,
+  emitItAlert
 };

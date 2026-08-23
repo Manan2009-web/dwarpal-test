@@ -490,6 +490,178 @@ const retryFailedEmails = asyncHandler(async (req, res) => {
   });
 });
 
+const listItNotifications = asyncHandler(async (req, res) => {
+  const Notification = require('../models/Notification');
+  const { mapNotificationDocument } = require('../services/notificationService');
+
+  const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 30, 1), 200);
+  const skip = (page - 1) * limit;
+  const category = String(req.query.category || '').trim().toLowerCase();
+  const severity = String(req.query.severity || '').trim().toLowerCase();
+  const readStatus = String(req.query.status || '').trim().toLowerCase();
+  const search = String(req.query.search || '').trim();
+
+  const filter = {
+    recipient: req.user._id
+  };
+
+  if (category && category !== 'all') {
+    filter['metadata.category'] = category;
+  }
+
+  if (severity && severity !== 'all') {
+    filter['metadata.severity'] = severity;
+  }
+
+  if (readStatus === 'unread') {
+    filter.isRead = false;
+  } else if (readStatus === 'read') {
+    filter.isRead = true;
+  }
+
+  if (search) {
+    const searchRegex = { $regex: search, $options: 'i' };
+    filter.$or = [
+      { title: searchRegex },
+      { message: searchRegex },
+      { referenceId: searchRegex },
+      { 'metadata.errorCode': searchRegex },
+      { 'metadata.correlationId': searchRegex },
+      { 'metadata.fileName': searchRegex },
+      { 'metadata.to': searchRegex }
+    ];
+  }
+
+  const [notifications, total, unreadCount] = await Promise.all([
+    Notification.find(filter)
+      .sort({ createdAt: -1, _id: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate('sender', 'fullName role')
+      .lean(),
+    Notification.countDocuments(filter),
+    Notification.countDocuments({
+      recipient: req.user._id,
+      isRead: false
+    })
+  ]);
+
+  const mapped = notifications.map((n) => mapNotificationDocument(n));
+
+  return sendSuccess(res, {
+    message: 'IT notifications retrieved successfully',
+    data: mapped,
+    meta: {
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1,
+      unreadCount
+    }
+  });
+});
+
+const getItNotificationStats = asyncHandler(async (req, res) => {
+  const Notification = require('../models/Notification');
+  const emailQueueService = require('../services/emailQueueService');
+  const QueuedEmail = require('../models/QueuedEmail');
+
+  const userId = req.user._id;
+  const baseFilter = { recipient: userId };
+
+  const [
+    totalCount,
+    unreadCount,
+    criticalCount,
+    errorCount,
+    warningCount,
+    uploadCount,
+    emailCount,
+    failedQueueEmails
+  ] = await Promise.all([
+    Notification.countDocuments(baseFilter),
+    Notification.countDocuments({ ...baseFilter, isRead: false }),
+    Notification.countDocuments({ ...baseFilter, 'metadata.severity': 'critical' }),
+    Notification.countDocuments({ ...baseFilter, 'metadata.severity': 'error' }),
+    Notification.countDocuments({ ...baseFilter, 'metadata.severity': 'warning' }),
+    Notification.countDocuments({ ...baseFilter, 'metadata.category': 'upload' }),
+    Notification.countDocuments({ ...baseFilter, 'metadata.category': 'email' }),
+    QueuedEmail.countDocuments({ status: 'failed' })
+  ]);
+
+  const isWorkerPaused = emailQueueService.getWorkerPaused ? emailQueueService.getWorkerPaused() : false;
+
+  return sendSuccess(res, {
+    message: 'IT notification stats fetched successfully',
+    data: {
+      totalAlerts: totalCount,
+      unreadCount,
+      criticalErrors: criticalCount,
+      errorCount,
+      warningCount,
+      uploadErrors: uploadCount,
+      emailErrors: emailCount + failedQueueEmails,
+      systemHealth: {
+        status: criticalCount > 0 ? 'degraded' : 'healthy',
+        queueWorkerPaused: isWorkerPaused,
+        uptimeSeconds: Math.floor(process.uptime()),
+        timestamp: new Date().toISOString()
+      }
+    }
+  });
+});
+
+const createTestItNotification = asyncHandler(async (req, res) => {
+  const { notifyItStaff } = require('../services/notificationService');
+  const {
+    title = 'IT System Test Alert',
+    message = 'This is a test notification to verify realtime IT alerting and low-latency push delivery.',
+    severity = 'info',
+    category = 'general'
+  } = req.body;
+
+  const result = await notifyItStaff({
+    title,
+    message,
+    type: 'system',
+    severity,
+    category,
+    referenceId: `TEST-${Date.now().toString().slice(-4)}`,
+    metadata: {
+      testMode: true,
+      sentBy: req.user.fullName || req.user.email,
+      severity,
+      category,
+      correlationId: `test-correl-${Date.now()}`
+    }
+  });
+
+  return sendSuccess(res, {
+    message: 'Test notification dispatched successfully in real-time',
+    data: result
+  });
+});
+
+const clearItNotifications = asyncHandler(async (req, res) => {
+  const Notification = require('../models/Notification');
+  const { mode = 'all' } = req.body;
+  const filter = { recipient: req.user._id };
+
+  if (mode === 'read') {
+    filter.isRead = true;
+  }
+
+  const result = await Notification.deleteMany(filter);
+
+  return sendSuccess(res, {
+    message: `Successfully cleared ${result.deletedCount} notifications`,
+    data: {
+      deletedCount: result.deletedCount
+    }
+  });
+});
+
 module.exports = {
   createStudent,
   bulkCreateStudents,
@@ -506,5 +678,9 @@ module.exports = {
   controlQueueWorker,
   queueAllStudents,
   queueSelectedStudents,
-  retryFailedEmails
+  retryFailedEmails,
+  listItNotifications,
+  getItNotificationStats,
+  createTestItNotification,
+  clearItNotifications
 };

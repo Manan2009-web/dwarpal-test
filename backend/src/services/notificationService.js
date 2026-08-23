@@ -5,7 +5,8 @@ const { buildPaginationMeta, getPagination } = require('../utils/pagination');
 const {
   emitAllNotificationsRead,
   emitNotificationCreated,
-  emitNotificationsRead
+  emitNotificationsRead,
+  emitItAlert
 } = require('./realtimeService');
 const { sendPushNotification } = require('./pushNotificationService');
 
@@ -434,11 +435,78 @@ async function markAllNotificationsAsRead(actor) {
   };
 }
 
+async function notifyItStaff({
+  title,
+  message,
+  type = 'system',
+  severity = 'error',
+  category = 'system',
+  referenceId = '',
+  metadata = {},
+  relatedRoute = '/admin/notifications'
+}) {
+  try {
+    const itStaffUsers = await User.find({
+      role: { $in: ['it', 'admin'] },
+      isActive: true
+    }).select('_id role fullName').lean();
+
+    const timestamp = new Date().toISOString();
+    const alertPayload = {
+      id: `it_alert_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      title,
+      message,
+      type,
+      severity,
+      category,
+      referenceId,
+      metadata: {
+        ...metadata,
+        severity,
+        category,
+        timestamp
+      },
+      relatedRoute,
+      createdAt: timestamp,
+      isRead: false
+    };
+
+    emitItAlert(alertPayload);
+
+    if (!itStaffUsers.length) {
+      return [alertPayload];
+    }
+
+    const notificationsToCreate = itStaffUsers.map((itUser) => ({
+      recipient: itUser._id,
+      recipientRole: itUser.role,
+      title,
+      message,
+      type,
+      status: severity === 'critical' || severity === 'error' ? 'rejected' : 'info',
+      recordType: 'system',
+      referenceId: referenceId || (metadata.correlationId || ''),
+      relatedRoute,
+      metadata: {
+        ...metadata,
+        severity,
+        category
+      }
+    }));
+
+    return await createBulkNotifications(notificationsToCreate);
+  } catch (error) {
+    console.error('[notifications] Failed to notify IT staff:', error.message || error);
+    return [];
+  }
+}
+
 module.exports = {
   createBulkNotifications,
   getNotificationsForUser,
   getUnreadNotificationCount,
   mapNotificationDocument,
   markAllNotificationsAsRead,
-  markNotificationAsRead
+  markNotificationAsRead,
+  notifyItStaff
 };

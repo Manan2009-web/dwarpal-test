@@ -3299,4 +3299,50 @@ export async function resignCoordinator(classDetails) {
   });
 }
 
+export async function fetchItNotifications(params = {}, signal) {
+  const payload = await apiRequest(`/admin/it-notifications${buildQueryString(params)}`, { signal })
+  return {
+    notifications: Array.isArray(payload?.data) ? payload.data : [],
+    meta: payload?.meta || {},
+    unreadCount: Number(payload?.meta?.unreadCount || 0),
+  }
+}
+
+export async function fetchItNotificationStats(signal) {
+  const payload = await apiRequest('/admin/it-notifications/stats', { signal })
+  return (
+    payload?.data || {
+      totalAlerts: 0,
+      unreadCount: 0,
+      criticalErrors: 0,
+      errorCount: 0,
+      warningCount: 0,
+      uploadErrors: 0,
+      emailErrors: 0,
+      systemHealth: {
+        status: 'healthy',
+        queueWorkerPaused: false,
+        uptimeSeconds: 0,
+        timestamp: new Date().toISOString(),
+      },
+    }
+  )
+}
+
+export async function createTestItNotification(data = {}) {
+  const payload = await apiRequest('/admin/it-notifications/test', {
+    method: 'POST',
+    body: data,
+  })
+  return payload?.data || null
+}
+
+export async function clearItNotifications(mode = 'all') {
+  const payload = await apiRequest('/admin/it-notifications/clear', {
+    method: 'POST',
+    body: { mode },
+  })
+  return payload?.data || { deletedCount: 0 }
+}
+
 export { ApiError }
