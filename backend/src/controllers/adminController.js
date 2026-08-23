@@ -272,6 +272,8 @@ const getQueueStats = asyncHandler(async (req, res) => {
   // Calculate "never sent" count
   const distinctQueuedEmails = await QueuedEmail.distinct('to', { context: 'student-onboarding' });
   const neverSentCount = Math.max(totalStudents - distinctQueuedEmails.length, 0);
+  const emailQueueService = require('../services/emailQueueService');
+  const { batchLimit, batchSentCount } = emailQueueService.getBatchLimit();
 
   return sendSuccess(res, {
     message: 'Email queue stats fetched successfully.',
@@ -282,6 +284,8 @@ const getQueueStats = asyncHandler(async (req, res) => {
       failedCount: statsMap.failed,
       neverSentCount,
       isWorkerPaused,
+      batchLimit,
+      batchSentCount,
       diagnostics,
       warnings
     }
@@ -312,9 +316,14 @@ const queueAllStudents = asyncHandler(async (req, res) => {
   const User = require('../models/User');
   const { decryptTemporaryCredential } = require('../utils/temporaryCredential');
   const { sendStudentOnboardingEmail } = require('../services/emailService');
+  const emailQueueService = require('../services/emailQueueService');
 
   const limit = Math.max(parseInt(req.body.limit, 10) || 0, 0);
   const filterType = String(req.body.filterType || 'failed_only'); // 'all' | 'failed_only'
+
+  if (limit > 0) {
+    emailQueueService.setBatchLimit(limit);
+  }
 
   // Get all students matching criteria
   const matchStage = { role: 'student' };

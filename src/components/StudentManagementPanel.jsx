@@ -301,10 +301,21 @@ function EmailManagementPanel({ currentUser }) {
   const [totalPages, setTotalPages] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const [selectedIds, setSelectedIds] = useState([])
-  const [resendLimit, setResendLimit] = useState(300)
+  const [resendLimit, setResendLimit] = useState(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('dwarpal_email_batch_limit') : null
+    return saved !== null ? Math.max(parseInt(saved, 10) || 0, 0) : 300
+  })
   const [resendFilter, setResendFilter] = useState('failed_only') // 'failed_only' | 'all'
   const [submitting, setSubmitting] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
+
+  const handleLimitChange = (val) => {
+    const num = Math.max(parseInt(val, 10) || 0, 0)
+    setResendLimit(num)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('dwarpal_email_batch_limit', String(num))
+    }
+  }
 
   // Fetch Stats
   const loadStats = useCallback(async (signal) => {
@@ -318,6 +329,39 @@ function EmailManagementPanel({ currentUser }) {
         console.error('Failed to load email queue stats:', err)
       }
     }
+  }, [])
+
+  // Real-time live sync for email queue events
+  useEffect(() => {
+    function handleEmailQueueEvent(event) {
+      const data = event?.detail || event
+      if (data?.stats) {
+        setStats((prev) => ({
+          ...prev,
+          ...data.stats,
+          isWorkerPaused: data.isWorkerPaused !== undefined ? data.isWorkerPaused : prev.isWorkerPaused,
+        }))
+      }
+      if (data?.to) {
+        setStudents((prev) =>
+          prev.map((student) => {
+            if (student.email?.toLowerCase() === data.to?.toLowerCase()) {
+              return {
+                ...student,
+                emailStatus: data.type === 'sent' ? 'sent' : (data.attempts >= 3 ? 'failed' : 'sending'),
+                emailSentCount: data.type === 'sent' ? (student.emailSentCount || 0) + 1 : student.emailSentCount,
+                emailAttempts: data.attempts !== undefined ? data.attempts : student.emailAttempts,
+                emailUpdatedAt: new Date().toISOString(),
+              }
+            }
+            return student
+          }),
+        )
+      }
+    }
+
+    window.addEventListener('dwarpal:email_queue_event', handleEmailQueueEvent)
+    return () => window.removeEventListener('dwarpal:email_queue_event', handleEmailQueueEvent)
   }, [])
 
   // Fetch Students
@@ -595,6 +639,11 @@ function EmailManagementPanel({ currentUser }) {
               <h3>
                 <Mail size={18} color="#0284c7" />
                 Bulk Resend Onboarding Credentials
+                {stats.batchLimit > 0 && (
+                  <span style={{ fontSize: '0.75rem', fontWeight: '700', padding: '0.2rem 0.55rem', borderRadius: '6px', background: 'rgba(2, 132, 199, 0.1)', color: '#0284c7', border: '1px solid rgba(2, 132, 199, 0.2)' }}>
+                    Batch Progress: {stats.batchSentCount || 0} / {stats.batchLimit} sent
+                  </span>
+                )}
               </h3>
               <p>Trigger throttled bulk delivery of temporary passwords and portal activation codes to student inboxes.</p>
             </div>
@@ -602,11 +651,11 @@ function EmailManagementPanel({ currentUser }) {
           
           <div className="it-bulk-resend-grid">
             <div className="it-bulk-field">
-              <label>Daily / Batch Limit</label>
+              <label>Daily / Batch Limit (Auto-Saved)</label>
               <input
                 type="number"
                 value={resendLimit}
-                onChange={e => setResendLimit(Math.max(parseInt(e.target.value, 10) || 0, 0))}
+                onChange={e => handleLimitChange(e.target.value)}
               />
             </div>
 

@@ -4,10 +4,55 @@ const env = require('../config/env');
 let workerIntervalId = null;
 const QUEUE_WORKER_INTERVAL_MS = 8000; // 8 seconds delay
 let isWorkerPaused = false;
+let batchLimit = 0; // 0 = unlimited
+let batchSentCount = 0;
+
+function setBatchLimit(limit) {
+  batchLimit = Math.max(0, parseInt(limit, 10) || 0);
+  batchSentCount = 0; // reset batch progress counter for new batch
+  console.info(`[email-queue] Batch limit set to: ${batchLimit}`);
+  if (batchLimit > 0 && isWorkerPaused) {
+    setWorkerPaused(false);
+  }
+}
+
+function getBatchLimit() {
+  return { batchLimit, batchSentCount };
+}
+
+async function getQueueStatsData() {
+  const [sentCount, pendingCount, failedCount] = await Promise.all([
+    QueuedEmail.countDocuments({ status: 'sent' }),
+    QueuedEmail.countDocuments({ status: { $in: ['pending', 'sending'] } }),
+    QueuedEmail.countDocuments({ status: 'failed' })
+  ]);
+  return {
+    sentCount,
+    pendingCount,
+    failedCount,
+    isWorkerPaused,
+    batchSentCount,
+    batchLimit
+  };
+}
+
+function emitEmailQueueEvent(type, payload = {}) {
+  try {
+    const { emitToRole } = require('./realtimeService');
+    const eventData = { type, ...payload };
+    emitToRole('it', 'email:queue:event', eventData);
+    emitToRole('admin', 'email:queue:event', eventData);
+  } catch (err) {
+    // safe fallback
+  }
+}
 
 function setWorkerPaused(paused) {
   isWorkerPaused = Boolean(paused);
   console.info(`[email-queue] Worker status changed: ${isWorkerPaused ? 'PAUSED' : 'ACTIVE'}`);
+  getQueueStatsData().then((stats) => {
+    emitEmailQueueEvent('worker_status', { isWorkerPaused, stats });
+  }).catch(() => {});
 }
 
 function getWorkerPaused() {
@@ -22,6 +67,8 @@ async function recoverStuckSendingEmails() {
     );
     if (res.modifiedCount > 0) {
       console.info(`[email-queue] Recovered ${res.modifiedCount} stuck sending email(s) back to pending.`);
+      const stats = await getQueueStatsData();
+      emitEmailQueueEvent('recovered', { stats });
     }
   } catch (err) {
     console.warn('[email-queue] Failed to recover stuck sending emails:', err.message);
@@ -35,6 +82,8 @@ async function retryAllFailedEmails() {
   );
   if (res.modifiedCount > 0) {
     setWorkerPaused(false);
+    const stats = await getQueueStatsData();
+    emitEmailQueueEvent('retried_all', { count: res.modifiedCount, stats });
   }
   return res.modifiedCount || 0;
 }
@@ -46,6 +95,18 @@ async function processNextQueuedEmail() {
   if (isWorkerPaused) {
     return;
   }
+
+  // Check if batch limit was set and reached
+  if (batchLimit > 0 && batchSentCount >= batchLimit) {
+    if (!isWorkerPaused) {
+      setWorkerPaused(true);
+      console.info(`[email-queue] Batch limit of ${batchLimit} reached. Worker paused automatically.`);
+      const stats = await getQueueStatsData();
+      emitEmailQueueEvent('limit_reached', { batchLimit, batchSentCount, stats });
+    }
+    return;
+  }
+
   try {
     // Find the oldest pending email, lock it by setting status to 'sending'
     const email = await QueuedEmail.findOneAndUpdate(
@@ -82,7 +143,16 @@ async function processNextQueuedEmail() {
       email.sentAt = new Date();
       await email.save();
 
-      console.info(`[email-queue] Email successfully delivered to ${recipientLog}`);
+      batchSentCount += 1;
+      console.info(`[email-queue] Email successfully delivered to ${recipientLog} (Batch progress: ${batchSentCount}/${batchLimit || 'unlimited'})`);
+
+      if (batchLimit > 0 && batchSentCount >= batchLimit) {
+        setWorkerPaused(true);
+        console.info(`[email-queue] Batch limit of ${batchLimit} reached after delivery. Worker paused.`);
+      }
+
+      const stats = await getQueueStatsData();
+      emitEmailQueueEvent('sent', { emailId: email._id, to: email.to, stats, batchSentCount, batchLimit });
     } catch (sendError) {
       const errorMsg = sendError.smtpFailure?.errorMessage || sendError.message || String(sendError);
       console.warn(`[email-queue] Failed to deliver email to ${recipientLog}: ${errorMsg}`);
@@ -119,6 +189,15 @@ async function processNextQueuedEmail() {
       }
 
       await email.save();
+
+      const stats = await getQueueStatsData();
+      emitEmailQueueEvent('failed', {
+        emailId: email._id,
+        to: email.to,
+        error: errorMsg,
+        attempts: email.attempts,
+        stats
+      });
     }
   } catch (error) {
     console.error('[email-queue] Database error in queue processor:', error);
@@ -203,6 +282,9 @@ module.exports = {
   stopEmailQueueWorker,
   getWorkerPaused,
   setWorkerPaused,
+  setBatchLimit,
+  getBatchLimit,
+  getQueueStatsData,
   retryAllFailedEmails,
   recoverStuckSendingEmails
 };

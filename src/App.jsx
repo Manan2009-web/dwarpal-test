@@ -2028,11 +2028,13 @@ function App() {
   function renderAdminRoute() {
     return (
       <AdminRoute currentUser={currentUser} authReady={authReady}>
-        <div className={requiresEmailVerification ? 'app-shell-lock-surface' : ''} aria-hidden={requiresEmailVerification}>
-          <Suspense fallback={<LoadingSpinner />}>
-            <AdminPortal currentUser={currentUser} onLogout={logout} onOpenSupport={() => setSupportModalOpen(true)} onResign={handleResignCoordinator} />
-          </Suspense>
-        </div>
+        <NotificationProvider currentUser={currentUser}>
+          <div className={requiresEmailVerification ? 'app-shell-lock-surface' : ''} aria-hidden={requiresEmailVerification}>
+            <Suspense fallback={<LoadingSpinner />}>
+              <AdminPortal currentUser={currentUser} onLogout={logout} onOpenSupport={() => setSupportModalOpen(true)} onResign={handleResignCoordinator} />
+            </Suspense>
+          </div>
+        </NotificationProvider>
         {/* TEMP_DISABLED_OTP */}
       </AdminRoute>
     )
@@ -2049,11 +2051,13 @@ function App() {
   function renderChairmanRoute() {
     return (
       <ChairmanRoute currentUser={currentUser} authReady={authReady}>
-        <div className={requiresEmailVerification ? 'app-shell-lock-surface' : ''} aria-hidden={requiresEmailVerification}>
-          <Suspense fallback={<LoadingSpinner />}>
-            <ChairmanPortal currentUser={currentUser} onLogout={logout} onOpenSupport={() => setSupportModalOpen(true)} />
-          </Suspense>
-        </div>
+        <NotificationProvider currentUser={currentUser}>
+          <div className={requiresEmailVerification ? 'app-shell-lock-surface' : ''} aria-hidden={requiresEmailVerification}>
+            <Suspense fallback={<LoadingSpinner />}>
+              <ChairmanPortal currentUser={currentUser} onLogout={logout} onOpenSupport={() => setSupportModalOpen(true)} />
+            </Suspense>
+          </div>
+        </NotificationProvider>
       </ChairmanRoute>
     )
   }

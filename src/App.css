@@ -9883,14 +9883,13 @@ html, body, #root, .admin-shell, .app-shell, .app-main, .app-scroll-region {
   display: inline-flex;
   align-items: center;
   gap: 0.55rem;
-  padding: 0.65rem 1.25rem;
-  border-radius: 10px;
-  font-size: 0.85rem;
+  padding: 0.55rem 1.15rem;
+  border-radius: 9px;
+  font-size: 0.84rem;
   font-weight: 700;
   cursor: pointer;
   border: 1px solid transparent;
-  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.12);
+  transition: all 0.15s ease;
   white-space: nowrap;
 }
 
@@ -9901,50 +9900,49 @@ html, body, #root, .admin-shell, .app-shell, .app-main, .app-scroll-region {
 }
 
 .it-worker-btn.pause {
-  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
-  color: #ffffff;
-  border-color: rgba(217, 119, 6, 0.3);
+  background: rgba(217, 119, 6, 0.1);
+  color: #b45309;
+  border-color: rgba(217, 119, 6, 0.25);
 }
 
 .it-worker-btn.pause:hover:not(:disabled) {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(217, 119, 6, 0.25);
+  background: rgba(217, 119, 6, 0.18);
+  color: #92400e;
+  border-color: rgba(217, 119, 6, 0.4);
 }
 
 .it-worker-btn.resume {
-  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
-  color: #ffffff;
-  border-color: rgba(22, 163, 74, 0.3);
+  background: rgba(22, 163, 74, 0.1);
+  color: #15803d;
+  border-color: rgba(22, 163, 74, 0.25);
 }
 
 .it-worker-btn.resume:hover:not(:disabled) {
-  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(22, 163, 74, 0.25);
+  background: rgba(22, 163, 74, 0.18);
+  color: #166534;
+  border-color: rgba(22, 163, 74, 0.4);
 }
 
 .it-retry-failed-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.55rem;
-  padding: 0.65rem 1.25rem;
-  border-radius: 10px;
-  font-size: 0.85rem;
+  padding: 0.55rem 1.15rem;
+  border-radius: 9px;
+  font-size: 0.84rem;
   font-weight: 700;
   cursor: pointer;
-  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 8px -2px rgba(220, 38, 38, 0.2);
+  transition: all 0.15s ease;
   white-space: nowrap;
-  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-  color: #ffffff;
-  border: 1px solid rgba(220, 38, 38, 0.3);
+  background: rgba(220, 38, 38, 0.1);
+  color: #b91c1c;
+  border: 1px solid rgba(220, 38, 38, 0.25);
 }
 
 .it-retry-failed-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.35);
+  background: rgba(220, 38, 38, 0.18);
+  color: #991b1b;
+  border-color: rgba(220, 38, 38, 0.4);
 }
 
 .it-retry-failed-btn.empty {
@@ -9956,8 +9954,8 @@ html, body, #root, .admin-shell, .app-shell, .app-main, .app-scroll-region {
 }
 
 .it-retry-count-badge {
-  background: rgba(255, 255, 255, 0.25);
-  color: #ffffff;
+  background: rgba(220, 38, 38, 0.15);
+  color: #b91c1c;
   font-size: 0.75rem;
   padding: 0.1rem 0.45rem;
   border-radius: 999px;
@@ -9971,7 +9969,7 @@ html, body, #root, .admin-shell, .app-shell, .app-main, .app-scroll-region {
   border-radius: 16px;
   padding: 1.5rem 1.75rem;
   margin-bottom: 2rem;
-  box-shadow: 0 4px 18px -4px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 2px 12px -2px rgba(15, 23, 42, 0.04);
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
@@ -9986,7 +9984,7 @@ html, body, #root, .admin-shell, .app-shell, .app-main, .app-scroll-region {
 }
 
 .it-bulk-resend-header h3 {
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   font-weight: 700;
   color: var(--app-text, #0f172a);
   margin: 0 0 0.25rem 0;
@@ -10031,7 +10029,7 @@ html, body, #root, .admin-shell, .app-shell, .app-main, .app-scroll-region {
 
 .it-bulk-field input,
 .it-bulk-field select {
-  padding: 0.65rem 0.85rem;
+  padding: 0.6rem 0.85rem;
   border-radius: 9px;
   border: 1px solid var(--app-surface-border, rgba(203, 213, 225, 0.9));
   background: var(--app-surface-soft, #f8fafc);
@@ -10054,23 +10052,21 @@ html, body, #root, .admin-shell, .app-shell, .app-main, .app-scroll-region {
   align-items: center;
   justify-content: center;
   gap: 0.6rem;
-  padding: 0.7rem 1.4rem;
-  border-radius: 10px;
-  font-size: 0.88rem;
+  padding: 0.65rem 1.35rem;
+  border-radius: 9px;
+  font-size: 0.86rem;
   font-weight: 700;
   color: #ffffff;
-  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
-  border: 1px solid rgba(2, 132, 199, 0.3);
+  background: var(--app-primary, #1f5a80);
+  border: 1px solid transparent;
   cursor: pointer;
-  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 3px 10px -2px rgba(2, 132, 199, 0.3);
+  transition: all 0.15s ease;
   white-space: nowrap;
 }
 
 .it-bulk-resend-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px -2px rgba(2, 132, 199, 0.4);
+  background: var(--app-primary-hover, #163247);
+  filter: brightness(1.08);
 }
 
 .it-bulk-resend-btn:disabled {

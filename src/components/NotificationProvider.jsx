@@ -610,12 +610,19 @@ export function NotificationProvider({ children, currentUser, notificationPermis
       }
     }
 
+    function handleEmailQueueEvent(event) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('dwarpal:email_queue_event', { detail: event }))
+      }
+    }
+
     socket.on('connect', handleConnect)
     socket.on('disconnect', handleDisconnect)
     socket.on('connect_error', handleConnectError)
     socket.io.on('reconnect_attempt', handleReconnectAttempt)
     socket.on('notification:created', handleNotificationCreated)
     socket.on('it:notification:created', handleItNotificationCreated)
+    socket.on('email:queue:event', handleEmailQueueEvent)
     socket.on('notification:read', handleNotificationRead)
     socket.on('notification:read-all', handleNotificationReadAll)
 
@@ -626,6 +633,7 @@ export function NotificationProvider({ children, currentUser, notificationPermis
       socket.io.off('reconnect_attempt', handleReconnectAttempt)
       socket.off('notification:created', handleNotificationCreated)
       socket.off('it:notification:created', handleItNotificationCreated)
+      socket.off('email:queue:event', handleEmailQueueEvent)
       socket.off('notification:read', handleNotificationRead)
       socket.off('notification:read-all', handleNotificationReadAll)
       socket.disconnect()
@@ -780,12 +788,26 @@ export function NotificationProvider({ children, currentUser, notificationPermis
   return <NotificationContext.Provider value={contextValue}>{children}</NotificationContext.Provider>
 }
 
+const defaultNotificationContext = {
+  notifications: [],
+  unreadCount: 0,
+  loading: false,
+  refreshing: false,
+  error: null,
+  socketStatus: 'disconnected',
+  socketConnected: false,
+  pushReady: false,
+  pushBusy: false,
+  pushSubscription: null,
+  markNotificationRead: async () => {},
+  markAllRead: async () => {},
+  refreshNotifications: async () => {},
+  enablePushNotifications: async () => false,
+  disablePushNotifications: async () => true,
+  playNotificationSound: () => {},
+}
+
 export function useNotifications() {
   const context = useContext(NotificationContext)
-
-  if (!context) {
-    throw new Error('useNotifications must be used within a NotificationProvider.')
-  }
-
-  return context
+  return context || defaultNotificationContext
 }
