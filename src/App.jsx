@@ -2969,7 +2969,7 @@ function LoginScreen({ onLogin, portalAccess }) {
         submitLabel="Sign in"
         showForgotPassword={true}
         showStudentRegisterLink={portalAccess?.accessType === 'student'}
-        showRegisterLink={false}
+        showRegisterLink={portalAccess?.accessType !== 'student'}
       />
     )
   }
