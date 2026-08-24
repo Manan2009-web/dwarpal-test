@@ -162,12 +162,13 @@ function resolveGatepassReturnTime(gatepass) {
   return derivedDate;
 }
 
-function canGatepassBeMarkedIn(gatepass) {
-  return Boolean(resolveGatepassReturnTime(gatepass));
-}
-const AUTO_ESCALATION_TIMEOUT_MS = env.gatepassEscalationTimeoutSeconds
-  ? Math.max(5, Number(env.gatepassEscalationTimeoutSeconds)) * 1000
-  : Math.max(1, Number(env.gatepassEscalationTimeoutMinutes || 2)) * 60 * 1000;
+const PRINCIPAL_TIMEOUT_MS = Math.max(1, Number(env.principalTimeoutMinutes || 2)) * 60 * 1000; // 2 minutes
+const HOD_TIMEOUT_MS = Math.max(1, Number(env.hodTimeoutMinutes || 2)) * 60 * 1000; // 2 minutes
+const COORDINATOR_TIMEOUT_MS = Math.max(1, Number(env.coordinatorTimeoutMinutes || 2)) * 60 * 1000; // 2 minutes
+const BOUNCER_TIMEOUT_MS = Math.max(1, Number(env.bouncerTimeoutMinutes || 5)) * 60 * 1000; // 5 minutes
+const CHAIRMAN_TIMEOUT_MS = Math.max(1, Number(env.chairmanTimeoutMinutes || 5)) * 60 * 1000; // 5 minutes
+
+const AUTO_ESCALATION_TIMEOUT_MS = PRINCIPAL_TIMEOUT_MS;
 const AUTO_ESCALATION_SWEEP_INTERVAL_MS = Math.max(1000, Number(env.gatepassEscalationSweepIntervalMs || 2000));
 let escalationSweepRunning = false;
 let escalationSweepInterval = null;
@@ -3050,14 +3051,18 @@ async function processPendingStudentEscalations({ maxPerSweep = 50 } = {}) {
   };
 
   try {
-    const cutoff = new Date(Date.now() - AUTO_ESCALATION_TIMEOUT_MS);
+    const nowMs = Date.now();
+    const principalCutoff = new Date(nowMs - PRINCIPAL_TIMEOUT_MS);
+    const hodCutoff = new Date(nowMs - HOD_TIMEOUT_MS);
+    const coordinatorCutoff = new Date(nowMs - COORDINATOR_TIMEOUT_MS);
+    const campusSecurityCutoff = new Date(nowMs - BOUNCER_TIMEOUT_MS);
     const safeLimit = Math.max(1, Number(maxPerSweep) || 50);
 
     const [principalPending, hodPending, coordinatorPending, campusSecurityPending] = await Promise.all([
       Gatepass.find({
         applicantType: 'student',
         status: 'pending_principal',
-        updatedAt: { $lte: cutoff },
+        updatedAt: { $lte: principalCutoff },
         'autoEscalation.state': { $ne: 'blocked' }
       })
         .sort({ updatedAt: 1, _id: 1 })
@@ -3121,7 +3126,7 @@ async function processPendingStudentEscalations({ maxPerSweep = 50 } = {}) {
         break;
       }
 
-      const isTimedOut = gatepass.updatedAt instanceof Date && gatepass.updatedAt.getTime() <= cutoff.getTime();
+      const isTimedOut = gatepass.updatedAt instanceof Date && gatepass.updatedAt.getTime() <= hodCutoff.getTime();
       const isHodUnavailable = !isGatepassApproverAvailable(gatepass.forwardedTo);
 
       if (!isTimedOut && !isHodUnavailable) {
@@ -3154,7 +3159,7 @@ async function processPendingStudentEscalations({ maxPerSweep = 50 } = {}) {
         break;
       }
 
-      const isTimedOut = gatepass.updatedAt instanceof Date && gatepass.updatedAt.getTime() <= cutoff.getTime();
+      const isTimedOut = gatepass.updatedAt instanceof Date && gatepass.updatedAt.getTime() <= coordinatorCutoff.getTime();
       const isCoordinatorUnavailable = !isGatepassApproverAvailable(gatepass.forwardedTo);
 
       if (!isTimedOut && !isCoordinatorUnavailable) {
@@ -3185,7 +3190,7 @@ async function processPendingStudentEscalations({ maxPerSweep = 50 } = {}) {
         break;
       }
 
-      const isTimedOut = gatepass.updatedAt instanceof Date && gatepass.updatedAt.getTime() <= cutoff.getTime();
+      const isTimedOut = gatepass.updatedAt instanceof Date && gatepass.updatedAt.getTime() <= campusSecurityCutoff.getTime();
 
       if (!isTimedOut) {
         continue;

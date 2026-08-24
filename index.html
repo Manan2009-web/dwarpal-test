@@ -1,21 +1,25 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <!-- Google Tag Manager -->
-    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-    })(window,document,'script','dataLayer','GTM-MVR23SMH');</script>
-    <!-- End Google Tag Manager -->
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-020VM383CW"></script>
+    <!-- Google Tag Manager & gtag.js (Deferred on load for instant mobile First Contentful Paint) -->
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
+      window.addEventListener('load', function() {
+        var gtm = document.createElement('script');
+        gtm.async = true;
+        gtm.src = 'https://www.googletagmanager.com/gtm.js?id=GTM-MVR23SMH';
+        document.head.appendChild(gtm);
 
-      gtag('config', 'G-020VM383CW');
+        var gtagScript = document.createElement('script');
+        gtagScript.async = true;
+        gtagScript.src = 'https://www.googletagmanager.com/gtag/js?id=G-020VM383CW';
+        gtagScript.onload = function() {
+          gtag('js', new Date());
+          gtag('config', 'G-020VM383CW');
+        };
+        document.head.appendChild(gtagScript);
+      });
     </script>
     <meta charset="UTF-8" />
     <meta http-equiv="Cache-Control" content="no-store, max-age=0, must-revalidate" />
@@ -95,7 +99,6 @@
         .initial-loader-logo {
           width: 56px;
           height: 56px;
-          object-fit: contain;
         }
         .initial-loader-title {
           font-size: 1.875rem;
@@ -106,7 +109,11 @@
         }
       </style>
       <div class="initial-loader">
-        <img src="/dwarpal-icon-192.png" alt="DwarPal" class="initial-loader-logo" />
+        <svg class="initial-loader-logo" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="48" height="48" rx="12" fill="#2872A1" />
+          <path d="M24 10L36 16V26C36 33 24 38 24 38C24 38 12 33 12 26V16L24 10Z" fill="white" fill-opacity="0.9" />
+          <path d="M24 18L30 22V28C30 31.5 24 34 24 34C24 34 18 31.5 18 28V22L24 18Z" fill="#2872A1" />
+        </svg>
         <h1 class="initial-loader-title">DwarPal</h1>
       </div>
     </div>
