@@ -927,7 +927,7 @@ async function sendStudentOnboardingEmail({ email, fullName, enrollmentNo, tempo
 
   const safeFullName   = escapeHtml(fullName || 'Student');
   const safeEnrollmentNo = escapeHtml(enrollmentNo || '');
-  const safeCollegeName  = escapeHtml(collegeName || 'Your College');
+  const safeCollegeName  = escapeHtml(collegeName || env.collegeName || 'Neotech Campus');
   const clientUrl      = env.clientUrl || 'https://dwarpal-test.vercel.app';
   const activationUrl  = `${clientUrl}/login?action=activate`;
   const safeActivationUrl = escapeHtml(activationUrl);
@@ -1018,7 +1018,7 @@ async function sendStudentOnboardingEmail({ email, fullName, enrollmentNo, tempo
     '',
     `Hello ${fullName},`,
     '',
-    `An account has been set up for you on the DwarPal gatepass network on behalf of ${collegeName}.`,
+    `An account has been set up for you on the DwarPal gatepass network on behalf of ${collegeName || env.collegeName || 'Neotech Campus'}.`,
     '',
     `Enrollment number: ${enrollmentNo}`,
     `Access code      : STUDENT2026`,
@@ -1092,7 +1092,7 @@ async function sendStaffWelcomeEmail({ email, fullName, role, collegeName }) {
 
   const safeFullName    = escapeHtml(fullName || 'Team Member');
   const safeRole        = escapeHtml(role || 'Staff');
-  const safeCollegeName = escapeHtml(collegeName || 'Your College');
+  const safeCollegeName = escapeHtml(collegeName || env.collegeName || 'Neotech Campus');
   const loginUrl        = 'https://dwarpal-test.vercel.app';
   const safeLoginUrl    = escapeHtml(loginUrl);
   const year            = new Date().getFullYear();
