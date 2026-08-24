@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DwarPal - Student Registration Notice Poster</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 10mm;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+    body {
+      background: #f8fafc;
+      color: #0f172a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .poster-card {
+      width: 100%;
+      max-width: 660px;
+      background: #ffffff;
+      border: 3px solid #10263e;
+      border-radius: 28px;
+      padding: 36px 32px;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.08);
+      position: relative;
+    }
+    .badge {
+      display: inline-block;
+      background: #e0f2fe;
+      color: #0369a1;
+      padding: 6px 18px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+      border: 1px solid #bae6fd;
+    }
+    h1 {
+      font-size: 32px;
+      font-weight: 900;
+      color: #0f172a;
+      letter-spacing: -0.5px;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+    .subtitle {
+      font-size: 15px;
+      color: #475569;
+      font-weight: 600;
+      margin-bottom: 22px;
+    }
+    .qr-box {
+      width: 270px;
+      height: 270px;
+      margin: 0 auto 20px;
+      background: #ffffff;
+      padding: 12px;
+      border: 3px solid #0369a1;
+      border-radius: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .qr-box img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    .url-tag {
+      font-family: monospace;
+      font-size: 13px;
+      font-weight: 700;
+      background: #f1f5f9;
+      padding: 8px 16px;
+      border-radius: 10px;
+      color: #0369a1;
+      display: inline-block;
+      margin-bottom: 20px;
+      border: 1px solid #e2e8f0;
+    }
+    .instructions {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      text-align: left;
+      margin-top: 8px;
+      padding-top: 18px;
+      border-top: 2px dashed #cbd5e1;
+    }
+    .step {
+      flex: 1;
+      background: #f8fafc;
+      padding: 12px;
+      border-radius: 14px;
+      border: 1px solid #e2e8f0;
+    }
+    .step-num {
+      width: 22px;
+      height: 22px;
+      background: #0369a1;
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+    .step-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 4px;
+    }
+    .step-desc {
+      font-size: 11px;
+      color: #64748b;
+      line-height: 1.35;
+    }
+    .footer-note {
+      margin-top: 18px;
+      font-size: 10px;
+      color: #94a3b8;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .print-btn {
+      margin-top: 20px;
+      background: #0369a1;
+      color: white;
+      border: none;
+      padding: 12px 28px;
+      font-size: 14px;
+      font-weight: 700;
+      border-radius: 12px;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(3, 105, 161, 0.35);
+    }
+    @media print {
+      body {
+        background: white;
+        padding: 0;
+      }
+      .poster-card {
+        box-shadow: none;
+        border: 2px solid #000;
+        padding: 20px;
+        max-width: 100%;
+      }
+      .print-btn {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="poster-card">
+    <div class="badge">DwarPal Digital Campus Access</div>
+    <h1>Student Registration</h1>
+    <p class="subtitle">Scan with any Smartphone camera to register your gatepass account</p>
+
+    <div class="qr-box">
+      <img src="/dwarpal_student_registration_qr.png" alt="DwarPal Registration QR Code">
+    </div>
+
+    <div class="url-tag">https://dwarpal-test.vercel.app/student/register</div>
+
+    <div class="instructions">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-title">Scan QR Code</div>
+        <div class="step-desc">Open phone camera or scanner to open the registration portal.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-title">Fill Details</div>
+        <div class="step-desc">Enter info. New students get auto-generated GTU IDs.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-title">Instant Gatepass</div>
+        <div class="step-desc">Login and submit campus exit/entry passes directly.</div>
+      </div>
+    </div>
+
+    <div class="footer-note">Official Campus Security & Administration • DwarPal System</div>
+  </div>
+
+  <button class="print-btn" onclick="window.print()">🖨️ Print Hard Copy Notice (Ctrl + P)</button>
+
+</body>
+</html>
