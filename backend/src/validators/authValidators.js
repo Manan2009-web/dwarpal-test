@@ -97,7 +97,7 @@ const registerValidation = [
     .customSanitizer(normalizeProgram)
     .custom((value, { req }) => {
       const role = String(req.body.role || '').trim().toLowerCase();
-      if (!['principal', 'admin', 'hod'].includes(role)) {
+      if (!['principal', 'admin', 'hod', 'student'].includes(role)) {
         return true;
       }
 
@@ -117,7 +117,7 @@ const registerValidation = [
       const role = String(req.body.role || '').trim().toLowerCase();
       const normalizedDepartment = String(value || '').trim();
 
-      if (['faculty', 'hod'].includes(role)) {
+      if (['faculty', 'hod', 'student'].includes(role)) {
         if (!normalizedDepartment) {
           throw new Error('Department is required');
         }
@@ -139,8 +139,9 @@ const registerValidation = [
     return true;
   }),
   body('enrollmentNo').trim().custom((value, { req }) => {
-    if (req.body.role === 'student' && !value) {
-      throw new Error('Enrollment number is required for students');
+    const isNewStudent = Boolean(req.body?.isNewStudent === true || req.body?.isNewStudent === 'true');
+    if (req.body.role === 'student' && !value && !isNewStudent) {
+      throw new Error('Enrollment number is required for students, or select New Student');
     }
     return true;
   }),

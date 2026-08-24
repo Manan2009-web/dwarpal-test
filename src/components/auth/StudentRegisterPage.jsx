@@ -147,20 +147,35 @@ export default function StudentRegisterPage() {
         isTemporary: Boolean(isNewStudent || createdUser?.isTemporaryEnrollment)
       })
     } catch (err) {
-      const conflictAccount = err?.response?.data?.existingAccount || err?.existingAccount
+      const conflictAccount = 
+        err?.payload?.existingAccount || 
+        err?.response?.data?.existingAccount || 
+        err?.data?.existingAccount || 
+        err?.existingAccount
 
-      if (conflictAccount || err?.status === 409 || err?.response?.status === 409) {
+      const isConflict = 
+        Boolean(conflictAccount) || 
+        err?.status === 409 || 
+        err?.response?.status === 409 || 
+        err?.payload?.status === 409 || 
+        err?.code === 409 || 
+        String(err?.message || '').toLowerCase().includes('already') || 
+        String(err?.response?.data?.message || '').toLowerCase().includes('already') ||
+        String(err?.payload?.message || '').toLowerCase().includes('already')
+
+      if (isConflict) {
         setDuplicateAccountModal({
           enrollmentNo: conflictAccount?.enrollmentNo || enrollmentNo || 'Registered in College Records',
           email: conflictAccount?.email || email,
           fullName: conflictAccount?.fullName || fullName
         })
       } else {
-        const errorMsg = err?.response?.data?.message || err?.message || 'Registration failed. Please check your details.'
+        const errorMsg = err?.payload?.message || err?.response?.data?.message || err?.message || 'Registration failed. Please check your details.'
         setErrorMessage(errorMsg)
-        if (err?.response?.data?.errors) {
+        const rawErrors = err?.payload?.errors || err?.response?.data?.errors || err?.errors
+        if (Array.isArray(rawErrors)) {
           const mapped = {}
-          err.response.data.errors.forEach(errItem => {
+          rawErrors.forEach(errItem => {
             if (errItem.field) mapped[errItem.field] = errItem.message
           })
           setFieldErrors(mapped)
