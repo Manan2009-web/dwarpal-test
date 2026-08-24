@@ -37,7 +37,11 @@ export default function PasswordInput({
         name={name}
         type={inputType}
         value={value}
-        onChange={(event) => onChange?.(event.target.value, event)}
+        onChange={(event) => {
+          if (typeof onChange === 'function') {
+            onChange(event.target.value, event)
+          }
+        }}
         placeholder={placeholder}
         autoComplete={autoComplete}
         disabled={disabled}

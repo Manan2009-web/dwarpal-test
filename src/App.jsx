@@ -3001,7 +3001,8 @@ function LoginScreen({ onLogin, portalAccess }) {
         subtitle="Sign in to continue to your dashboard"
         submitLabel="Sign in"
         showForgotPassword={true}
-        showRegisterLink={portalAccess?.accessType !== 'student'}
+        showStudentRegisterLink={portalAccess?.accessType === 'student'}
+        showRegisterLink={false}
       />
     )
   }

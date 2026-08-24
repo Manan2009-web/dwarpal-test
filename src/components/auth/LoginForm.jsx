@@ -107,6 +107,7 @@ export default function LoginForm({
   submitLabel = 'Sign in',
   showForgotPassword = true,
   showRegisterLink = true,
+  showStudentRegisterLink = false,
 }) {
   const reduceMotion = useReducedMotion()
 
@@ -229,7 +230,16 @@ export default function LoginForm({
               </motion.button>
             </motion.form>
 
-            {showRegisterLink ? (
+            {showStudentRegisterLink ? (
+              <motion.div variants={itemVariants} className="tw:mt-5 tw:text-center">
+                <p className="tw:text-[0.92rem] tw:text-neutral-500">
+                  New student without an account?{' '}
+                  <Link to="/student/register" className="tw:font-semibold tw:text-[#2f6db5] tw:underline tw:underline-offset-4 hover:tw:text-[#1d5290]">
+                    Register here
+                  </Link>
+                </p>
+              </motion.div>
+            ) : showRegisterLink ? (
               <motion.div variants={itemVariants} className="tw:mt-5 tw:text-center">
                 <p className="tw:text-[0.92rem] tw:text-neutral-500">
                   Don't have an account?{' '}

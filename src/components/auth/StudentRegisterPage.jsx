@@ -15,7 +15,7 @@ import {
   X
 } from 'lucide-react'
 import PasswordInput from '../PasswordInput'
-import { registerUser, apiRequest } from '../../lib/dwarpalApi'
+import { registerUser, apiRequest, storePortalAccessSession } from '../../lib/dwarpalApi'
 import { PROGRAM_OPTIONS, DEPARTMENTS, SEMESTER_OPTIONS } from '../../mockData'
 
 export default function StudentRegisterPage() {
@@ -95,6 +95,15 @@ export default function StudentRegisterPage() {
     document.body.removeChild(a)
   }
 
+  // Direct Student Login navigation helper
+  const handleGoToStudentLogin = (e) => {
+    if (e) e.preventDefault?.()
+    try {
+      storePortalAccessSession({ token: 'STUDENT_PORTAL_DIRECT', accessType: 'student' })
+    } catch (err) {}
+    navigate('/login', { replace: true })
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setErrorMessage('')
@@ -172,13 +181,14 @@ export default function StudentRegisterPage() {
       />
 
       <div className="tw:w-full tw:max-w-2xl tw:flex tw:items-center tw:justify-between tw:mb-6 tw:relative tw:z-10">
-        <Link 
-          to="/access-portal" 
+        <button 
+          type="button"
+          onClick={handleGoToStudentLogin} 
           className="tw:inline-flex tw:items-center tw:gap-2 tw:text-xs tw:font-semibold tw:text-[#2872a1] tw:bg-white/80 tw:backdrop-blur-md tw:px-3.5 tw:py-2 tw:rounded-xl tw:border tw:border-[rgba(23,52,73,0.12)] tw:shadow-sm tw:hover:bg-slate-50 tw:transition-colors"
         >
           <ArrowLeft className="tw:w-4 tw:h-4" />
-          Back to Portal
-        </Link>
+          Student Login
+        </button>
 
         <button
           type="button"
@@ -235,7 +245,7 @@ export default function StudentRegisterPage() {
             <div className="tw:pt-4 tw:flex tw:flex-col tw:sm:flex-row tw:items-center tw:justify-center tw:gap-3">
               <button
                 type="button"
-                onClick={() => navigate('/access-portal')}
+                onClick={handleGoToStudentLogin}
                 className="tw:w-full tw:sm:w-auto tw:px-8 tw:py-3.5 tw:rounded-xl tw:bg-[#2872a1] tw:hover:bg-[#1f5a80] tw:text-white tw:font-bold tw:text-xs tw:tracking-wider tw:uppercase tw:shadow-lg tw:shadow-[#2872a1]/25 tw:transition"
               >
                 Proceed to Student Login
@@ -420,7 +430,7 @@ export default function StudentRegisterPage() {
                 <PasswordInput
                   id="student-password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(val) => setPassword(typeof val === 'string' ? val : val?.target?.value || '')}
                   placeholder="Minimum 8 characters"
                   required
                   wrapperClassName="tw:relative"
@@ -438,7 +448,7 @@ export default function StudentRegisterPage() {
                 <PasswordInput
                   id="student-confirm-password"
                   value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onChange={(val) => setConfirmPassword(typeof val === 'string' ? val : val?.target?.value || '')}
                   placeholder="Re-enter password"
                   required
                   wrapperClassName="tw:relative"
@@ -471,9 +481,13 @@ export default function StudentRegisterPage() {
             <div className="tw:pt-3 tw:text-center tw:text-xs tw:text-[#5d7183] tw:space-y-2">
               <p>
                 Already have an account?{' '}
-                <Link to="/access-portal" className="tw:font-bold tw:text-[#2872a1] tw:hover:underline">
-                  Sign in here
-                </Link>
+                <button 
+                  type="button" 
+                  onClick={handleGoToStudentLogin} 
+                  className="tw:font-bold tw:text-[#2872a1] tw:hover:underline tw:bg-transparent tw:border-none tw:p-0 tw:cursor-pointer"
+                >
+                  Sign in to Student Dashboard
+                </button>
               </p>
             </div>
 
@@ -537,7 +551,7 @@ export default function StudentRegisterPage() {
             <div className="tw:pt-2 tw:flex tw:flex-col tw:gap-2.5">
               <button
                 type="button"
-                onClick={() => navigate('/access-portal')}
+                onClick={handleGoToStudentLogin}
                 className="tw:w-full tw:h-11 tw:rounded-xl tw:bg-[#2872a1] tw:hover:bg-[#1f5a80] tw:text-white tw:font-bold tw:text-xs tw:uppercase tw:tracking-wider tw:shadow-md tw:transition tw:flex tw:items-center tw:justify-center tw:gap-2"
               >
                 <span>Proceed to Student Login</span>
