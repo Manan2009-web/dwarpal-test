@@ -2065,6 +2065,38 @@ function App() {
           }
         />
         <Route
+          path="/student/login"
+          element={
+            <PublicAuthRoute currentUser={currentUser} authReady={authReady} portalAccess={{ accessType: 'student', token: 'STUDENT_DIRECT_PORTAL' }}>
+              <LoginScreen onLogin={login} portalAccess={{ accessType: 'student', token: 'STUDENT_DIRECT_PORTAL' }} />
+            </PublicAuthRoute>
+          }
+        />
+        <Route
+          path="/security/login"
+          element={
+            <PublicAuthRoute currentUser={currentUser} authReady={authReady} portalAccess={{ accessType: 'faculty', token: 'FACULTY_DIRECT_PORTAL' }}>
+              <LoginScreen onLogin={login} portalAccess={{ accessType: 'faculty', token: 'FACULTY_DIRECT_PORTAL' }} />
+            </PublicAuthRoute>
+          }
+        />
+        <Route
+          path="/gatekeeper/login"
+          element={
+            <PublicAuthRoute currentUser={currentUser} authReady={authReady} portalAccess={{ accessType: 'faculty', token: 'FACULTY_DIRECT_PORTAL' }}>
+              <LoginScreen onLogin={login} portalAccess={{ accessType: 'faculty', token: 'FACULTY_DIRECT_PORTAL' }} />
+            </PublicAuthRoute>
+          }
+        />
+        <Route
+          path="/faculty/login"
+          element={
+            <PublicAuthRoute currentUser={currentUser} authReady={authReady} portalAccess={{ accessType: 'faculty', token: 'FACULTY_DIRECT_PORTAL' }}>
+              <LoginScreen onLogin={login} portalAccess={{ accessType: 'faculty', token: 'FACULTY_DIRECT_PORTAL' }} />
+            </PublicAuthRoute>
+          }
+        />
+        <Route
           path="/register"
           element={
             <PublicAuthRoute currentUser={currentUser} authReady={authReady} portalAccess={portalAccess} isRegisterRoute={true}>
