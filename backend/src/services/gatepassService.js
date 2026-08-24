@@ -162,6 +162,10 @@ function resolveGatepassReturnTime(gatepass) {
   return derivedDate;
 }
 
+function canGatepassBeMarkedIn(gatepass) {
+  return Boolean(resolveGatepassReturnTime(gatepass));
+}
+
 const PRINCIPAL_TIMEOUT_MS = Math.max(1, Number(env.principalTimeoutMinutes || 2)) * 60 * 1000; // 2 minutes
 const HOD_TIMEOUT_MS = Math.max(1, Number(env.hodTimeoutMinutes || 2)) * 60 * 1000; // 2 minutes
 const COORDINATOR_TIMEOUT_MS = Math.max(1, Number(env.coordinatorTimeoutMinutes || 2)) * 60 * 1000; // 2 minutes
