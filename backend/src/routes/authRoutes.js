@@ -232,7 +232,7 @@ router.use(authLimiter);
 router.post('/portal-access', portalAccessValidation, validateRequest, authController.portalAccess);
 router.post(
   '/register/check-availability',
-  requirePortalAccess('faculty'),
+  requirePortalAccess('faculty', 'student'),
   registerNetworkRateLimit,
   registrationAvailabilityValidation,
   validateRequest,
@@ -240,7 +240,7 @@ router.post(
 );
 router.post(
   '/register/start',
-  requirePortalAccess('faculty'),
+  requirePortalAccess('faculty', 'student'),
   registerNetworkRateLimit,
   registerIdentityRateLimit,
   registerValidation,
@@ -249,7 +249,7 @@ router.post(
 );
 router.post(
   '/register/verify-otp',
-  requirePortalAccess('faculty'),
+  requirePortalAccess('faculty', 'student'),
   registerOtpVerifyRateLimit,
   registerVerifyOtpValidation,
   validateRequest,
@@ -257,7 +257,7 @@ router.post(
 );
 router.post(
   '/register/resend-otp',
-  requirePortalAccess('faculty'),
+  requirePortalAccess('faculty', 'student'),
   registerOtpResendRateLimit,
   registerResendOtpValidation,
   validateRequest,
@@ -265,7 +265,7 @@ router.post(
 );
 router.post(
   '/register',
-  requirePortalAccess('faculty'),
+  requirePortalAccess('faculty', 'student'),
   registerNetworkRateLimit,
   registerIdentityRateLimit,
   registerValidation,
@@ -275,7 +275,7 @@ router.post(
 router.post(
   '/login',
   dbConnectMiddleware,
-  requirePortalAccess('faculty'),
+  requirePortalAccess('faculty', 'student'),
   loginNetworkRateLimit,
   loginAccountRateLimit,
   loginValidation,
@@ -298,7 +298,7 @@ router.post(
 );
 router.post(
   '/forgot-password/account',
-  requirePortalAccess('faculty'),
+  requirePortalAccess('faculty', 'student'),
   forgotPasswordStartRateLimit,
   forgotPasswordAccountValidation,
   validateRequest,
@@ -306,7 +306,7 @@ router.post(
 );
 router.post(
   '/forgot-password/start',
-  requirePortalAccess('faculty'),
+  requirePortalAccess('faculty', 'student'),
   forgotPasswordStartRateLimit,
   forgotPasswordStartValidation,
   validateRequest,
@@ -314,7 +314,7 @@ router.post(
 );
 router.post(
   '/forgot-password/verify-otp',
-  requirePortalAccess('faculty'),
+  requirePortalAccess('faculty', 'student'),
   forgotPasswordVerifyRateLimit,
   forgotPasswordVerifyOtpValidation,
   validateRequest,
@@ -322,7 +322,7 @@ router.post(
 );
 router.post(
   '/forgot-password/reset',
-  requirePortalAccess('faculty'),
+  requirePortalAccess('faculty', 'student'),
   forgotPasswordResetRateLimit,
   forgotPasswordResetValidation,
   validateRequest,
@@ -400,7 +400,7 @@ router.post(
 );
 router.post(
   '/webauthn/authentication/options',
-  requirePortalAccess('faculty'),
+  requirePortalAccess('faculty', 'student'),
   biometricRateLimit,
   webAuthnAuthenticationOptionsValidation,
   validateRequest,
@@ -408,7 +408,7 @@ router.post(
 );
 router.post(
   '/webauthn/authentication/verify',
-  requirePortalAccess('faculty'),
+  requirePortalAccess('faculty', 'student'),
   biometricRateLimit,
   webAuthnAuthenticationVerifyValidation,
   validateRequest,

@@ -1229,17 +1229,6 @@ function App() {
         authMode: portalAccess?.accessType === 'student' ? 'student-login' : 'login',
       })
 
-      if (
-        [
-          'PORTAL_ACCESS_INVALID',
-          'PORTAL_ACCESS_REQUIRED',
-          'ERR_PORTAL_INVALID',
-          'ERR_PORTAL_REQUIRED',
-        ].includes(errorDetails.code)
-      ) {
-        savePortalAccess(null, true)
-      }
-
       toast.error({
         title: 'Login failed',
         message: errorDetails.message,
@@ -1273,17 +1262,6 @@ function App() {
         fallbackMessage: 'Unable to resend the student login OTP right now.',
         authMode: 'student-login',
       })
-
-      if (
-        [
-          'PORTAL_ACCESS_INVALID',
-          'PORTAL_ACCESS_REQUIRED',
-          'ERR_PORTAL_INVALID',
-          'ERR_PORTAL_REQUIRED',
-        ].includes(errorDetails.code)
-      ) {
-        savePortalAccess(null, true)
-      }
 
       return {
         ok: false,
@@ -1321,17 +1299,6 @@ function App() {
         fallbackMessage: 'Unable to verify this student OTP right now.',
         authMode: 'student-login',
       })
-
-      if (
-        [
-          'PORTAL_ACCESS_INVALID',
-          'PORTAL_ACCESS_REQUIRED',
-          'ERR_PORTAL_INVALID',
-          'ERR_PORTAL_REQUIRED',
-        ].includes(errorDetails.code)
-      ) {
-        savePortalAccess(null, true)
-      }
 
       return {
         ok: false,
