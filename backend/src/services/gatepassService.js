@@ -165,8 +165,10 @@ function resolveGatepassReturnTime(gatepass) {
 function canGatepassBeMarkedIn(gatepass) {
   return Boolean(resolveGatepassReturnTime(gatepass));
 }
-const AUTO_ESCALATION_TIMEOUT_MS = Math.max(1, Number(env.gatepassEscalationTimeoutMinutes || 2)) * 60 * 1000;
-const AUTO_ESCALATION_SWEEP_INTERVAL_MS = Math.max(10000, Number(env.gatepassEscalationSweepIntervalMs || 60000));
+const AUTO_ESCALATION_TIMEOUT_MS = env.gatepassEscalationTimeoutSeconds
+  ? Math.max(5, Number(env.gatepassEscalationTimeoutSeconds)) * 1000
+  : Math.max(1, Number(env.gatepassEscalationTimeoutMinutes || 2)) * 60 * 1000;
+const AUTO_ESCALATION_SWEEP_INTERVAL_MS = Math.max(1000, Number(env.gatepassEscalationSweepIntervalMs || 2000));
 let escalationSweepRunning = false;
 let escalationSweepInterval = null;
 

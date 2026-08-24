@@ -5702,12 +5702,26 @@ function getRoleStats(currentUser, summary, gatepasses) {
   }
 
   if (currentUser.role === 'principal') {
+    const forwardedCount = typeof summaryStats.forwardedCount === 'number'
+      ? summaryStats.forwardedCount
+      : typeof summaryStats.forwarded === 'number'
+        ? summaryStats.forwarded
+        : gatepasses.filter((item) => item.status === 'Forwarded' || item.rawStatus?.startsWith('forwarded_')).length
+
+    const pendingDirect = typeof summaryStats.pendingStudentRequests === 'number'
+      ? summaryStats.pendingStudentRequests + (summaryStats.pendingFacultyRequests || 0)
+      : typeof summaryStats.pending === 'number'
+        ? summaryStats.pending
+        : typeof summaryStats.pendingRequests === 'number'
+          ? summaryStats.pendingRequests
+          : gatepasses.filter((item) => item.status === 'Pending' && !item.rawStatus?.startsWith('forwarded_')).length
+
     return {
-      pending: summaryStats.pending ?? summaryStats.pendingRequests ?? gatepasses.filter((item) => item.status === 'Pending').length,
-      forwarded: summaryStats.forwarded ?? summaryStats.forwardedCount ?? gatepasses.filter((item) => item.status === 'Forwarded').length,
-      approved: summaryStats.approved ?? summaryStats.approvedCount ?? summaryStats.finalApprovedCount ?? 0,
-      rejected: summaryStats.rejected ?? summaryStats.rejectedCount ?? 0,
-      outdated: summaryStats.outdated ?? summaryStats.outdatedCount ?? gatepasses.filter((item) => item.status === 'Outdated' || item.isOutdated).length,
+      pending: pendingDirect,
+      forwarded: forwardedCount,
+      approved: summaryStats.approvedCount ?? summaryStats.approved ?? summaryStats.finalApprovedCount ?? 0,
+      rejected: summaryStats.rejectedCount ?? summaryStats.rejected ?? 0,
+      outdated: summaryStats.outdatedCount ?? summaryStats.outdated ?? gatepasses.filter((item) => item.status === 'Outdated' || item.isOutdated).length,
     }
   }
 
