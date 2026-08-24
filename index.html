@@ -1,6 +1,13 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-MVR23SMH');</script>
+    <!-- End Google Tag Manager -->
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-020VM383CW"></script>
     <script>
@@ -29,7 +36,7 @@
                               : Allow API calls + WebSocket to any HTTPS host.
                                 Tighten to specific origins in production.
     font-src    'self' data:  : Allow self-hosted fonts + base64 data URIs.
-    frame-src   'none'        : Block all iframes (prevents clickjacking).
+    frame-src   'self' https://www.googletagmanager.com : Block all unlisted iframes (allows GTM noscript).
     object-src  'none'        : Block Flash / plugin embeds.
     base-uri    'self'        : Prevent base-tag injection attacks.
     form-action 'self'        : All form submissions must go to same origin.
@@ -44,7 +51,7 @@
       img-src 'self' data: blob: https: http:;
       connect-src 'self' https: http: wss: ws:;
       font-src 'self' data:;
-      frame-src 'none';
+      frame-src 'self' https://www.googletagmanager.com;
       object-src 'none';
       base-uri 'self';
       form-action 'self';
@@ -64,6 +71,10 @@
     <title>DwarPal - Digital Gatepass System</title>
   </head>
   <body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-MVR23SMH"
+    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <!-- End Google Tag Manager (noscript) -->
     <div id="root">
       <style>
         .initial-loader {
