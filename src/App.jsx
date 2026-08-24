@@ -2067,7 +2067,7 @@ function App() {
         <Route
           path="/student/login"
           element={
-            <PublicAuthRoute currentUser={currentUser} authReady={authReady} portalAccess={{ accessType: 'student', token: 'STUDENT_DIRECT_PORTAL' }}>
+            <PublicAuthRoute currentUser={currentUser} authReady={authReady} targetRole="student">
               <LoginScreen onLogin={login} portalAccess={{ accessType: 'student', token: 'STUDENT_DIRECT_PORTAL' }} />
             </PublicAuthRoute>
           }
@@ -2075,7 +2075,7 @@ function App() {
         <Route
           path="/security/login"
           element={
-            <PublicAuthRoute currentUser={currentUser} authReady={authReady} portalAccess={{ accessType: 'faculty', token: 'FACULTY_DIRECT_PORTAL' }}>
+            <PublicAuthRoute currentUser={currentUser} authReady={authReady} targetRole="faculty">
               <LoginScreen onLogin={login} portalAccess={{ accessType: 'faculty', token: 'FACULTY_DIRECT_PORTAL' }} />
             </PublicAuthRoute>
           }
@@ -2083,7 +2083,7 @@ function App() {
         <Route
           path="/gatekeeper/login"
           element={
-            <PublicAuthRoute currentUser={currentUser} authReady={authReady} portalAccess={{ accessType: 'faculty', token: 'FACULTY_DIRECT_PORTAL' }}>
+            <PublicAuthRoute currentUser={currentUser} authReady={authReady} targetRole="faculty">
               <LoginScreen onLogin={login} portalAccess={{ accessType: 'faculty', token: 'FACULTY_DIRECT_PORTAL' }} />
             </PublicAuthRoute>
           }
@@ -2091,7 +2091,7 @@ function App() {
         <Route
           path="/faculty/login"
           element={
-            <PublicAuthRoute currentUser={currentUser} authReady={authReady} portalAccess={{ accessType: 'faculty', token: 'FACULTY_DIRECT_PORTAL' }}>
+            <PublicAuthRoute currentUser={currentUser} authReady={authReady} targetRole="faculty">
               <LoginScreen onLogin={login} portalAccess={{ accessType: 'faculty', token: 'FACULTY_DIRECT_PORTAL' }} />
             </PublicAuthRoute>
           }
@@ -2099,7 +2099,7 @@ function App() {
         <Route
           path="/register"
           element={
-            <PublicAuthRoute currentUser={currentUser} authReady={authReady} portalAccess={portalAccess} isRegisterRoute={true}>
+            <PublicAuthRoute currentUser={currentUser} authReady={authReady} portalAccess={{ accessType: 'faculty', token: 'FACULTY_DIRECT_PORTAL' }} isRegisterRoute={true}>
               <Suspense fallback={<LoadingSpinner />}>
                 <Register setCurrentUser={setCurrentUser} onRegister={registerAccount} />
               </Suspense>
@@ -2241,24 +2241,41 @@ function RoleDashboardRoute({ currentUser, authReady, expectedRole, children }) 
   return children
 }
 
-function PublicAuthRoute({ currentUser, authReady, portalAccess, isRegisterRoute = false, children }) {
+function PublicAuthRoute({ currentUser, authReady, portalAccess, targetRole, isRegisterRoute = false, children }) {
   useRouteGuardDebug('public-auth', authReady, currentUser)
 
   if (!authReady) return <AuthBootstrapScreen />
   if (currentUser) return <Navigate to={getLandingPathForUser(currentUser)} replace />
 
-  // Require portal access session unless performing account activation
+  // If a target role is specified (e.g. /gatekeeper/login, /security/login, /student/login), sync session
+  if (targetRole && typeof window !== 'undefined') {
+    try {
+      storePortalAccessSession({
+        token: targetRole === 'student' ? 'STUDENT_DIRECT_PORTAL' : 'FACULTY_DIRECT_PORTAL',
+        accessType: targetRole
+      })
+    } catch (e) {}
+  }
+
+  // If visiting /register, allow staff/gatekeeper registration directly
+  if (isRegisterRoute) {
+    if (typeof window !== 'undefined') {
+      try {
+        storePortalAccessSession({
+          token: 'FACULTY_DIRECT_PORTAL',
+          accessType: 'faculty'
+        })
+      } catch (e) {}
+    }
+    return children
+  }
+
   const queryParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
   const isActivation = queryParams ? queryParams.get('action') === 'activate' : false
 
-  const effectivePortalAccess = portalAccess || getPortalAccessSession()
+  const effectivePortalAccess = portalAccess || (targetRole ? { accessType: targetRole, token: targetRole === 'student' ? 'STUDENT_DIRECT_PORTAL' : 'FACULTY_DIRECT_PORTAL' } : getPortalAccessSession())
   if (!effectivePortalAccess && !isActivation) {
     return <Navigate to="/access-portal" replace />
-  }
-
-  // Block students from opening /register
-  if (isRegisterRoute && effectivePortalAccess.accessType === 'student') {
-    return <Navigate to="/login" replace />
   }
 
   return children
