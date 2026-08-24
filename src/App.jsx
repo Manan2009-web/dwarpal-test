@@ -53,6 +53,7 @@ const PasswordResetPanel = lazy(() => import('./components/PasswordResetPanel'))
 const NewStudentWelcomeModal = lazy(() => import('./components/NewStudentWelcomeModal'))
 const LegalDocs = lazy(() => import('./components/LegalDocs'))
 const SupportPage = lazy(() => import('./components/SupportPage'))
+const NotFoundPage = lazy(() => import('./components/NotFoundPage'))
 const Aurora = lazy(() => import('./components/ui/Aurora'))
 import { useToast } from './components/ToastProvider'
 import { usePushSubscription } from './hooks/usePushSubscription'
@@ -2133,7 +2134,16 @@ function App() {
         <Route path="/hod/dashboard" element={renderAppShellRoute('hod')} />
         <Route path="/security/dashboard" element={renderAppShellRoute('security')} />
         <Route path="/cao/dashboard" element={renderAppShellRoute('cao')} />
-        <Route path="*" element={<DefaultRoute currentUser={currentUser} authReady={authReady} portalAccess={portalAccess} />} />
+        <Route
+          path="*"
+          element={
+            <ErrorBoundary>
+              <Suspense fallback={<LoadingSpinner />}>
+                <NotFoundPage currentUser={currentUser} />
+              </Suspense>
+            </ErrorBoundary>
+          }
+        />
       </Routes>
       <FeatureBoundary label="Privacy preferences banner">
         <PrivacyPreferencesBanner
