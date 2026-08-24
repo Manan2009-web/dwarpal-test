@@ -1057,7 +1057,10 @@ async function routeStudentGatepassToCoordinator(
 }
 
 async function buildCampusSecurityReadyGatepassNotifications(gatepass, actor) {
-  const bouncerUsers = await listActiveUsersByRole('campus_security');
+  const bouncerUsers = await User.find({
+    role: { $in: ['campus_security', 'security'] },
+    isActive: true
+  }).select('_id');
 
   return bouncerUsers.map((bouncerUser) => ({
     recipient: bouncerUser._id,
@@ -1177,14 +1180,28 @@ async function routeStudentGatepassToChairman(
   };
 }
 
+function resolveRoleLabel(role) {
+  switch (role) {
+    case 'principal': return 'Principal';
+    case 'hod': return 'HOD';
+    case 'coordinator': return 'Class Coordinator';
+    case 'chairman': return 'Chairman';
+    case 'campus_security': return 'Campus Security';
+    case 'security': return 'Security';
+    default: return String(role || 'Approver').toUpperCase();
+  }
+}
+
 function buildForwardNotificationsForStudentGatepass(gatepass, actor, routeResult, trigger) {
   const isEscalation = trigger.startsWith('auto_');
   const notificationType = buildRoutingForwardType(trigger);
-  const recipientRoleLabel = routeResult.routedTo === 'coordinator' ? 'Coordinator' : 'HOD';
-  const recipientWorkflowLabel = routeResult.routedTo === 'coordinator' ? 'coordinator_review' : 'hod_review';
+  const recipientRoleLabel = resolveRoleLabel(routeResult.routedTo);
+  const recipientWorkflowLabel = `${routeResult.routedTo}_review`;
 
-  return [
-    {
+  const notifications = [];
+
+  if (routeResult.recipient?._id) {
+    notifications.push({
       recipient: routeResult.recipient._id,
       sender: actor?._id || null,
       gatepass: gatepass._id,
@@ -1200,9 +1217,13 @@ function buildForwardNotificationsForStudentGatepass(gatepass, actor, routeResul
         workflow: recipientWorkflowLabel,
         escalated: isEscalation
       })
-    },
-    {
-      recipient: gatepass.createdBy._id || gatepass.createdBy,
+    });
+  }
+
+  const studentId = gatepass.createdBy?._id || gatepass.createdBy;
+  if (studentId) {
+    notifications.push({
+      recipient: studentId,
       sender: actor?._id || null,
       gatepass: gatepass._id,
       type: notificationType,
@@ -1217,8 +1238,10 @@ function buildForwardNotificationsForStudentGatepass(gatepass, actor, routeResul
         workflow: 'requester_forwarded',
         escalated: isEscalation
       })
-    }
-  ];
+    });
+  }
+
+  return notifications;
 }
 
 function buildSearchFilter(searchTerm) {
@@ -1243,8 +1266,13 @@ function buildSearchFilter(searchTerm) {
   };
 }
 
-function getNowFilterConditions() {
-  const now = new Date();
+const OUTDATED_GRACE_MS = 8 * 60 * 60 * 1000; // 8 hours grace period
+
+function getNowFilterConditions(now = new Date()) {
+  const cutoffTime = new Date(now.getTime() - OUTDATED_GRACE_MS);
+  const cutoffDateStart = new Date(cutoffTime);
+  cutoffDateStart.setHours(0, 0, 0, 0);
+
   const startOfToday = new Date(now);
   startOfToday.setHours(0, 0, 0, 0);
 
@@ -1255,17 +1283,23 @@ function getNowFilterConditions() {
   const minutes = String(now.getMinutes()).padStart(2, '0');
   const currentTimeString = `${hours}:${minutes}`;
 
+  const cutoffHours = String(cutoffTime.getHours()).padStart(2, '0');
+  const cutoffMinutes = String(cutoffTime.getMinutes()).padStart(2, '0');
+  const cutoffTimeString = `${cutoffHours}:${cutoffMinutes}`;
+
+  // Outdated: Scheduled departure was more than 8 hours ago
   const outdatedFilter = {
     $or: [
-      { outDate: { $lt: startOfToday } },
-      { outDate: { $gte: startOfToday, $lte: endOfToday }, outTime: { $lt: currentTimeString } }
+      { outDate: { $lt: cutoffDateStart } },
+      { outDate: { $gte: cutoffDateStart, $lte: cutoffTime }, outTime: { $lt: cutoffTimeString } }
     ]
   };
 
+  // Active: Scheduled departure was within the last 8 hours or in the future
   const activeTimeFilter = {
     $or: [
-      { outDate: { $gt: endOfToday } },
-      { outDate: { $gte: startOfToday, $lte: endOfToday }, outTime: { $gte: currentTimeString } }
+      { outDate: { $gt: cutoffTime } },
+      { outDate: { $gte: cutoffDateStart, $lte: now }, outTime: { $gte: cutoffTimeString } }
     ]
   };
 
@@ -1275,31 +1309,43 @@ function getNowFilterConditions() {
 function isGatepassOutdated(gatepass, now = new Date()) {
   if (!gatepass) return false;
   const status = gatepass.status || gatepass.rawStatus;
-  if (['checked_out_by_security', 'completed', 'cancelled', 'rejected_by_principal', 'rejected_by_hod', 'rejected_by_coordinator', 'rejected_by_cao'].includes(status)) {
+  if ([
+    'checked_out_by_security',
+    'completed',
+    'cancelled',
+    'rejected_by_principal',
+    'rejected_by_hod',
+    'rejected_by_coordinator',
+    'rejected_by_cao',
+    'rejected_by_chairman',
+    'rejected'
+  ].includes(status)) {
     return false;
   }
-  if (!gatepass.outDate) return false;
-  const outDate = new Date(gatepass.outDate);
-  if (Number.isNaN(outDate.getTime())) return false;
 
-  const startOfToday = new Date(now);
-  startOfToday.setHours(0, 0, 0, 0);
-
-  if (outDate < startOfToday) {
-    return true;
+  let departureTimestamp = null;
+  if (gatepass.outDate) {
+    const outDate = new Date(gatepass.outDate);
+    if (!Number.isNaN(outDate.getTime())) {
+      const [h = '23', m = '59'] = String(gatepass.outTime || '23:59').split(':');
+      const outDateTime = new Date(outDate);
+      outDateTime.setHours(Number(h), Number(m), 59, 999);
+      departureTimestamp = outDateTime.getTime();
+    }
   }
 
-  const endOfToday = new Date(now);
-  endOfToday.setHours(23, 59, 59, 999);
-
-  if (outDate <= endOfToday && gatepass.outTime) {
-    const [h = '23', m = '59'] = String(gatepass.outTime).split(':');
-    const outDateTime = new Date(outDate);
-    outDateTime.setHours(Number(h), Number(m), 59, 999);
-    return outDateTime.getTime() < now.getTime();
+  if (!departureTimestamp && gatepass.createdAt) {
+    const createdDate = new Date(gatepass.createdAt);
+    if (!Number.isNaN(createdDate.getTime())) {
+      departureTimestamp = createdDate.getTime();
+    }
   }
 
-  return false;
+  if (!departureTimestamp) {
+    return false;
+  }
+
+  return (now.getTime() - departureTimestamp) > OUTDATED_GRACE_MS;
 }
 
 function applyStatusFilter(filter, queryStatus, allowedStatuses = null) {

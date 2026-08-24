@@ -64,6 +64,8 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="DwarPal" />
     <meta name="description" content="Digital gatepass and campus access management system for students and faculty." />
+    <link rel="preconnect" href="https://www.googletagmanager.com" crossorigin />
+    <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
     <link rel="icon" type="image/png" sizes="192x192" href="/dwarpal-icon-192.png" />
     <link rel="shortcut icon" href="/dwarpal-icon-192.png" />
     <link rel="apple-touch-icon" sizes="192x192" href="/dwarpal-icon-192.png" />
@@ -197,7 +199,11 @@
         }
 
         let started = false
-        cleanupLegacyBrowserState()
+        if (typeof window.requestIdleCallback === 'function') {
+          window.requestIdleCallback(cleanupLegacyBrowserState, { timeout: 2000 })
+        } else {
+          setTimeout(cleanupLegacyBrowserState, 1200)
+        }
 
         window.__DWARPAL_BOOT_STATUS__ = {
           markStarted() {

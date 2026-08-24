@@ -1084,9 +1084,10 @@ function formatDurationLabel(totalMinutes) {
   return [hourLabel, minuteLabel].filter(Boolean).join(' ') || `${minutes}m`
 }
 
+const OUTDATED_GRACE_MS = 8 * 60 * 60 * 1000 // 8 hours grace period
+
 export function isGatepassOutdated(gatepass, now = new Date()) {
   if (!gatepass) return false
-  if (gatepass.isOutdated === true) return true
   const status = gatepass.status || gatepass.rawStatus
   if ([
     'checked_out_by_security',
@@ -1095,34 +1096,37 @@ export function isGatepassOutdated(gatepass, now = new Date()) {
     'rejected_by_principal',
     'rejected_by_hod',
     'rejected_by_coordinator',
-    'rejected_by_cao'
+    'rejected_by_cao',
+    'rejected_by_chairman',
+    'rejected'
   ].includes(status)) {
     return false
   }
 
-  const outDateVal = gatepass.outDate || gatepass.outTime
-  if (!outDateVal) return false
-  const outDate = new Date(outDateVal)
-  if (Number.isNaN(outDate.getTime())) return false
-
-  const startOfToday = new Date(now)
-  startOfToday.setHours(0, 0, 0, 0)
-
-  if (outDate < startOfToday) {
-    return true
+  let departureTimestamp = null
+  const outDateVal = gatepass.outDate || gatepass.date
+  if (outDateVal) {
+    const outDate = new Date(outDateVal)
+    if (!Number.isNaN(outDate.getTime())) {
+      const [h = '23', m = '59'] = String(gatepass.outTime || '23:59').split(':')
+      const outDateTime = new Date(outDate)
+      outDateTime.setHours(Number(h), Number(m), 59, 999)
+      departureTimestamp = outDateTime.getTime()
+    }
   }
 
-  const endOfToday = new Date(now)
-  endOfToday.setHours(23, 59, 59, 999)
-
-  if (outDate <= endOfToday && gatepass.outTime && typeof gatepass.outTime === 'string' && gatepass.outTime.includes(':')) {
-    const [h = '23', m = '59'] = gatepass.outTime.split(':')
-    const outDateTime = new Date(outDate)
-    outDateTime.setHours(Number(h), Number(m), 59, 999)
-    return outDateTime.getTime() < now.getTime()
+  if (!departureTimestamp && gatepass.createdAt) {
+    const createdDate = new Date(gatepass.createdAt)
+    if (!Number.isNaN(createdDate.getTime())) {
+      departureTimestamp = createdDate.getTime()
+    }
   }
 
-  return false
+  if (!departureTimestamp) {
+    return false
+  }
+
+  return (now.getTime() - departureTimestamp) > OUTDATED_GRACE_MS
 }
 
 function getDisplayStatus(status, gatepass = null) {

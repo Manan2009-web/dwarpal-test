@@ -31,6 +31,15 @@ export default defineConfig(({ mode }) => {
               if (id.includes('firebase')) {
                 return 'vendor-firebase'
               }
+              if (id.includes('ogl')) {
+                return 'vendor-ogl'
+              }
+              if (id.includes('xlsx') || id.includes('papaparse')) {
+                return 'vendor-sheets'
+              }
+              if (id.includes('qr-scanner')) {
+                return 'vendor-qr'
+              }
               if (id.includes('lucide-react')) {
                 return 'vendor-lucide'
               }

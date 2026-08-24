@@ -23,13 +23,11 @@ import './App.css'
 import AppBrand from './components/AppBrand'
 import LandingPage from './components/LandingPage'
 import LoadingPage from './components/LoadingPage'
-import SupportModal from './components/SupportModal'
 import AuthPage from './components/auth/AuthPage'
 import LoginForm from './components/auth/LoginForm'
 import RegisterForm from './components/auth/RegisterForm'
 import LandingPanel from './components/auth/LandingPanel'
 import FeatureBoundary from './components/FeatureBoundary'
-import GatepassQrModal from './components/GatepassQrModal'
 import NotificationCenterPanel from './components/NotificationCenterPanel'
 import { NotificationProvider, useNotifications } from './components/NotificationProvider'
 import ExpandableGatepassCard from './components/ExpandableGatepassCard'
@@ -37,16 +35,9 @@ import NotificationPermissionPrompt, {
   NotificationPermissionCard,
 } from './components/NotificationPermissionPrompt'
 import PushPromptBanner from './components/PushPromptBanner'
-import PreferencesPanel from './components/PreferencesPanel'
 import PrivacyPreferencesBanner from './components/PrivacyPreferencesBanner'
 import PasswordInput from './components/PasswordInput'
-import PasswordResetPanel from './components/PasswordResetPanel'
-import NewStudentWelcomeModal from './components/NewStudentWelcomeModal'
 import { SkeletonNotificationList } from './components/ui/SkeletonLoader'
-
-import LegalDocs from './components/LegalDocs'
-import SupportPage from './components/SupportPage'
-import Aurora from './components/ui/Aurora'
 import OtpCodeInput from './components/OtpCodeInput'
 
 const AccessPortal = lazy(() => import('./components/AccessPortal'))
@@ -55,6 +46,14 @@ const ChairmanPortal = lazy(() => import('./components/ChairmanPortal'))
 const Register = lazy(() => import('./components/Register'))
 const FacultyLeaveWizard = lazy(() => import('./components/FacultyLeaveWizard'))
 const SecurityVerificationPanel = lazy(() => import('./components/SecurityVerificationPanel'))
+const SupportModal = lazy(() => import('./components/SupportModal'))
+const GatepassQrModal = lazy(() => import('./components/GatepassQrModal'))
+const PreferencesPanel = lazy(() => import('./components/PreferencesPanel'))
+const PasswordResetPanel = lazy(() => import('./components/PasswordResetPanel'))
+const NewStudentWelcomeModal = lazy(() => import('./components/NewStudentWelcomeModal'))
+const LegalDocs = lazy(() => import('./components/LegalDocs'))
+const SupportPage = lazy(() => import('./components/SupportPage'))
+const Aurora = lazy(() => import('./components/ui/Aurora'))
 import { useToast } from './components/ToastProvider'
 import { usePushSubscription } from './hooks/usePushSubscription'
 import { useStudentSessionTimeout } from './hooks/useStudentSessionTimeout'
@@ -2143,7 +2142,9 @@ function App() {
           onReject={() => handleCookiePreferenceChange('rejected')}
         />
       </FeatureBoundary>
-      <SupportModal open={supportModalOpen} onClose={() => setSupportModalOpen(false)} support={SUPPORT_CONFIG} />
+      <Suspense fallback={null}>
+        <SupportModal open={supportModalOpen} onClose={() => setSupportModalOpen(false)} support={SUPPORT_CONFIG} />
+      </Suspense>
       {/* TEMP_DISABLED_OTP */}
     </BrowserRouter>
   )
@@ -3299,12 +3300,14 @@ function RegisterScreen({ onRegister }) {
     <div className="tw:relative tw:flex tw:min-h-screen tw:items-center tw:justify-center tw:bg-[#040406] tw:px-4 tw:py-12 tw:font-sans tw:antialiased tw:selection:bg-white/20 tw:overflow-hidden">
       {/* Refraction WebGL Aurora Background */}
       <div className="tw:absolute tw:inset-0 tw:z-0 tw:pointer-events-none tw:transform-gpu">
-        <Aurora 
-          colorStops={['#A855F7', '#6366F1', '#EC4899']}
-          amplitude={1.2}
-          blend={0.5}
-          speed={0.5}
-        />
+        <Suspense fallback={null}>
+          <Aurora 
+            colorStops={['#A855F7', '#6366F1', '#EC4899']}
+            amplitude={1.2}
+            blend={0.5}
+            speed={0.5}
+          />
+        </Suspense>
       </div>
 
       {/* Apple Glass Container - max-w-2xl for form fields */}
@@ -4324,15 +4327,17 @@ function ProfileSettingsTabs({
 
       {activeTab === 'preferences' ? (
         <FeatureBoundary label="Preferences panel">
-          <PreferencesPanel
-            cookieConsent={cookieConsent}
-            notificationPermissionState={notificationPermissionState}
-            notificationsSupported={notificationsSupported}
-            onManageCookies={onManageCookiePreferences}
-            onManageNotifications={onOpenNotificationPrompt}
-            onTestNotification={onTestNotification}
-            testingNotification={testingNotification}
-          />
+          <Suspense fallback={<div className="tw:p-6 tw:text-sm tw:text-slate-400">Loading preferences...</div>}>
+            <PreferencesPanel
+              cookieConsent={cookieConsent}
+              notificationPermissionState={notificationPermissionState}
+              notificationsSupported={notificationsSupported}
+              onManageCookies={onManageCookiePreferences}
+              onManageNotifications={onOpenNotificationPrompt}
+              onTestNotification={onTestNotification}
+              testingNotification={testingNotification}
+            />
+          </Suspense>
         </FeatureBoundary>
       ) : null}
 
@@ -4341,7 +4346,9 @@ function ProfileSettingsTabs({
       ) : null}
 
       {activeTab === 'password' ? (
-        <PasswordResetPanel currentUser={currentUser} onCurrentUserPatch={onCurrentUserPatch} />
+        <Suspense fallback={<div className="tw:p-6 tw:text-sm tw:text-slate-400">Loading password settings...</div>}>
+          <PasswordResetPanel currentUser={currentUser} onCurrentUserPatch={onCurrentUserPatch} />
+        </Suspense>
       ) : null}
 
       {currentUser.role === 'principal' || currentUser.role === 'hod' ? (
@@ -4856,11 +4863,13 @@ function AppShell({
           ) : null}
 
           {showNewStudentWelcome ? (
-            <NewStudentWelcomeModal
-              currentUser={currentUser}
-              onNavigateToProfileReset={handleNavigateToProfileReset}
-              onClose={handleDismissWelcomeModal}
-            />
+            <Suspense fallback={null}>
+              <NewStudentWelcomeModal
+                currentUser={currentUser}
+                onNavigateToProfileReset={handleNavigateToProfileReset}
+                onClose={handleDismissWelcomeModal}
+              />
+            </Suspense>
           ) : null}
 
           {currentPage === 'notifications' ? (
@@ -4919,11 +4928,13 @@ function AppShell({
         onClose={() => setRejectRequest(null)}
         onSubmit={handleRejectSubmit}
       />
-      <GatepassQrModal
-        gatepass={qrPreviewGatepass}
-        open={Boolean(qrPreviewGatepass)}
-        onClose={() => setQrPreviewGatepass(null)}
-      />
+      <Suspense fallback={null}>
+        <GatepassQrModal
+          gatepass={qrPreviewGatepass}
+          open={Boolean(qrPreviewGatepass)}
+          onClose={() => setQrPreviewGatepass(null)}
+        />
+      </Suspense>
       <FeatureBoundary label="Notification permission prompt">
         <NotificationPermissionPrompt
           open={notificationPromptOpen}

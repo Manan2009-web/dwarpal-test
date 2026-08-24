@@ -77,8 +77,13 @@ function mergeRecentItems(first = [], second = [], limit = 5) {
     .slice(0, limit);
 }
 
-function getNowFilterConditions() {
-  const now = new Date();
+const OUTDATED_GRACE_MS = 8 * 60 * 60 * 1000; // 8 hours grace period
+
+function getNowFilterConditions(now = new Date()) {
+  const cutoffTime = new Date(now.getTime() - OUTDATED_GRACE_MS);
+  const cutoffDateStart = new Date(cutoffTime);
+  cutoffDateStart.setHours(0, 0, 0, 0);
+
   const startOfToday = new Date(now);
   startOfToday.setHours(0, 0, 0, 0);
 
@@ -89,17 +94,23 @@ function getNowFilterConditions() {
   const minutes = String(now.getMinutes()).padStart(2, '0');
   const currentTimeString = `${hours}:${minutes}`;
 
+  const cutoffHours = String(cutoffTime.getHours()).padStart(2, '0');
+  const cutoffMinutes = String(cutoffTime.getMinutes()).padStart(2, '0');
+  const cutoffTimeString = `${cutoffHours}:${cutoffMinutes}`;
+
+  // Outdated: Scheduled departure was more than 8 hours ago
   const outdatedFilter = {
     $or: [
-      { outDate: { $lt: startOfToday } },
-      { outDate: { $gte: startOfToday, $lte: endOfToday }, outTime: { $lt: currentTimeString } }
+      { outDate: { $lt: cutoffDateStart } },
+      { outDate: { $gte: cutoffDateStart, $lte: cutoffTime }, outTime: { $lt: cutoffTimeString } }
     ]
   };
 
+  // Active: Scheduled departure was within the last 8 hours or in the future
   const activeTimeFilter = {
     $or: [
-      { outDate: { $gt: endOfToday } },
-      { outDate: { $gte: startOfToday, $lte: endOfToday }, outTime: { $gte: currentTimeString } }
+      { outDate: { $gt: cutoffTime } },
+      { outDate: { $gte: cutoffDateStart, $lte: now }, outTime: { $gte: cutoffTimeString } }
     ]
   };
 
