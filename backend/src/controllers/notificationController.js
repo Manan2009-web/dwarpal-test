@@ -3,6 +3,7 @@ const { sendSuccess } = require('../utils/apiResponse');
 const { saveDeviceToken } = require('../services/pushNotificationService');
 const PushSubscription = require('../models/PushSubscription');
 const {
+  createBulkNotifications,
   getNotificationsForUser,
   getUnreadNotificationCount,
   markAllNotificationsAsRead,
