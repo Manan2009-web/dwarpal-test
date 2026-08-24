@@ -520,6 +520,31 @@ const removeWebAuthnDevice = asyncHandler(async (req, res) => {
   });
 });
 
+const getStudentRegistrationQr = asyncHandler(async (req, res) => {
+  const QRCode = require('qrcode');
+  const env = require('../config/env');
+  const origin = req.headers.origin || req.headers.referer || env.clientUrl || 'https://dwarpal-test.vercel.app';
+  const cleanOrigin = String(origin).replace(/\/$/, '');
+  const registrationUrl = `${cleanOrigin}/student/register`;
+
+  const qrDataUrl = await QRCode.toDataURL(registrationUrl, {
+    width: 600,
+    margin: 2,
+    color: {
+      dark: '#10263e',
+      light: '#ffffff'
+    }
+  });
+
+  return sendSuccess(res, {
+    message: 'Student registration QR code generated successfully',
+    data: {
+      registrationUrl,
+      qrDataUrl
+    }
+  });
+});
+
 module.exports = {
   checkRegistrationAvailability,
   changePassword,
@@ -527,6 +552,7 @@ module.exports = {
   forgotPasswordStart,
   resolveForgotPasswordAccount,
   getMe,
+  getStudentRegistrationQr,
   portalAccess,
   requestPasswordChange,
   resetForgotPassword,

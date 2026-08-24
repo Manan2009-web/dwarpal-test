@@ -150,6 +150,10 @@ function errorHandler(err, req, res, next) {
     response.rateLimit = error.rateLimit;
   }
 
+  if (error.existingAccount) {
+    response.existingAccount = error.existingAccount;
+  }
+
   res.status(error.statusCode || 500).json(response);
 }
 

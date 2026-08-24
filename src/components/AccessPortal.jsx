@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { KeyRound } from 'lucide-react'
+import { KeyRound, GraduationCap } from 'lucide-react'
 import SideRays from './ui/SideRays'
 import logo from '../assets/dwarpal_logo.png'
 import { requestPortalAccess } from '../lib/dwarpalApi'
@@ -198,7 +198,17 @@ export default function AccessPortal({ onAccessGranted }) {
           </motion.button>
         </form>
 
-        <motion.div variants={itemVariants} className="tw:mt-8 tw:text-center">
+        <motion.div variants={itemVariants} className="tw:mt-6 tw:pt-5 tw:border-t tw:border-[rgba(23,52,73,0.1)] tw:text-center">
+          <p className="tw:text-xs tw:text-[#5d7183]">
+            New student or no enrollment ID yet?{' '}
+            <Link to="/student/register" className="tw:font-bold tw:text-[#2872a1] tw:hover:underline tw:inline-flex tw:items-center tw:gap-1">
+              <GraduationCap className="tw:w-3.5 tw:h-3.5" />
+              <span>Student Direct Register</span>
+            </Link>
+          </p>
+        </motion.div>
+
+        <motion.div variants={itemVariants} className="tw:mt-6 tw:text-center">
           <p className="tw:text-[9px] tw:text-neutral-400 tw:font-mono tw:tracking-widest tw:uppercase">
             DwarPal SecOps Infrastructure
           </p>

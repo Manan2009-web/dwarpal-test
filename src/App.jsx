@@ -54,6 +54,7 @@ const NewStudentWelcomeModal = lazy(() => import('./components/NewStudentWelcome
 const LegalDocs = lazy(() => import('./components/LegalDocs'))
 const SupportPage = lazy(() => import('./components/SupportPage'))
 const NotFoundPage = lazy(() => import('./components/NotFoundPage'))
+const StudentRegisterPage = lazy(() => import('./components/auth/StudentRegisterPage'))
 const Aurora = lazy(() => import('./components/ui/Aurora'))
 import { useToast } from './components/ToastProvider'
 import { usePushSubscription } from './hooks/usePushSubscription'
@@ -2117,6 +2118,20 @@ function App() {
           <ErrorBoundary>
             <Suspense fallback={<LoadingSpinner />}>
               <SupportPage />
+            </Suspense>
+          </ErrorBoundary>
+        } />
+        <Route path="/student/register" element={
+          <ErrorBoundary>
+            <Suspense fallback={<LoadingSpinner />}>
+              <StudentRegisterPage />
+            </Suspense>
+          </ErrorBoundary>
+        } />
+        <Route path="/register/student" element={
+          <ErrorBoundary>
+            <Suspense fallback={<LoadingSpinner />}>
+              <StudentRegisterPage />
             </Suspense>
           </ErrorBoundary>
         } />

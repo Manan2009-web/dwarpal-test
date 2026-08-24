@@ -453,5 +453,9 @@ router.post(
   authController.resetPassword
 );
 
+router.get(
+  '/student-register-qr',
+  authController.getStudentRegistrationQr
+);
 
 module.exports = router;

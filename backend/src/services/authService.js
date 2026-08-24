@@ -23,6 +23,7 @@ const {
   PUBLIC_REGISTRATION_ROLES,
   normalizeRole
 } = require('../constants/appConstants');
+const { generateTemporaryEnrollmentNo } = require('./studentManagementService');
 const { normalizePhoneNumber } = require('../utils/phone');
 const {
   getExpectedOrigins,
@@ -214,11 +215,23 @@ async function collectRegistrationConflictErrors(payload = {}) {
   console.log('[register-debug] Employee Query:', normalizedPayload.employeeId);
   // --- END DEBUG LOGS ---
 
-  const existingUsers = await User.find({ $or: duplicateLookup }).select('_id email phone enrollmentNo enrollment employeeId').lean();
+  const existingUsers = await User.find({ $or: duplicateLookup }).select('_id email phone enrollmentNo enrollment employeeId fullName role').lean();
   const errors = [];
   const conflictingUsers = existingUsers.filter((user) => String(user?._id || '') !== ignoredUserId);
 
   console.log('[register-debug] Existing User(s) found:', JSON.stringify(conflictingUsers));
+
+  let existingAccount = null;
+  if (conflictingUsers.length > 0) {
+    const prime = conflictingUsers[0];
+    existingAccount = {
+      enrollmentNo: prime.enrollmentNo || prime.enrollment || '',
+      email: prime.email || '',
+      phone: prime.phone || '',
+      fullName: prime.fullName || '',
+      role: prime.role || 'student'
+    };
+  }
 
   if (normalizedPayload.email && conflictingUsers.some((user) => user.email === normalizedPayload.email)) {
     errors.push(buildFieldError('email', DUPLICATE_REGISTRATION_MESSAGES.email));
@@ -248,17 +261,19 @@ async function collectRegistrationConflictErrors(payload = {}) {
     errors.push(buildFieldError('employeeId', DUPLICATE_REGISTRATION_MESSAGES.employeeId));
   }
 
-  return errors;
+  return { errors, existingAccount };
 }
 
 async function assertRegistrationAvailability(payload = {}, options = {}) {
-  const conflictErrors = await collectRegistrationConflictErrors({
+  const { errors: conflictErrors, existingAccount } = await collectRegistrationConflictErrors({
     ...payload,
     ignoreUserId: options.ignoreUserId || null
   });
 
   if (conflictErrors.length) {
-    throw new AppError(conflictErrors[0].message, 409, conflictErrors);
+    const err = new AppError(conflictErrors[0].message, 409, conflictErrors);
+    err.existingAccount = existingAccount;
+    throw err;
   }
 }
 
@@ -280,6 +295,7 @@ function applyRegistrationDetailsToUser(user, normalizedPayload) {
   user.enrollment = normalizedPayload.role === 'student' ? normalizedPayload.enrollmentNo : undefined;
   user.employeeId = normalizedPayload.role === 'student' ? undefined : normalizedPayload.employeeId;
   user.phone = normalizedPayload.phone;
+  user.isTemporaryEnrollment = Boolean(normalizedPayload.isTemporaryEnrollment);
   // TEMP_DISABLED_OTP
   user.emailVerified = true;
   user.isEmailVerified = true;
@@ -310,6 +326,16 @@ async function registerUser(payload, req, requestMeta) {
 
   if (!normalizedPayload.phone) {
     throw createFieldErrorResponse('phone', 'Please enter a valid phone number.');
+  }
+
+  // Auto-generate GTU enrollment number if student is marked as new student or enrollment is omitted
+  if (normalizedRole === 'student' && (payload.isNewStudent || !normalizedPayload.enrollmentNo)) {
+    normalizedPayload.enrollmentNo = await generateTemporaryEnrollmentNo(
+      normalizedPayload.program,
+      normalizedPayload.department,
+      normalizedPayload.semester
+    );
+    normalizedPayload.isTemporaryEnrollment = true;
   }
 
   await assertRegistrationAvailability(normalizedPayload);

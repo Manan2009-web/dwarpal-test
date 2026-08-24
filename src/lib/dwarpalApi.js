@@ -755,6 +755,7 @@ function buildRegistrationIdentityPayload(payload = {}) {
       ? {
           semester: Number(payload.semester),
           enrollmentNo: cleanedId,
+          isNewStudent: Boolean(payload.isNewStudent),
         }
       : normalizedRole
         ? {

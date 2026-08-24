@@ -1020,5 +1020,6 @@ module.exports = {
   exportStudentCredentials,
   listStudents,
   updateStudent,
-  bulkCreateStudents
+  bulkCreateStudents,
+  generateTemporaryEnrollmentNo
 };
