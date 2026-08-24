@@ -356,7 +356,7 @@ function buildDeliveryHeaders(to, context) {
 }
 
 function getFromAddressString() {
-  const address = env.emailFrom || getEffectiveFromEmail() || 'onboarding@dwarpal.dcpartners.dev';
+  const address = env.emailFrom || getEffectiveFromEmail() || 'dwarpal@neotech.ac.in';
   const name = String(env.smtpFromName || 'DwarPal').trim();
   return name ? `${name} <${address}>` : address;
 }
@@ -1001,7 +1001,7 @@ async function sendStudentOnboardingEmail({ email, fullName, enrollmentNo, tempo
           <tr>
             <td style="padding:24px 40px;background-color:#f8fafc;border-top:1px solid #e2e8f0;font-size:12px;color:#64748b;line-height:1.6;text-align:left;">
               <p style="margin:0 0 8px;font-weight:600;color:#334155;">DwarPal Systems</p>
-              <p style="margin:0 0 12px;">This is a system notification sent on behalf of ${safeCollegeName}. Replies to this message are monitored at <a href="mailto:support@dcpartners.dev" style="color:#2872a1;text-decoration:none;">support@dcpartners.dev</a>.</p>
+              <p style="margin:0 0 12px;">This is a system notification sent on behalf of ${safeCollegeName}. Replies to this message are monitored at <a href="mailto:dwarpal@neotech.ac.in" style="color:#2872a1;text-decoration:none;">dwarpal@neotech.ac.in</a>.</p>
               <p style="margin:0;font-size:11px;color:#94a3b8;">You are receiving this transactional email because an account was registered for you on the DwarPal gatepass network.</p>
             </td>
           </tr>
@@ -1030,7 +1030,7 @@ async function sendStudentOnboardingEmail({ email, fullName, enrollmentNo, tempo
     '',
     `---`,
     `DwarPal Systems`,
-    `Support: support@dcpartners.dev`,
+    `Support: dwarpal@neotech.ac.in`,
     `You are receiving this transactional email because an account was registered for you on the DwarPal gatepass network.`
   ].join('\n');
 

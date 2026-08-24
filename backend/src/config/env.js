@@ -226,7 +226,7 @@ const env = {
     process.env.PASSWORD_RESET_OTP_VERIFY_ATTEMPT_LIMIT,
     5
   ),
-  emailFrom: normalizeEnvString(process.env.EMAIL_FROM) || 'DwarPal <onboarding@dwarpal.dcpartners.dev>',
+  emailFrom: normalizeEnvString(process.env.EMAIL_FROM) || 'DwarPal <dwarpal@neotech.ac.in>',
   resendApiKey: normalizeEnvString(process.env.RESEND_API_KEY),
   brevoApiKey: normalizeEnvString(process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY),
   brevoApiKeys: Array.from(
