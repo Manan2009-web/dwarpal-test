@@ -204,6 +204,30 @@ export function NotificationProvider({ children, currentUser, notificationPermis
       return
     }
 
+    // 1. If a custom MP3 audio file is available in /sounds/notification.mp3, attempt audio playback
+    if (typeof Audio !== 'undefined') {
+      try {
+        const audio = new Audio('/sounds/notification.mp3')
+        audio.volume = 0.6
+        const playPromise = audio.play()
+        if (playPromise && typeof playPromise.then === 'function') {
+          playPromise.then(() => {
+            lastSoundAtRef.current = now
+          }).catch(() => {
+            // Fall back to Web Audio synthesis if audio element fails or file not present
+            synthesizeChime(now)
+          })
+          return
+        }
+      } catch {
+        // Fall back to Web Audio synthesis
+      }
+    }
+
+    synthesizeChime(now)
+  }, [])
+
+  function synthesizeChime(now) {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext
 
     if (!AudioContextClass) {
@@ -225,26 +249,39 @@ export function NotificationProvider({ children, currentUser, notificationPermis
         audioContext.resume().catch(() => {})
       }
 
-      const oscillator = audioContext.createOscillator()
-      const gainNode = audioContext.createGain()
       const startTime = audioContext.currentTime
 
-      oscillator.type = 'sine'
-      oscillator.frequency.setValueAtTime(880, startTime)
-      gainNode.gain.setValueAtTime(0.0001, startTime)
-      gainNode.gain.exponentialRampToValueAtTime(0.03, startTime + 0.01)
-      gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.18)
+      // Tone 1: Warm fundamental (587.33 Hz - D5)
+      const osc1 = audioContext.createOscillator()
+      const gain1 = audioContext.createGain()
+      osc1.type = 'sine'
+      osc1.frequency.setValueAtTime(587.33, startTime)
+      gain1.gain.setValueAtTime(0.0001, startTime)
+      gain1.gain.exponentialRampToValueAtTime(0.12, startTime + 0.02)
+      gain1.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.35)
+      osc1.connect(gain1)
+      gain1.connect(audioContext.destination)
+      osc1.start(startTime)
+      osc1.stop(startTime + 0.38)
 
-      oscillator.connect(gainNode)
-      gainNode.connect(audioContext.destination)
+      // Tone 2: Crystal upper overtone chime (880 Hz - A5) starting slightly offset (+0.08s)
+      const osc2 = audioContext.createOscillator()
+      const gain2 = audioContext.createGain()
+      osc2.type = 'triangle'
+      osc2.frequency.setValueAtTime(880, startTime + 0.08)
+      gain2.gain.setValueAtTime(0.0001, startTime + 0.08)
+      gain2.gain.exponentialRampToValueAtTime(0.09, startTime + 0.1)
+      gain2.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.45)
+      osc2.connect(gain2)
+      gain2.connect(audioContext.destination)
+      osc2.start(startTime + 0.08)
+      osc2.stop(startTime + 0.48)
 
-      oscillator.start(startTime)
-      oscillator.stop(startTime + 0.2)
       lastSoundAtRef.current = now
     } catch {
-      // Ignore sound failures so visual notifications continue.
+      // Ignore sound failures so visual notifications continue uninterrupted.
     }
-  }, [])
+  }
 
   const showRealtimeToast = useCallback(
     (notification) => {

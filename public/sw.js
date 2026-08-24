@@ -35,9 +35,12 @@ self.addEventListener('fetch', (event) => {
   const { request } = event
 
   // Skip non-GET requests immediately
-  if (request.method !== 'GET') return
-
   const url = new URL(request.url)
+
+  // 0. Only intercept same-origin requests (prevents adblockers/3rd-party fetch rejection errors like GTM)
+  if (url.origin !== self.location.origin) {
+    return
+  }
 
   // 1. API & WebSocket requests: Network-Only bypass
   if (url.pathname.startsWith('/api/') || url.pathname.includes('/socket.io/')) {
@@ -85,7 +88,7 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
         }
         return response
-      })
+      }).catch(() => cachedResponse || null)
     })
   )
 })
