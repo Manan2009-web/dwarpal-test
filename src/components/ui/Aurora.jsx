@@ -113,9 +113,12 @@ export default function Aurora(props) {
   const propsRef = useRef(props);
   propsRef.current = props;
 
+  const isMobile = typeof window !== 'undefined' && (window.innerWidth < 768 || 'ontouchstart' in window || (navigator.maxTouchPoints && navigator.maxTouchPoints > 0));
   const ctnDom = useRef(null);
 
   useEffect(() => {
+    if (isMobile) return undefined;
+
     const ctn = ctnDom.current;
     if (!ctn) return;
 
@@ -137,20 +140,15 @@ export default function Aurora(props) {
       const width = ctn.offsetWidth;
       const height = ctn.offsetHeight;
       
-      // Performance Mode: Render at half resolution on mobile to save GPU fill rate
-      const isMobile = window.innerWidth < 768;
-      const scaleFactor = isMobile ? 0.5 : 1.0;
+      renderer.setSize(width, height);
       
-      renderer.setSize(width * scaleFactor, height * scaleFactor);
-      
-      // Ensure the canvas element stays visually full size via CSS layout stretching
       if (renderer.gl.canvas) {
         renderer.gl.canvas.style.width = '100%';
         renderer.gl.canvas.style.height = '100%';
       }
       
       if (program) {
-        program.uniforms.uResolution.value = [width * scaleFactor, height * scaleFactor];
+        program.uniforms.uResolution.value = [width, height];
       }
     }
     window.addEventListener('resize', resize);
@@ -183,6 +181,8 @@ export default function Aurora(props) {
     let animateId = 0;
     const update = t => {
       animateId = requestAnimationFrame(update);
+      if (document.hidden) return;
+
       const { time = t * 0.01, speed = 1.0 } = propsRef.current;
       program.uniforms.uTime.value = time * speed * 0.1;
       program.uniforms.uAmplitude.value = propsRef.current.amplitude ?? 1.0;
@@ -206,7 +206,22 @@ export default function Aurora(props) {
       }
       gl.getExtension('WEBGL_lose_context')?.loseContext();
     };
-  }, [amplitude]);
+  }, [amplitude, isMobile]);
+
+  if (isMobile) {
+    return (
+      <div 
+        ref={ctnDom} 
+        className="aurora-container"
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'radial-gradient(ellipse at 50% 15%, rgba(168, 85, 247, 0.22) 0%, rgba(99, 102, 241, 0.14) 40%, rgba(236, 72, 153, 0.08) 70%, transparent 100%)',
+          pointerEvents: 'none'
+        }}
+      />
+    );
+  }
 
   return <div ref={ctnDom} className="aurora-container" />;
 }

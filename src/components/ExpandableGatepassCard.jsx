@@ -187,7 +187,7 @@ const ExpandableGatepassCard = memo(function ExpandableGatepassCard({
 
     const interval = setInterval(() => {
       const updatedAtTime = new Date(gatepass.updatedAt).getTime()
-      const limitMs = 2 * 60 * 1000 // 2 minutes escalation
+      const limitMs = raw === 'forwarded_to_campus_security' ? 5 * 60 * 1000 : 2 * 60 * 1000
       const elapsed = Date.now() - updatedAtTime
       const remaining = limitMs - elapsed
 
@@ -198,9 +198,10 @@ const ExpandableGatepassCard = memo(function ExpandableGatepassCard({
         const secs = Math.floor(remaining / 1000)
         const mins = Math.floor(secs / 60)
         const displaySecs = String(secs % 60).padStart(2, '0')
-        setTimeLeft(`${mins}:${displaySecs}`)
+        const nextVal = `${mins}:${displaySecs}`
+        setTimeLeft((prev) => (prev === nextVal ? prev : nextVal))
       }
-    }, 500)
+    }, 1000)
 
     return () => clearInterval(interval)
   }, [gatepass.rawStatus, gatepass.status, gatepass.updatedAt])

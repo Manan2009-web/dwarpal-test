@@ -186,34 +186,37 @@ void main() {
       meshRef.current = mesh
 
       const updateSize = () => {
-        if (!containerRef.current || !renderer) return
-        renderer.dpr = Math.min(window.devicePixelRatio, 2)
+        if (!containerRef.current || !rendererRef.current) return
+        rendererRef.current.dpr = Math.min(window.devicePixelRatio || 1, 1.5)
         const { clientWidth: w, clientHeight: h } = containerRef.current
-        renderer.setSize(w, h)
-        uniforms.iResolution.value = [w * renderer.dpr, h * renderer.dpr]
-      }
-
-      const loop = (t) => {
-        if (!rendererRef.current || !uniformsRef.current || !meshRef.current) return
-        uniforms.iTime.value = t * 0.001
-        try {
-          renderer.render({ scene: mesh })
-          animationIdRef.current = requestAnimationFrame(loop)
-        } catch (e) {
-          return
+        rendererRef.current.setSize(w, h)
+        if (uniformsRef.current) {
+          uniformsRef.current.iResolution.value = [w * rendererRef.current.dpr, h * rendererRef.current.dpr]
         }
       }
 
       window.addEventListener('resize', updateSize)
-      updateSize()
+
+      const loop = (t) => {
+        animationIdRef.current = requestAnimationFrame(loop)
+        if (document.hidden) return
+        if (!rendererRef.current || !uniformsRef.current || !meshRef.current) return
+        uniformsRef.current.iTime.value = t * 0.001
+        try {
+          rendererRef.current.render({ scene: meshRef.current })
+        } catch (e) {
+          // ignore transient render error
+        }
+      }
+
       animationIdRef.current = requestAnimationFrame(loop)
 
       cleanupFunctionRef.current = () => {
+        window.removeEventListener('resize', updateSize)
         if (animationIdRef.current) {
           cancelAnimationFrame(animationIdRef.current)
           animationIdRef.current = null
         }
-        window.removeEventListener('resize', updateSize)
         if (renderer) {
           try {
             const loseCtx = renderer.gl.getExtension('WEBGL_lose_context')
@@ -236,7 +239,7 @@ void main() {
         cleanupFunctionRef.current = null
       }
     }
-  }, [isVisible, speed, rayColor1, rayColor2, intensity, spread, origin, tilt, saturation, blend, falloff, opacity])
+  }, [isVisible, isMobile, speed, rayColor1, rayColor2, intensity, spread, origin, tilt, saturation, blend, falloff, opacity])
 
   useEffect(() => {
     if (!uniformsRef.current) return
@@ -255,6 +258,19 @@ void main() {
     u.iFalloff.value = falloff
     u.iOpacity.value = opacity
   }, [speed, rayColor1, rayColor2, intensity, spread, origin, tilt, saturation, blend, falloff, opacity])
+
+  if (isMobile) {
+    return (
+      <div 
+        ref={containerRef} 
+        className={`side-rays-container ${className}`.trim()}
+        style={{
+          background: 'radial-gradient(circle at 100% 0%, rgba(234, 179, 8, 0.12) 0%, rgba(150, 200, 255, 0.08) 50%, transparent 80%)',
+          pointerEvents: 'none'
+        }}
+      />
+    )
+  }
 
   return <div ref={containerRef} className={`side-rays-container ${className}`.trim()} />
 }
