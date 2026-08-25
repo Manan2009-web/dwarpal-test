@@ -1602,12 +1602,8 @@ function AdminApprovalsPage({
       let actions = []
       const isActionable = [
         'forwarded_to_admin',
-        'forwarded_to_chairman',
-        'forwarded_to_campus_security',
-        'approved_by_principal',
-        'approved_by_hod',
-        'approved_by_coordinator',
-      ].includes(gp.rawStatus || gp.status)
+        'forwarded_to_chairman'
+      ].includes(gp.rawStatus || gp.status) || (gp.status === 'Pending' && ['admin', 'forwarded_to_admin', 'forwarded_to_chairman'].includes(gp.stage))
 
       if (isActionable) {
         actions = [
@@ -1714,70 +1710,86 @@ function AdminApprovalsPage({
         </div>
 
         {loading ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <SkeletonGatepassCard />
-            <SkeletonGatepassCard />
-            <SkeletonGatepassCard />
+          <div className="gatepass-grid admin-approval-grid">
+            <div className="gatepass-column">
+              <SkeletonGatepassCard />
+              <SkeletonGatepassCard />
+            </div>
+            <div className="gatepass-column">
+              <SkeletonGatepassCard />
+            </div>
           </div>
         ) : cards.length > 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {cards.map(({ gatepass, actions }) => (
-              <ExpandableGatepassCard
-                key={gatepass.id}
-                gatepass={gatepass}
-                currentUserRole="admin"
-                actions={actions}
-                expanded={expandedId === gatepass.id}
-                onToggle={() => onToggleExpand(expandedId === gatepass.id ? '' : gatepass.id)}
-              />
-            ))}
-
-            {meta.totalPages > 1 && (
-              <div
-                className="admin-pager"
-                style={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  gap: '12px',
-                  marginTop: '16px',
-                }}
-              >
-                <button
-                  disabled={page <= 1}
-                  onClick={() => onPageChange(page - 1)}
-                  className="admin-icon-button"
-                  style={{ cursor: page <= 1 ? 'not-allowed' : 'pointer', opacity: page <= 1 ? 0.4 : 1 }}
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <span style={{ fontSize: '0.9rem', color: 'var(--app-text-muted)' }}>
-                  Page {page} of {meta.totalPages}
-                </span>
-                <button
-                  disabled={page >= meta.totalPages}
-                  onClick={() => onPageChange(page + 1)}
-                  className="admin-icon-button"
-                  style={{ cursor: page >= meta.totalPages ? 'not-allowed' : 'pointer', opacity: page >= meta.totalPages ? 0.4 : 1 }}
-                >
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            )}
+          <div className="gatepass-grid admin-approval-grid">
+            <div className="gatepass-column">
+              {cards
+                .map((card, index) => ({ ...card, index }))
+                .filter((_, i) => i % 2 === 0)
+                .map(({ gatepass, actions, index }) => (
+                  <ExpandableGatepassCard
+                    key={gatepass.id}
+                    gatepass={gatepass}
+                    currentUserRole="admin"
+                    actions={actions}
+                    expanded={expandedId === gatepass.id}
+                    onToggle={() => onToggleExpand(expandedId === gatepass.id ? '' : gatepass.id)}
+                    style={{ order: index }}
+                  />
+                ))}
+            </div>
+            <div className="gatepass-column">
+              {cards
+                .map((card, index) => ({ ...card, index }))
+                .filter((_, i) => i % 2 !== 0)
+                .map(({ gatepass, actions, index }) => (
+                  <ExpandableGatepassCard
+                    key={gatepass.id}
+                    gatepass={gatepass}
+                    currentUserRole="admin"
+                    actions={actions}
+                    expanded={expandedId === gatepass.id}
+                    onToggle={() => onToggleExpand(expandedId === gatepass.id ? '' : gatepass.id)}
+                    style={{ order: index }}
+                  />
+                ))}
+            </div>
           </div>
         ) : (
+          <div style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--app-text-muted)' }}>
+            <p style={{ fontSize: '1.1rem', fontWeight: '500' }}>No gatepasses found</p>
+            <span style={{ fontSize: '0.875rem' }}>No requests match your current filters.</span>
+          </div>
+        )}
+        {meta.totalPages > 1 && (
           <div
-            className="admin-empty-state"
+            className="admin-pager"
             style={{
-              minHeight: '200px',
               display: 'flex',
               justifyContent: 'center',
               alignItems: 'center',
-              color: 'var(--app-text-muted)',
-              fontSize: '1rem',
+              gap: '12px',
+              marginTop: '16px',
             }}
           >
-            No gatepasses found in this queue.
+            <button
+              disabled={page <= 1}
+              onClick={() => onPageChange(page - 1)}
+              className="admin-icon-button"
+              style={{ cursor: page <= 1 ? 'not-allowed' : 'pointer', opacity: page <= 1 ? 0.4 : 1 }}
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span style={{ fontSize: '0.9rem', color: 'var(--app-text-muted)' }}>
+              Page {page} of {meta.totalPages}
+            </span>
+            <button
+              disabled={page >= meta.totalPages}
+              onClick={() => onPageChange(page + 1)}
+              className="admin-icon-button"
+              style={{ cursor: page >= meta.totalPages ? 'not-allowed' : 'pointer', opacity: page >= meta.totalPages ? 0.4 : 1 }}
+            >
+              <ChevronRight size={16} />
+            </button>
           </div>
         )}
       </section>

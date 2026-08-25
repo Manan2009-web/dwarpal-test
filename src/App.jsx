@@ -5773,7 +5773,7 @@ function getRoleStats(currentUser, summary, gatepasses) {
   if (currentUser.role === 'admin') {
     return {
       total: summaryStats.total ?? summaryStats.totalRequests ?? gatepasses.length,
-      pending: summaryStats.pending ?? gatepasses.filter((item) => item.status === 'Pending' || item.status === 'Forwarded').length,
+      pending: summaryStats.pending ?? gatepasses.filter((item) => item.status === 'Pending').length,
       approved: summaryStats.approved ?? gatepasses.filter((item) => item.status === 'Approved').length,
       rejected: summaryStats.rejected ?? gatepasses.filter((item) => item.status === 'Rejected').length,
       checkedOut: summaryStats.checkedOut ?? gatepasses.filter((item) => item.status === 'Out').length,
@@ -5784,7 +5784,8 @@ function getRoleStats(currentUser, summary, gatepasses) {
 
   if (currentUser.role === 'hod') {
     return {
-      pending: summaryStats.pending ?? summaryStats.pendingReviews ?? gatepasses.filter((item) => item.status === 'Pending' || item.status === 'Forwarded').length,
+      pending: summaryStats.pending ?? summaryStats.pendingReviews ?? gatepasses.filter((item) => item.status === 'Pending').length,
+      forwarded: summaryStats.forwarded ?? summaryStats.forwardedCount ?? gatepasses.filter((item) => item.status === 'Forwarded').length,
       handled: summaryStats.handled ?? summaryStats.totalHandled ?? 0,
       approved: summaryStats.approved ?? summaryStats.approvedCount ?? summaryStats.approvedByHod ?? 0,
       rejected: summaryStats.rejected ?? summaryStats.rejectedCount ?? summaryStats.rejectedByHod ?? 0,
@@ -5794,7 +5795,7 @@ function getRoleStats(currentUser, summary, gatepasses) {
 
   if (currentUser.role === 'chairman') {
     return {
-      pending: summaryStats.pending ?? gatepasses.filter((item) => item.status === 'Pending' || item.status === 'Forwarded').length,
+      pending: summaryStats.pending ?? gatepasses.filter((item) => item.status === 'Pending').length,
       approved: summaryStats.approved ?? 0,
       rejected: summaryStats.rejected ?? 0,
       outdated: summaryStats.outdated ?? gatepasses.filter((item) => item.status === 'Outdated' || item.isOutdated).length,
@@ -5803,8 +5804,8 @@ function getRoleStats(currentUser, summary, gatepasses) {
 
   if (currentUser.role === 'campus_security') {
     return {
-      pending: summaryStats.pending ?? gatepasses.filter((item) => item.status === 'Pending' || item.status === 'Forwarded').length,
-      cleared: summaryStats.cleared ?? 0,
+      pending: summaryStats.pending ?? gatepasses.filter((item) => item.status === 'Pending').length,
+      cleared: summaryStats.cleared ?? gatepasses.filter((item) => item.status === 'Approved').length,
       outdated: summaryStats.outdated ?? gatepasses.filter((item) => item.status === 'Outdated' || item.isOutdated).length,
     }
   }
@@ -5888,7 +5889,7 @@ function getSummaryCards(role, stats) {
   if (role === 'hod') {
     return [
       { label: 'Pending Review', value: stats.pending, icon: Clock3, tone: 'warning' },
-      { label: 'Handled', value: stats.handled, icon: QrCode },
+      { label: 'Forwarded', value: stats.forwarded, icon: Send, tone: 'info' },
       { label: 'Approved', value: stats.approved, icon: CheckCircle2, tone: 'success' },
       { label: 'Rejected', value: stats.rejected, icon: XCircle, tone: 'danger' },
       { label: 'Outdated', value: stats.outdated, icon: AlertTriangle, tone: 'danger' },
@@ -5943,10 +5944,22 @@ function canSecurityMarkIn(gatepass) {
     return false
   }
 
-  return Boolean(gatepass.canMarkIn ?? gatepass.returnTime ?? gatepass.expectedReturnTime)
+  return Boolean(
+    gatepass.requestKind === 'faculty_leave' ||
+      gatepass.canMarkIn ||
+      gatepass.returnTime ||
+      gatepass.expectedReturnTime,
+  )
 }
 
-function getAvailableActions(role, gatepass, onGatepassAction, securityStation = 'campus') {
+function getAvailableActions(argRole, argGatepass, onGatepassAction, securityStation = 'main') {
+  const role = typeof argRole === 'string' ? argRole : (argGatepass && typeof argGatepass === 'string' ? argGatepass : '')
+  const gatepass = typeof argRole === 'object' && argRole !== null ? argRole : (typeof argGatepass === 'object' && argGatepass !== null ? argGatepass : null)
+
+  if (!gatepass) {
+    return []
+  }
+
   function handleAction(action) {
     return async () => {
       await onGatepassAction(gatepass, action)
@@ -5995,7 +6008,7 @@ function getAvailableActions(role, gatepass, onGatepassAction, securityStation =
     return []
   }
 
-  if (role === 'principal' && gatepass.status === 'Pending' && ['principal', 'principal_review'].includes(gatepass.stage)) {
+  if (role === 'principal' && (gatepass.status === 'Pending' || gatepass.rawStatus === 'pending_principal')) {
     return [
       { label: 'Approve', tone: 'success', onClick: handleAction('approve') },
       { label: 'Reject', tone: 'danger', onClick: handleAction('reject') },
@@ -6003,7 +6016,7 @@ function getAvailableActions(role, gatepass, onGatepassAction, securityStation =
     ]
   }
 
-  if (role === 'hod' && gatepass.status === 'Pending' && ['hod', 'hod_review'].includes(gatepass.stage)) {
+  if (role === 'hod' && (gatepass.status === 'Pending' || gatepass.rawStatus === 'forwarded_to_hod')) {
     return [
       { label: 'Approve', tone: 'success', onClick: handleAction('approve') },
       { label: 'Reject', tone: 'danger', onClick: handleAction('reject') },
@@ -6011,7 +6024,7 @@ function getAvailableActions(role, gatepass, onGatepassAction, securityStation =
     ]
   }
 
-  if (role === 'faculty' && gatepass.status === 'Pending' && ['coordinator', 'coordinator_review'].includes(gatepass.stage)) {
+  if (role === 'faculty' && (gatepass.status === 'Pending' || gatepass.rawStatus === 'forwarded_to_coordinator')) {
     return [
       { label: 'Approve', tone: 'success', onClick: handleAction('approve') },
       { label: 'Reject', tone: 'danger', onClick: handleAction('reject') },
@@ -6026,14 +6039,7 @@ function getAvailableActions(role, gatepass, onGatepassAction, securityStation =
   }
 
   if (role === 'admin') {
-    const isAdminStage = [
-      'forwarded_to_admin',
-      'forwarded_to_chairman',
-      'forwarded_to_campus_security',
-      'approved_by_principal',
-      'approved_by_hod',
-      'approved_by_coordinator'
-    ].includes(gatepass.rawStatus || gatepass.status)
+    const isAdminStage = ['forwarded_to_admin', 'forwarded_to_chairman'].includes(gatepass.rawStatus || gatepass.status) || (gatepass.status === 'Pending' && ['admin', 'forwarded_to_admin', 'forwarded_to_chairman'].includes(gatepass.stage))
     if (isAdminStage) {
       return [
         { label: 'Approve', tone: 'success', onClick: handleAction('approve') },
@@ -6057,10 +6063,9 @@ function getAvailableActions(role, gatepass, onGatepassAction, securityStation =
       'approved_by_principal',
       'approved_by_hod',
       'approved_by_coordinator',
-      'approved_by_admin',
       'approved_by_chairman',
       'forwarded_to_campus_security'
-    ].includes(gatepass.rawStatus || gatepass.status)
+    ].includes(gatepass.rawStatus || gatepass.status) || (gatepass.status === 'Pending' && !gatepass.campusCleared)
 
     if (isBouncerStage) {
       return [

@@ -225,7 +225,6 @@ const BOUNCER_VISIBLE_STATUSES = Object.freeze([
   'approved_by_principal',
   'approved_by_hod',
   'approved_by_coordinator',
-  'approved_by_admin',
   'approved_by_chairman',
   'forwarded_to_campus_security'
 ]);

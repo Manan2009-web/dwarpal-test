@@ -1271,6 +1271,7 @@ function buildForwardNotificationsForStudentGatepass(gatepass, actor, routeResul
 
   const notifications = [];
 
+  // 1. Recipient receives incoming request notification
   if (routeResult.recipient?._id) {
     notifications.push({
       recipient: routeResult.recipient._id,
@@ -1291,6 +1292,33 @@ function buildForwardNotificationsForStudentGatepass(gatepass, actor, routeResul
     });
   }
 
+  // 2. Forwarding actor receives confirmation notification
+  if (
+    actor?._id &&
+    String(actor._id) !== String(routeResult.recipient?._id) &&
+    String(actor._id) !== String(gatepass.createdBy?._id || gatepass.createdBy)
+  ) {
+    notifications.push({
+      recipient: actor._id,
+      sender: actor._id,
+      gatepass: gatepass._id,
+      type: notificationType,
+      status: 'forwarded',
+      title: isEscalation
+        ? `Gatepass auto-forwarded to ${recipientRoleLabel}`
+        : `Gatepass forwarded to ${recipientRoleLabel}`,
+      message: isEscalation
+        ? `Gatepass ${gatepass.passNumber} was auto-forwarded to ${recipientRoleLabel}.`
+        : `Gatepass ${gatepass.passNumber} has been forwarded to ${recipientRoleLabel}.`,
+      metadata: buildGatepassNotificationMetadata(gatepass, {
+        workflow: 'actor_forwarded',
+        forwardedToRole: routeResult.routedTo,
+        escalated: isEscalation
+      })
+    });
+  }
+
+  // 3. Student requester receives timeline update notification
   const studentId = gatepass.createdBy?._id || gatepass.createdBy;
   if (studentId) {
     notifications.push({
@@ -1453,7 +1481,13 @@ function applyStatusFilter(filter, queryStatus, allowedStatuses = null) {
 
   if (requestedStatuses.includes('forwarded')) {
     filter.status = {
-      $in: ['forwarded_to_hod', 'forwarded_to_coordinator', 'forwarded_to_campus_security', 'forwarded_to_chairman']
+      $in: [
+        'forwarded_to_hod',
+        'forwarded_to_coordinator',
+        'forwarded_to_campus_security',
+        'forwarded_to_admin',
+        'forwarded_to_chairman'
+      ]
     };
     Object.assign(filter, activeTimeFilter);
     return;
@@ -1558,10 +1592,22 @@ function buildAccessFilter(actor) {
     case 'faculty':
       if (isCoordinatorActor(actor)) {
         const coordClasses = getCoordinatorClasses(actor);
-        const classConditions = coordClasses.map(c => ({
+        const validCoordinatorStatuses = [
+          'forwarded_to_coordinator',
+          'forwarded_to_campus_security',
+          'forwarded_to_admin',
+          'forwarded_to_chairman',
+          'approved_by_coordinator',
+          'approved_final',
+          'rejected_by_coordinator',
+          'checked_out_by_security',
+          'completed'
+        ];
+        const classConditions = coordClasses.map((c) => ({
           'routingSnapshot.program': c.program,
           'routingSnapshot.department': c.department,
-          'routingSnapshot.semester': c.semester
+          'routingSnapshot.semester': c.semester,
+          status: { $in: validCoordinatorStatuses }
         }));
         return {
           $or: [
@@ -1597,9 +1643,30 @@ function buildAccessFilter(actor) {
         }
       }
 
+      const validHodStatuses = [
+        'forwarded_to_hod',
+        'forwarded_to_coordinator',
+        'forwarded_to_campus_security',
+        'forwarded_to_admin',
+        'forwarded_to_chairman',
+        'approved_by_hod',
+        'approved_by_coordinator',
+        'approved_by_admin',
+        'approved_by_chairman',
+        'approved_final',
+        'rejected_by_hod',
+        'rejected_by_coordinator',
+        'checked_out_by_security',
+        'completed'
+      ];
+
       const programDeptConditions = hodScopePairs
         .filter((s) => s.program && s.department)
-        .map((s) => ({ 'routingSnapshot.program': s.program, 'routingSnapshot.department': s.department }));
+        .map((s) => ({
+          'routingSnapshot.program': s.program,
+          'routingSnapshot.department': s.department,
+          status: { $in: validHodStatuses }
+        }));
 
       return {
         applicantType: 'student',
@@ -1615,7 +1682,19 @@ function buildAccessFilter(actor) {
     case 'security':
       return { status: { $in: SECURITY_VISIBLE_STATUSES } };
     case 'campus_security':
-      return { applicantType: 'student' };
+      return {
+        applicantType: 'student',
+        status: {
+          $in: [
+            ...BOUNCER_VISIBLE_STATUSES,
+            'approved_final',
+            'rejected_by_campus_security',
+            'forwarded_to_admin',
+            'checked_out_by_security',
+            'completed'
+          ]
+        }
+      };
     case 'admin':
       return { applicantType: { $in: ['student', 'faculty'] } };
     case 'chairman':
@@ -2119,7 +2198,7 @@ async function getPendingGatepassesForRole(actor, query = {}) {
     allowedStatuses = BOUNCER_VISIBLE_STATUSES;
   } else if (actor.role === 'admin') {
     filter.applicantType = 'student';
-    allowedStatuses = ['forwarded_to_admin', 'forwarded_to_chairman', ...BOUNCER_VISIBLE_STATUSES];
+    allowedStatuses = ['forwarded_to_admin', 'forwarded_to_chairman'];
   } else if (actor.role === 'chairman') {
     filter.applicantType = 'student';
     filter.forwardedTo = actor._id;
@@ -2485,9 +2564,7 @@ async function approveGatepass(gatepassId, actor, payload, requestMeta) {
   } else if (actor.role === 'admin') {
     const allowedAdminStatuses = [
       'forwarded_to_admin',
-      'forwarded_to_chairman',
-      'forwarded_to_campus_security',
-      ...BOUNCER_VISIBLE_STATUSES
+      'forwarded_to_chairman'
     ];
     if (gatepass.applicantType !== 'student' || !allowedAdminStatuses.includes(gatepass.status)) {
       throw new AppError('Administrator can only approve student gatepasses in escalation or review queue', 400);
@@ -2911,9 +2988,7 @@ async function rejectGatepass(gatepassId, actor, payload, requestMeta) {
   } else if (actor.role === 'admin') {
     const allowedAdminStatuses = [
       'forwarded_to_admin',
-      'forwarded_to_chairman',
-      'forwarded_to_campus_security',
-      ...BOUNCER_VISIBLE_STATUSES
+      'forwarded_to_chairman'
     ];
     if (gatepass.applicantType !== 'student' || !allowedAdminStatuses.includes(gatepass.status)) {
       throw new AppError('Administrator can only reject student gatepasses in escalation or review queue', 400);

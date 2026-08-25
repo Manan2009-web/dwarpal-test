@@ -1133,24 +1133,109 @@ export function isGatepassOutdated(gatepass, now = new Date()) {
   return (now.getTime() - departureTimestamp) > OUTDATED_GRACE_MS
 }
 
-function getDisplayStatus(status, gatepass = null) {
+export function getDisplayStatus(status, gatepass = null, role = '') {
+  const rawStatus = gatepass?.rawStatus || status || ''
   if (gatepass && isGatepassOutdated(gatepass)) return 'Outdated'
+  if (rawStatus === 'cancelled' || gatepass?.isCancelled) return 'Outdated'
+  if (rawStatus === 'completed') return 'Returned'
+  if (rawStatus === 'checked_out_by_security') return 'Out'
+  if (REJECTED_GATEPASS_STATUSES.has(rawStatus) || String(rawStatus).startsWith('rejected_')) return 'Rejected'
+
+  const normalizedRole = normalizeRole(role || gatepass?.viewerRole || '')
+
+  if (normalizedRole === 'principal') {
+    if (rawStatus === 'pending_principal') return 'Pending'
+    if (
+      rawStatus === 'forwarded_to_hod' ||
+      rawStatus === 'forwarded_to_coordinator' ||
+      rawStatus === 'forwarded_to_campus_security' ||
+      rawStatus === 'forwarded_to_admin' ||
+      rawStatus === 'forwarded_to_chairman'
+    ) {
+      return 'Forwarded'
+    }
+    if (APPROVED_GATEPASS_STATUSES.has(rawStatus) || rawStatus === 'approved_by_principal' || rawStatus === 'approved_by_hod' || rawStatus === 'approved_by_coordinator') {
+      return 'Approved'
+    }
+  }
+
+  if (normalizedRole === 'hod') {
+    if (rawStatus === 'forwarded_to_hod') return 'Pending'
+    if (
+      rawStatus === 'forwarded_to_coordinator' ||
+      rawStatus === 'forwarded_to_campus_security' ||
+      rawStatus === 'forwarded_to_admin' ||
+      rawStatus === 'forwarded_to_chairman'
+    ) {
+      return 'Forwarded'
+    }
+    if (APPROVED_GATEPASS_STATUSES.has(rawStatus) || rawStatus === 'approved_by_hod' || rawStatus === 'approved_by_coordinator') {
+      return 'Approved'
+    }
+  }
+
+  if (normalizedRole === 'faculty') {
+    if (rawStatus === 'forwarded_to_coordinator') return 'Pending'
+    if (
+      rawStatus === 'forwarded_to_campus_security' ||
+      rawStatus === 'forwarded_to_admin' ||
+      rawStatus === 'forwarded_to_chairman'
+    ) {
+      return 'Forwarded'
+    }
+    if (APPROVED_GATEPASS_STATUSES.has(rawStatus) || rawStatus === 'approved_by_coordinator') {
+      return 'Approved'
+    }
+  }
+
+  if (normalizedRole === 'campus_security') {
+    if (
+      rawStatus === 'forwarded_to_campus_security' ||
+      rawStatus === 'approved_by_principal' ||
+      rawStatus === 'approved_by_hod' ||
+      rawStatus === 'approved_by_coordinator' ||
+      rawStatus === 'approved_by_chairman'
+    ) {
+      return 'Pending'
+    }
+    if (rawStatus === 'forwarded_to_admin' || rawStatus === 'forwarded_to_chairman') return 'Forwarded'
+    if (rawStatus === 'approved_final' || gatepass?.campusCleared) return 'Approved'
+  }
+
+  if (normalizedRole === 'admin') {
+    if (rawStatus === 'forwarded_to_admin' || rawStatus === 'forwarded_to_chairman') return 'Pending'
+    if (APPROVED_GATEPASS_STATUSES.has(rawStatus) || rawStatus === 'approved_by_admin') return 'Approved'
+    if (
+      rawStatus === 'forwarded_to_hod' ||
+      rawStatus === 'forwarded_to_coordinator' ||
+      rawStatus === 'forwarded_to_campus_security'
+    ) {
+      return 'Forwarded'
+    }
+  }
+
+  if (normalizedRole === 'chairman') {
+    if (rawStatus === 'forwarded_to_chairman') return 'Pending'
+    if (rawStatus === 'approved_by_chairman' || APPROVED_GATEPASS_STATUSES.has(rawStatus)) return 'Approved'
+  }
+
+  if (normalizedRole === 'cao') {
+    if (rawStatus === 'pending_cao' || gatepass?.rawShortLeaveStatus === 'pending_cao') return 'Pending'
+    if (rawStatus === 'approved_by_cao') return 'Approved'
+  }
+
+  // Default / Student view:
+  if (rawStatus === 'pending_principal' || rawStatus === 'pending_cao' || rawStatus === 'submitted') return 'Pending'
   if (
-    status === 'forwarded_to_hod' ||
-    status === 'forwarded_to_coordinator' ||
-    status === 'forwarded_to_campus_security' ||
-    status === 'forwarded_to_admin' ||
-    status === 'forwarded_to_chairman'
+    rawStatus === 'forwarded_to_hod' ||
+    rawStatus === 'forwarded_to_coordinator' ||
+    rawStatus === 'forwarded_to_campus_security' ||
+    rawStatus === 'forwarded_to_admin' ||
+    rawStatus === 'forwarded_to_chairman'
   ) {
     return 'Forwarded'
   }
-  if (status === 'pending_principal' || status === 'pending_cao' || status === 'submitted') return 'Pending'
-  if (PENDING_GATEPASS_STATUSES.has(status)) return 'Pending'
-  if (APPROVED_GATEPASS_STATUSES.has(status)) return 'Approved'
-  if (REJECTED_GATEPASS_STATUSES.has(status)) return 'Rejected'
-  if (status === 'checked_out_by_security') return 'Out'
-  if (status === 'completed') return 'Returned'
-  if (status === 'cancelled') return 'Outdated'
+  if (APPROVED_GATEPASS_STATUSES.has(rawStatus)) return 'Approved'
   return 'Pending'
 }
 
@@ -1558,7 +1643,7 @@ function buildTimeline(gatepass) {
     : buildFacultyTimeline(gatepass)
 }
 
-export function toUiGatepass(gatepass) {
+export function toUiGatepass(gatepass, role = '') {
   if (!gatepass) return null
 
   const applicant = gatepass.applicant || gatepass.applicantSnapshot || gatepass.createdBy || {}
@@ -1575,6 +1660,7 @@ export function toUiGatepass(gatepass) {
   const expectedReturnTime = gatepass.expectedReturnDate
     ? combineDateAndTime(gatepass.expectedReturnDate, gatepass.expectedReturnTime)
     : ''
+  const viewerRole = normalizeRole(role || gatepass.viewerRole || '')
   const mapped = {
     id: gatepassId,
     recordId,
@@ -1601,7 +1687,8 @@ export function toUiGatepass(gatepass) {
     returnTime: returnTime || null,
     canMarkIn: Boolean(gatepass.canMarkIn ?? returnTime),
     isOutdated: isGatepassOutdated(gatepass),
-    status: getDisplayStatus(gatepass.status, gatepass),
+    viewerRole,
+    status: getDisplayStatus(gatepass.status, gatepass, viewerRole),
     rawStatus: gatepass.status,
     stage: getCurrentStage(gatepass),
     rawApprovalLevel: gatepass.currentApprovalLevel,
@@ -1610,8 +1697,6 @@ export function toUiGatepass(gatepass) {
     approvedBy: gatepass.approvedBy || 'Awaiting approval',
     approvedAt: gatepass.approvedAt || '',
     rejectionReason: gatepass.rejectionReason || '',
-    rawStatus: gatepass.status,
-    rawApprovalLevel: gatepass.currentApprovalLevel || '',
     applicantType,
     qr: {
       available: Boolean(gatepass.qr?.available || gatepass.qrCodeDataUrl || gatepass.verificationToken),
@@ -2528,22 +2613,37 @@ function buildEmptyWorkspaceCollectionMeta(requestOptions) {
 }
 
 function buildGatepassStatusQuery(statusFilter, role = '') {
+  const normalizedRole = normalizeRole(role)
   if (!statusFilter || statusFilter === 'All') {
-    return role === 'security'
+    return normalizedRole === 'security'
       ? [...APPROVED_GATEPASS_STATUSES, 'checked_out_by_security', 'completed'].join(',')
       : ''
   }
 
   if (statusFilter === 'Pending') {
-    if (role === 'principal') return 'pending_principal'
-    if (role === 'hod') return 'forwarded_to_hod'
-    if (role === 'admin') return 'forwarded_to_admin,forwarded_to_chairman'
-    if (role === 'chairman') return 'forwarded_to_chairman'
-    if (role === 'campus_security') return 'forwarded_to_campus_security'
-    return 'pending_principal,pending_cao'
+    if (normalizedRole === 'principal') return 'pending_principal'
+    if (normalizedRole === 'hod') return 'forwarded_to_hod'
+    if (normalizedRole === 'faculty') return 'forwarded_to_coordinator'
+    if (normalizedRole === 'campus_security') return [...BOUNCER_VISIBLE_STATUSES].join(',')
+    if (normalizedRole === 'admin') return 'forwarded_to_admin,forwarded_to_chairman'
+    if (normalizedRole === 'chairman') return 'forwarded_to_chairman'
+    if (normalizedRole === 'cao') return 'pending_cao'
+    return 'pending_principal'
   }
 
   if (statusFilter === 'Forwarded') {
+    if (normalizedRole === 'student' || normalizedRole === 'principal') {
+      return 'forwarded_to_hod,forwarded_to_coordinator,forwarded_to_campus_security,forwarded_to_admin,forwarded_to_chairman'
+    }
+    if (normalizedRole === 'hod') {
+      return 'forwarded_to_coordinator,forwarded_to_campus_security,forwarded_to_admin,forwarded_to_chairman'
+    }
+    if (normalizedRole === 'faculty') {
+      return 'forwarded_to_campus_security,forwarded_to_admin,forwarded_to_chairman'
+    }
+    if (normalizedRole === 'campus_security') {
+      return 'forwarded_to_admin,forwarded_to_chairman'
+    }
     return 'forwarded'
   }
 
@@ -2552,7 +2652,10 @@ function buildGatepassStatusQuery(statusFilter, role = '') {
   }
 
   if (statusFilter === 'Approved') {
-    return [...APPROVED_GATEPASS_STATUSES].join(',')
+    if (normalizedRole === 'campus_security') {
+      return 'approved_final'
+    }
+    return [...APPROVED_GATEPASS_STATUSES, 'approved_by_principal', 'approved_by_hod', 'approved_by_coordinator'].join(',')
   }
 
   if (statusFilter === 'Rejected') {
@@ -2719,12 +2822,13 @@ function mergeWorkspaceSourceResults(sourceResults = [], requestOptions) {
 async function fetchWorkspaceRequests(role, signal, requestOptions = {}) {
   const normalizedRole = normalizeRole(role)
   const normalizedRequestOptions = normalizeWorkspaceRequestOptions(requestOptions)
+  const gatepassMapper = (item) => toUiGatepass(item, normalizedRole)
 
   if (normalizedRole === 'student') {
     return fetchSingleWorkspaceCollection({
       endpoint: '/gatepasses/my',
       signal,
-      mapper: toUiGatepass,
+      mapper: gatepassMapper,
       requestOptions: normalizedRequestOptions,
       statusParam: buildGatepassStatusQuery(normalizedRequestOptions.statusFilter, normalizedRole),
     })
@@ -2742,7 +2846,7 @@ async function fetchWorkspaceRequests(role, signal, requestOptions = {}) {
       fetchWorkspaceSourceWindow({
         endpoint: '/gatepasses',
         signal,
-        mapper: toUiGatepass,
+        mapper: gatepassMapper,
         requestOptions: normalizedRequestOptions,
         extraParams: { applicantType: 'student' },
         statusParam: buildGatepassStatusQuery(normalizedRequestOptions.statusFilter, normalizedRole),
@@ -2758,7 +2862,7 @@ async function fetchWorkspaceRequests(role, signal, requestOptions = {}) {
       fetchWorkspaceSourceWindow({
         endpoint: '/gatepasses',
         signal,
-        mapper: toUiGatepass,
+        mapper: gatepassMapper,
         requestOptions: normalizedRequestOptions,
         extraParams: { applicantType: 'student' },
         statusParam: buildGatepassStatusQuery(normalizedRequestOptions.statusFilter, normalizedRole),
@@ -2780,7 +2884,7 @@ async function fetchWorkspaceRequests(role, signal, requestOptions = {}) {
       fetchWorkspaceSourceWindow({
         endpoint: '/gatepasses',
         signal,
-        mapper: toUiGatepass,
+        mapper: gatepassMapper,
         requestOptions: normalizedRequestOptions,
         extraParams: { applicantType: 'student' },
         statusParam: buildGatepassStatusQuery(normalizedRequestOptions.statusFilter, normalizedRole),
@@ -2812,7 +2916,7 @@ async function fetchWorkspaceRequests(role, signal, requestOptions = {}) {
       fetchWorkspaceSourceWindow({
         endpoint: '/gatepasses',
         signal,
-        mapper: toUiGatepass,
+        mapper: gatepassMapper,
         requestOptions: normalizedRequestOptions,
         statusParam: buildGatepassStatusQuery(normalizedRequestOptions.statusFilter, normalizedRole),
       }),
@@ -2833,7 +2937,7 @@ async function fetchWorkspaceRequests(role, signal, requestOptions = {}) {
       return fetchSingleWorkspaceCollection({
         endpoint: '/gatepasses/pending/admin',
         signal,
-        mapper: toUiGatepass,
+        mapper: gatepassMapper,
         requestOptions: normalizedRequestOptions,
       })
     }
@@ -2841,7 +2945,7 @@ async function fetchWorkspaceRequests(role, signal, requestOptions = {}) {
     return fetchSingleWorkspaceCollection({
       endpoint: '/gatepasses/history',
       signal,
-      mapper: toUiGatepass,
+      mapper: gatepassMapper,
       requestOptions: normalizedRequestOptions,
       statusParam: buildGatepassStatusQuery(normalizedRequestOptions.statusFilter, normalizedRole),
     })
@@ -2850,7 +2954,7 @@ async function fetchWorkspaceRequests(role, signal, requestOptions = {}) {
   return fetchSingleWorkspaceCollection({
     endpoint: '/gatepasses/history',
     signal,
-    mapper: toUiGatepass,
+    mapper: gatepassMapper,
     requestOptions: normalizedRequestOptions,
     statusParam: buildGatepassStatusQuery(normalizedRequestOptions.statusFilter, normalizedRole),
   })

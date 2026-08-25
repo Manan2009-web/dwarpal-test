@@ -132,9 +132,9 @@ export default function LoginForm({
                 <AppBrand size="md" layout="stacked" centered />
               </div>
               <div className="tw:space-y-2 tw:-mt-1">
-                <h2 className="tw:text-[#163247] tw:font-bold">
+                <h1 className="tw:text-2xl tw:font-bold tw:tracking-tight tw:text-[#163247]">
                   {title === 'DwarPal' ? 'Sign In' : title}
-                </h2>
+                </h1>
                 <p className="tw:text-sm tw:font-medium tw:text-neutral-500">{subtitle}</p>
               </div>
             </motion.div>
@@ -189,7 +189,7 @@ export default function LoginForm({
                     type="button"
                     onClick={onForgotPassword}
                     disabled={isSubmitting}
-                    className="tw:border-none tw:bg-transparent tw:p-0 tw:text-[0.92rem] tw:font-semibold tw:text-neutral-500 tw:underline tw:underline-offset-4 tw:transition tw:duration-200 hover:tw:text-[#2f6db5] disabled:tw:opacity-55"
+                    className="tw:inline-flex tw:min-h-[48px] tw:items-center tw:border-none tw:bg-transparent tw:p-0 tw:text-[0.92rem] tw:font-semibold tw:text-[#2f6db5] tw:underline tw:underline-offset-4 tw:transition tw:duration-200 hover:tw:text-[#1d5290] disabled:tw:opacity-55"
                   >
                     Forgot password?
                   </button>
@@ -250,16 +250,20 @@ export default function LoginForm({
               </motion.div>
             ) : null}
 
-            <motion.div variants={itemVariants} className="tw:mt-6 tw:text-center tw:text-[0.78rem] tw:text-neutral-400 tw:border-t tw:border-neutral-200 tw:pt-4">
-              By signing in, you agree to our{' '}
-              <Link to="/privacy-policy" className="tw:font-medium tw:text-[#2f6db5] hover:tw:text-[#1d5290] tw:underline">
-                Privacy Policy
-              </Link>
-              . Need help? Visit{' '}
-              <Link to="/support" className="tw:font-medium tw:text-[#2f6db5] hover:tw:text-[#1d5290] tw:underline">
-                Support
-              </Link>
-              .
+            <motion.div variants={itemVariants} className="tw:mt-6 tw:flex tw:flex-wrap tw:items-center tw:justify-center tw:gap-x-3 tw:gap-y-2 tw:border-t tw:border-neutral-200 tw:pt-4 tw:text-center tw:text-[0.82rem] tw:text-neutral-500">
+              <span>
+                By signing in, you agree to our{' '}
+                <Link to="/privacy-policy" className="tw:font-semibold tw:text-[#2f6db5] tw:underline tw:underline-offset-4 hover:tw:text-[#1d5290]">
+                  Privacy Policy
+                </Link>
+              </span>
+              <span className="tw:text-neutral-300" aria-hidden="true">•</span>
+              <span>
+                Need help? Visit{' '}
+                <Link to="/support" className="tw:font-semibold tw:text-[#2f6db5] tw:underline tw:underline-offset-4 hover:tw:text-[#1d5290]">
+                  Support
+                </Link>
+              </span>
             </motion.div>
           </div>
         </motion.div>

@@ -1,6 +1,6 @@
 const Gatepass = require('../models/Gatepass');
 const FacultyLeaveRequest = require('../models/FacultyLeaveRequest');
-const { APPROVED_GATEPASS_STATUSES } = require('../constants/appConstants');
+const { APPROVED_GATEPASS_STATUSES, BOUNCER_VISIBLE_STATUSES } = require('../constants/appConstants');
 
 const gatepassRecentProjection =
   '_id passNumber applicantType applicantSnapshot.fullName applicantSnapshot.department status currentApprovalLevel outDate outTime createdAt updatedAt';
@@ -253,7 +253,7 @@ async function getDashboardSummary(user) {
       // Forwarded requests that are NOT outdated
       Gatepass.countDocuments({
         applicantType: 'student',
-        status: { $in: ['forwarded_to_hod', 'forwarded_to_coordinator', 'forwarded_to_campus_security', 'forwarded_to_chairman'] },
+        status: { $in: ['forwarded_to_hod', 'forwarded_to_coordinator', 'forwarded_to_campus_security', 'forwarded_to_admin', 'forwarded_to_chairman'] },
         ...activeTimeFilter
       }),
       Gatepass.countDocuments({
@@ -310,6 +310,7 @@ async function getDashboardSummary(user) {
     const [
       pendingStudentReviews,
       pendingFacultyReviews,
+      forwardedStudentCount,
       handledStudentCount,
       handledFacultyCount,
       approvedStudentCount,
@@ -322,6 +323,12 @@ async function getDashboardSummary(user) {
     ] = await Promise.all([
       Gatepass.countDocuments({ ...studentBaseFilter, status: 'forwarded_to_hod', ...activeTimeFilter }),
       FacultyLeaveRequest.countDocuments({ ...facultyBaseFilter, workloadStatus: 'pending_hod' }),
+      Gatepass.countDocuments({
+        applicantType: 'student',
+        'hodAction.status': 'forwarded',
+        status: { $in: ['forwarded_to_coordinator', 'forwarded_to_campus_security', 'forwarded_to_admin', 'forwarded_to_chairman'] },
+        ...activeTimeFilter
+      }),
       Gatepass.countDocuments({
         ...studentBaseFilter,
         'hodAction.status': { $in: ['approved', 'rejected'] }
@@ -356,6 +363,8 @@ async function getDashboardSummary(user) {
         pendingReviews,
         pending: pendingReviews,
         pendingForwardedRequests: pendingReviews,
+        forwarded: forwardedStudentCount,
+        forwardedCount: forwardedStudentCount,
         totalHandled,
         handled: totalHandled,
         approvedCount,
@@ -490,7 +499,7 @@ async function getDashboardSummary(user) {
     const [pending, cleared, outdated, recentActions] = await Promise.all([
       Gatepass.countDocuments({
         applicantType: 'student',
-        status: 'forwarded_to_campus_security',
+        status: { $in: BOUNCER_VISIBLE_STATUSES },
         ...activeTimeFilter
       }),
       Gatepass.countDocuments({
@@ -499,12 +508,12 @@ async function getDashboardSummary(user) {
       }),
       Gatepass.countDocuments({
         applicantType: 'student',
-        status: 'forwarded_to_campus_security',
+        status: { $in: BOUNCER_VISIBLE_STATUSES },
         ...outdatedFilter
       }),
       getRecentGatepasses({
         applicantType: 'student',
-        status: { $in: ['forwarded_to_campus_security', ...APPROVED_GATEPASS_STATUSES, 'checked_out_by_security', 'completed'] }
+        status: { $in: [...BOUNCER_VISIBLE_STATUSES, ...APPROVED_GATEPASS_STATUSES, 'checked_out_by_security', 'completed'] }
       })
     ]);
 
