@@ -3330,13 +3330,14 @@ function RegisterScreen({ onRegister }) {
 
   const roleOptions = [
     { value: 'student', label: 'Student' },
-    { value: 'faculty', label: 'Professor' },
-    { value: 'hod', label: 'Academic HOD' },
-    { value: 'admin', label: 'Administrator' },
-    { value: 'cao', label: 'CAO' },
     { value: 'principal', label: 'Principal' },
-    { value: 'security', label: 'Security | Main Gate' },
+    { value: 'hod', label: 'Academic HOD' },
+    { value: 'faculty', label: 'Professor' },
     { value: 'campus_security', label: 'Security | Bouncer' },
+    { value: 'security', label: 'Security | Main Gate' },
+    { value: 'admin', label: 'Administrator' },
+    { value: 'it', label: 'IT Department' },
+    { value: 'cao', label: 'CAO' },
     { value: 'chairman', label: 'Director' }
   ]
 

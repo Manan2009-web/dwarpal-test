@@ -340,14 +340,14 @@ export default function Register({ onRegister }) {
                 }`}
               >
                 <option value="" disabled>Select Role</option>
-                <option value="faculty">Professor</option>
-                <option value="hod">Academic HOD</option>
-                <option value="admin">Administrator</option>
-                <option value="cao">CAO</option>
-                <option value="security">Security | Main Gate</option>
-                <option value="campus_security">Security | Bouncer</option>
                 <option value="principal">Principal</option>
-                <option value="it">IT Admin</option>
+                <option value="hod">Academic HOD</option>
+                <option value="faculty">Professor</option>
+                <option value="campus_security">Security | Bouncer</option>
+                <option value="security">Security | Main Gate</option>
+                <option value="admin">Administrator</option>
+                <option value="it">IT Department</option>
+                <option value="cao">CAO</option>
                 <option value="chairman">Director</option>
               </select>
             </div>

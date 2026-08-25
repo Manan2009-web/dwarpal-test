@@ -49,9 +49,9 @@ export const ROLE_META = {
     idLabel: 'Employee ID',
   },
   it: {
-    title: 'IT Admin',
+    title: 'IT Department',
     shortTitle: 'IT',
-    panelTitle: 'IT Admin Dashboard',
+    panelTitle: 'IT Department Dashboard',
     accent: 'var(--accent-admin)',
     idLabel: 'Employee ID',
   },
@@ -143,6 +143,7 @@ export function normalizeRole(role) {
 
   if (normalizedRole === 'director') return 'chairman'
   if (normalizedRole === 'administrator') return 'admin'
+  if (normalizedRole === 'it department' || normalizedRole === 'it_department') return 'it'
 
   return ROLE_OPTIONS.includes(normalizedRole) ? normalizedRole : ''
 }
@@ -262,7 +263,7 @@ export const initialUsers = [
   },
   {
     id: 'it-demo',
-    name: 'IT Admin Demo',
+    name: 'IT Department Demo',
     email: 'it@dwarpal.edu',
     department: 'Computer',
     employeeId: 'it',
