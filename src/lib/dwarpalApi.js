@@ -740,7 +740,7 @@ export function isValidPhoneNumberInput(value, defaultCountryCode = DEFAULT_PHON
 function buildRegistrationIdentityPayload(payload = {}) {
   const normalizedRole = normalizeRole(payload.role)
   const isStudent = normalizedRole === 'student'
-  const requiresProgram = ['student', 'hod', 'principal', 'cao', 'admin'].includes(normalizedRole)
+  const requiresProgram = ['student', 'hod', 'principal'].includes(normalizedRole)
   const cleanedId = String(payload.enrollment || payload.enrollmentNo || payload.employeeId || '')
     .trim()
 

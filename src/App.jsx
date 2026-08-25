@@ -529,7 +529,7 @@ function FieldLabel({ children, required = false }) {
 }
 
 function roleUsesProgramRouting(role) {
-  return ['principal', 'admin', 'hod'].includes(role)
+  return ['principal', 'hod'].includes(role)
 }
 
 function getRegistrationDepartmentOptions(role, program) {
