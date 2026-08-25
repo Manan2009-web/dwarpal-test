@@ -1136,34 +1136,34 @@ async function resolveStudentChairmanUser(gatepass, requestedUserId = null) {
   }).select('_id fullName email role program department employeeId phone createdAt gatepassApprovalEnabled isActive');
 
   if (!chairman) {
-    throw new AppError('No active Chairman account is available for final gatepass escalation.', 404);
+    throw new AppError('No active Director account is available for final gatepass escalation.', 404);
   }
   return chairman;
 }
 
 async function routeStudentGatepassToChairman(
   gatepass,
-  { actor = null, comment = '', trigger = 'manual_forward', fromLevel = 'campus_security' } = {}
+  actor = null,
+  trigger = 'escalation',
+  comment = ''
 ) {
-  syncStudentGatepassRoutingSnapshot(gatepass, gatepass.createdBy);
   const chairmanUser = await resolveStudentChairmanUser(gatepass);
 
   gatepass.status = 'forwarded_to_chairman';
   gatepass.currentApprovalLevel = 'chairman';
-  gatepass.isCancelled = false;
-  gatepass.isCompleted = false;
+  const fromLevel = gatepass.forwardedToRole || 'principal';
+
   gatepass.forwardedTo = chairmanUser._id;
   gatepass.forwardedToRole = 'chairman';
-
-  if (fromLevel === 'campus_security') {
-    gatepass.campusSecurityAction = {
-      status: 'forwarded',
-      actionBy: actor?._id || null,
-      actedAt: new Date(),
-      comment: comment || ''
-    };
-  }
-
+  gatepass.autoForwardState = {
+    ...(gatepass.autoForwardState?.toObject?.() || {}),
+    coordinatorAssignedAt: null,
+    coordinatorTimeoutAt: null,
+    hodAssignedAt: null,
+    hodTimeoutAt: null,
+    principalAssignedAt: null,
+    principalTimeoutAt: null
+  };
   gatepass.chairmanAction = {
     status: 'pending',
     actionBy: null,
@@ -1175,7 +1175,7 @@ async function routeStudentGatepassToChairman(
     fromLevel,
     toLevel: 'chairman',
     trigger,
-    note: comment || 'Forwarded to Chairman for final institutional review.',
+    note: comment || 'Forwarded to Director for final institutional review.',
     actedBy: actor?._id || null,
     actedByRole: actor?.role || 'system'
   });
@@ -1190,9 +1190,9 @@ async function routeStudentGatepassToChairman(
 function resolveRoleLabel(role) {
   switch (role) {
     case 'principal': return 'Principal';
-    case 'hod': return 'HOD';
+    case 'hod': return 'Academic HOD';
     case 'coordinator': return 'Class Coordinator';
-    case 'chairman': return 'Chairman';
+    case 'chairman': return 'Director';
     case 'campus_security': return 'Campus Security';
     case 'security': return 'Security';
     default: return String(role || 'Approver').toUpperCase();
@@ -2411,7 +2411,7 @@ async function approveGatepass(gatepassId, actor, payload, requestMeta) {
     notifications.push(...(await buildCampusSecurityReadyGatepassNotifications(gatepass, actor)));
   } else if (actor.role === 'chairman') {
     if (gatepass.applicantType !== 'student' || gatepass.status !== 'forwarded_to_chairman') {
-      throw new AppError('Chairman can only approve forwarded student gatepasses', 400);
+      throw new AppError('Director can only approve forwarded student gatepasses', 400);
     }
 
     gatepass.status = 'approved_by_chairman';
@@ -2431,11 +2431,11 @@ async function approveGatepass(gatepassId, actor, payload, requestMeta) {
       fromLevel: 'chairman',
       toLevel: 'campus_security',
       trigger: 'approval',
-      note: 'Approved by chairman and sent to Campus Security (Bouncer).',
+      note: 'Approved by Director and sent to Campus Security (Bouncer).',
       actedBy: actor._id,
       actedByRole: actor.role
     });
-    auditMessage = `Gatepass ${gatepass.passNumber} approved by Chairman (sent to Campus Security)`;
+    auditMessage = `Gatepass ${gatepass.passNumber} approved by Director (sent to Campus Security)`;
 
     notifications.push({
       recipient: gatepass.createdBy._id,
@@ -2443,8 +2443,8 @@ async function approveGatepass(gatepassId, actor, payload, requestMeta) {
       gatepass: gatepass._id,
       type: 'gatepass_approved',
       status: 'approved',
-      title: 'Gatepass approved by Chairman',
-      message: `Your gatepass ${gatepass.passNumber} was approved by Chairman and is ready for bouncer verification.`,
+      title: 'Gatepass approved by Director',
+      message: `Your gatepass ${gatepass.passNumber} was approved by Director and is ready for bouncer verification.`,
       metadata: buildGatepassNotificationMetadata(gatepass, {
         workflow: 'campus_security_review'
       })
@@ -2788,7 +2788,7 @@ async function rejectGatepass(gatepassId, actor, payload, requestMeta) {
     auditMessage = `Gatepass ${gatepass.passNumber} rejected by Campus Security (Bouncer)`;
   } else if (actor.role === 'chairman') {
     if (gatepass.applicantType !== 'student' || gatepass.status !== 'forwarded_to_chairman') {
-      throw new AppError('Chairman can only reject forwarded student gatepasses', 400);
+      throw new AppError('Director can only reject forwarded student gatepasses', 400);
     }
 
     gatepass.status = 'rejected_by_chairman';
@@ -2802,11 +2802,11 @@ async function rejectGatepass(gatepassId, actor, payload, requestMeta) {
       fromLevel: 'chairman',
       toLevel: 'cancelled',
       trigger: 'rejection',
-      note: payload.rejectionReason || 'Rejected by Chairman.',
+      note: payload.rejectionReason || 'Rejected by Director.',
       actedBy: actor._id,
       actedByRole: actor.role
     });
-    auditMessage = `Gatepass ${gatepass.passNumber} rejected by Chairman`;
+    auditMessage = `Gatepass ${gatepass.passNumber} rejected by Director`;
   } else {
     throw new AppError('Your role is not allowed to reject gatepasses', 403);
   }

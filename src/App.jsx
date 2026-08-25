@@ -3335,7 +3335,8 @@ function RegisterScreen({ onRegister }) {
     { value: 'admin', label: 'Administrator' },
     { value: 'cao', label: 'CAO' },
     { value: 'principal', label: 'Principal' },
-    { value: 'security', label: 'Security Guard' }
+    { value: 'security', label: 'Security Guard' },
+    { value: 'chairman', label: 'Director' }
   ]
 
   return (
@@ -6104,7 +6105,7 @@ function getListTitle(user) {
   if (user?.role === 'admin') return 'Administrator overview & review queue'
   if (user?.role === 'cao') return 'CAO review queue'
   if (user?.role === 'campus_security') return 'Campus Security (Bouncer) clearance queue'
-  if (user?.role === 'chairman') return 'Chairman review queue'
+  if (user?.role === 'chairman') return 'Director review queue'
   if (user?.role === 'security') return 'Security verification queue'
   return 'Gatepass history'
 }

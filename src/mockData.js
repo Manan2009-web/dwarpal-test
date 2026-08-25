@@ -56,9 +56,9 @@ export const ROLE_META = {
     idLabel: 'Employee ID',
   },
   chairman: {
-    title: 'Chairman',
-    shortTitle: 'Chairman',
-    panelTitle: 'Chairman Reporting Panel',
+    title: 'Director',
+    shortTitle: 'Director',
+    panelTitle: 'Director Reporting Panel',
     accent: 'var(--accent-cao)',
     idLabel: 'Employee ID',
   },
@@ -140,6 +140,9 @@ export function normalizeRole(role) {
   const normalizedRole = String(role || '')
     .trim()
     .toLowerCase()
+
+  if (normalizedRole === 'director') return 'chairman'
+  if (normalizedRole === 'administrator') return 'admin'
 
   return ROLE_OPTIONS.includes(normalizedRole) ? normalizedRole : ''
 }

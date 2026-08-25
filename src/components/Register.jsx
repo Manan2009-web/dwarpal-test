@@ -348,7 +348,7 @@ export default function Register({ onRegister }) {
                 <option value="campus_security">Campus Security (Bouncer / Gatekeeper)</option>
                 <option value="principal">Principal</option>
                 <option value="it">IT Admin</option>
-                <option value="chairman">Chairman</option>
+                <option value="chairman">Director</option>
               </select>
             </div>
             {fieldErrors.role && <p className="field-error">{fieldErrors.role}</p>}

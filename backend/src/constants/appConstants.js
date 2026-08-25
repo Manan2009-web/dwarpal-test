@@ -81,6 +81,10 @@ function normalizeRole(value) {
     return 'admin';
   }
 
+  if (normalizedRole === 'director') {
+    return 'chairman';
+  }
+
   return ROLES.includes(normalizedRole) ? normalizedRole : '';
 }
 

@@ -1,5 +1,5 @@
 /**
- * ChairmanPortal — Institutional Reporting & Export Governance
+ * DirectorPortal — Institutional Reporting & Export Governance
  *
  * Built with the exact DwarPal system design:
  *   - admin-shell two-column layout (sidebar + main)
@@ -220,7 +220,7 @@ function ChairmanSidebar({ currentUser, activeSection, isOpen, onLinkClick }) {
           <CircleUserRound size={18} strokeWidth={1.5} />
         </div>
         <div className="admin-user-chip-info">
-          <strong>{currentUser.fullName || currentUser.name || 'Chairman'}</strong>
+          <strong>{currentUser.fullName || currentUser.name || 'Director'}</strong>
           <span>
             {[currentUser.role?.toUpperCase(), currentUser.department]
               .filter(Boolean)
@@ -229,7 +229,7 @@ function ChairmanSidebar({ currentUser, activeSection, isOpen, onLinkClick }) {
         </div>
       </div>
 
-      <nav className="admin-nav" aria-label="Chairman portal navigation">
+      <nav className="admin-nav" aria-label="Director portal navigation">
         {CHAIRMAN_NAV.map((item) => (
           <Link
             key={item.key}
@@ -248,7 +248,7 @@ function ChairmanSidebar({ currentUser, activeSection, isOpen, onLinkClick }) {
         style={{ padding: '0.5rem 0.2rem', textAlign: 'center' }}
       >
         <span style={{ fontSize: '0.72rem', color: 'var(--app-shell-muted)', opacity: 0.8 }}>
-          DwarPal v1.0 · Chairman
+          DwarPal v1.0 · Director
         </span>
       </div>
     </aside>
@@ -285,7 +285,7 @@ function ChairmanHeader({
           }
         </button>
         <div>
-          <p className="admin-eyebrow">DwarPal Chairman Portal</p>
+          <p className="admin-eyebrow">DwarPal Director Portal</p>
           <h1>{title}</h1>
           <span className="subtitle-text">{subtitle}</span>
         </div>
@@ -483,7 +483,7 @@ function DashboardPage({ preview, previewLoading }) {
       {/* Welcome banner */}
       <div className="admin-wide-panel" style={{ padding: '1.25rem 1.5rem', background: 'linear-gradient(135deg, var(--app-accent) 0%, var(--app-accent-strong) 100%)', color: '#fff', border: 'none' }}>
         <p className="admin-eyebrow" style={{ color: 'rgba(255,255,255,0.78)', marginBottom: '0.3rem' }}>
-          DwarPal · Chairman Reporting Panel
+          DwarPal · Director Reporting Panel
         </p>
         <h2 style={{ margin: 0, fontSize: '1.45rem', fontWeight: 800, letterSpacing: '-0.01em' }}>
           Institutional Governance Overview
@@ -1033,7 +1033,7 @@ function HistoryPage({ history, loading, onRefresh }) {
                       </span>
                     </span>
                   </td>
-                  <td>{item.generatedBySnapshot?.name || item.generatedBy?.fullName || 'Chairman'}</td>
+                  <td>{item.generatedBySnapshot?.name || item.generatedBy?.fullName || 'Director'}</td>
                   <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
                     {formatDateTime(item.generatedAt)}
                   </td>
@@ -1518,7 +1518,7 @@ export default function ChairmanPortal({ currentUser, onLogout, onOpenSupport })
       <main className="admin-main">
         <ChairmanHeader
           currentUser={currentUser}
-          title={titleMap[activeSection] || 'Chairman Portal'}
+          title={titleMap[activeSection] || 'Director Portal'}
           subtitle={subtitleMap[activeSection] || ''}
           refreshing={refreshBusy}
           isSidebarOpen={sidebarOpen || !sidebarCollapsed}

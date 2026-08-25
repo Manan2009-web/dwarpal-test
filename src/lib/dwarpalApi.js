@@ -1240,7 +1240,7 @@ function buildStudentTimeline(gatepass) {
     timeline.push(
       {
         label: 'Escalated for Coordinator Review',
-        note: 'Principal/HOD escalated this request',
+        note: 'Principal/Academic HOD escalated this request',
         at: gatepass.actions?.principal?.actedAt || gatepass.actions?.hod?.actedAt || gatepass.updatedAt,
         tone: 'done',
       },
@@ -1248,6 +1248,39 @@ function buildStudentTimeline(gatepass) {
         label: 'Coordinator Approved',
         note: 'Request approved and sent to Security desk',
         at: gatepass.actions?.coordinator?.actedAt || gatepass.updatedAt,
+        tone: 'done',
+      },
+      { label: 'Security Exit', note: 'Ready for OUT verification', at: null, tone: 'current' },
+    )
+    return timeline
+  }
+
+  if (gatepass.status === 'forwarded_to_chairman') {
+    timeline.push(
+      {
+        label: 'Escalated to Director',
+        note: 'Sent to Director for final institutional review',
+        at: gatepass.updatedAt,
+        tone: 'done',
+      },
+      { label: 'Director Review', note: 'Pending approval', at: null, tone: 'current' },
+      { label: 'Security Exit', note: 'Will unlock after approval', at: null, tone: 'upcoming' },
+    )
+    return timeline
+  }
+
+  if (gatepass.status === 'approved_by_chairman') {
+    timeline.push(
+      {
+        label: 'Escalated to Director',
+        note: 'Sent to Director for final institutional review',
+        at: gatepass.updatedAt,
+        tone: 'done',
+      },
+      {
+        label: 'Director Approved',
+        note: 'Request approved and sent to Security desk',
+        at: gatepass.actions?.chairman?.actedAt || gatepass.updatedAt,
         tone: 'done',
       },
       { label: 'Security Exit', note: 'Ready for OUT verification', at: null, tone: 'current' },
@@ -1301,6 +1334,24 @@ function buildStudentTimeline(gatepass) {
     return timeline
   }
 
+  if (gatepass.status === 'rejected_by_chairman') {
+    timeline.push(
+      {
+        label: 'Escalated to Director',
+        note: 'Sent to Director for final institutional review',
+        at: gatepass.updatedAt,
+        tone: 'done',
+      },
+      {
+        label: 'Rejected by Director',
+        note: gatepass.rejectionReason || 'Request closed',
+        at: gatepass.actions?.chairman?.actedAt || gatepass.updatedAt,
+        tone: 'danger',
+      },
+    )
+    return timeline
+  }
+
   if (gatepass.actions?.hod?.status === 'approved') {
     timeline.push(
       {
@@ -1331,6 +1382,15 @@ function buildStudentTimeline(gatepass) {
         label: 'Principal Approved',
         note: 'Request approved and sent to Security desk',
         at: gatepass.actions?.principal?.actedAt || gatepass.updatedAt,
+        tone: 'done',
+      },
+    )
+  } else if (gatepass.actions?.chairman?.status === 'approved') {
+    timeline.push(
+      {
+        label: 'Director Approved',
+        note: 'Request approved and sent to Security desk',
+        at: gatepass.actions?.chairman?.actedAt || gatepass.updatedAt,
         tone: 'done',
       },
     )
