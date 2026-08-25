@@ -371,6 +371,80 @@ async function getDashboardSummary(user) {
     };
   }
 
+  if (user.role === 'admin') {
+    const [
+      totalStudentGatepasses,
+      pendingStudentGatepasses,
+      approvedStudentGatepasses,
+      rejectedStudentGatepasses,
+      outdatedStudentGatepasses,
+      totalFacultyLeaves,
+      pendingFacultyLeaves,
+      approvedFacultyLeaves,
+      rejectedFacultyLeaves,
+      checkedOutGatepasses,
+      completedGatepasses,
+      recentStudentGatepasses,
+      recentFacultyLeaves
+    ] = await Promise.all([
+      Gatepass.countDocuments({ applicantType: 'student' }),
+      Gatepass.countDocuments({
+        applicantType: 'student',
+        status: { $in: ['pending_principal', 'forwarded_to_hod', 'forwarded_to_coordinator', 'forwarded_to_campus_security', 'forwarded_to_chairman', 'pending_cao'] },
+        ...activeTimeFilter
+      }),
+      Gatepass.countDocuments({
+        applicantType: 'student',
+        status: { $in: APPROVED_GATEPASS_STATUSES }
+      }),
+      Gatepass.countDocuments({
+        applicantType: 'student',
+        status: { $in: ['rejected_by_principal', 'rejected_by_hod', 'rejected_by_coordinator', 'rejected_by_chairman', 'rejected'] }
+      }),
+      Gatepass.countDocuments({
+        applicantType: 'student',
+        status: { $in: ['pending_principal', 'forwarded_to_hod', 'forwarded_to_coordinator', 'forwarded_to_campus_security', 'forwarded_to_chairman', 'pending_cao'] },
+        ...outdatedFilter
+      }),
+      FacultyLeaveRequest.countDocuments({}),
+      FacultyLeaveRequest.countDocuments({ overallStatus: 'pending' }),
+      FacultyLeaveRequest.countDocuments({ overallStatus: 'approved' }),
+      FacultyLeaveRequest.countDocuments({ overallStatus: 'rejected' }),
+      Gatepass.countDocuments({ status: 'checked_out_by_security' }),
+      Gatepass.countDocuments({ status: 'completed' }),
+      getRecentGatepasses({}, 5),
+      getRecentFacultyLeaves({}, 5)
+    ]);
+
+    const totalRequests = totalStudentGatepasses + totalFacultyLeaves;
+    const pendingTotal = pendingStudentGatepasses + pendingFacultyLeaves;
+    const approvedTotal = approvedStudentGatepasses + approvedFacultyLeaves;
+    const rejectedTotal = rejectedStudentGatepasses + rejectedFacultyLeaves;
+
+    return {
+      role: user.role,
+      stats: {
+        total: totalRequests,
+        totalRequests,
+        totalStudentGatepasses,
+        totalFacultyLeaves,
+        pending: pendingTotal,
+        pendingStudentGatepasses,
+        pendingFacultyLeaves,
+        approved: approvedTotal,
+        approvedStudentGatepasses,
+        approvedFacultyLeaves,
+        rejected: rejectedTotal,
+        rejectedStudentGatepasses,
+        rejectedFacultyLeaves,
+        checkedOut: checkedOutGatepasses,
+        completed: completedGatepasses,
+        outdated: outdatedStudentGatepasses
+      },
+      recentActions: mergeRecentItems(recentStudentGatepasses, recentFacultyLeaves)
+    };
+  }
+
   if (user.role === 'chairman') {
     const [pending, approved, rejected, outdated, recentActions] = await Promise.all([
       Gatepass.countDocuments({

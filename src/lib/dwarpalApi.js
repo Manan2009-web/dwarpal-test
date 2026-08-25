@@ -1176,11 +1176,11 @@ function buildStudentTimeline(gatepass) {
     timeline.push(
       {
         label: 'Forwarded by Principal',
-        note: 'Sent to HOD for final review',
+        note: 'Sent to Academic HOD for final review',
         at: gatepass.actions?.principal?.actedAt || gatepass.updatedAt,
         tone: 'done',
       },
-      { label: 'HOD Review', note: 'Pending approval', at: null, tone: 'current' },
+      { label: 'Academic HOD Review', note: 'Pending approval', at: null, tone: 'current' },
       { label: 'Security Exit', note: 'Will unlock after approval', at: null, tone: 'upcoming' },
     )
     return timeline
@@ -1189,7 +1189,7 @@ function buildStudentTimeline(gatepass) {
   if (gatepass.status === 'forwarded_to_coordinator') {
     timeline.push(
       {
-        label: 'Forwarded by Principal/HOD',
+        label: 'Forwarded by Principal/Academic HOD',
         note: 'Escalated to Coordinator for semester review',
         at:
           gatepass.actions?.coordinator?.actedAt ||
@@ -1221,12 +1221,12 @@ function buildStudentTimeline(gatepass) {
     timeline.push(
       {
         label: 'Forwarded by Principal',
-        note: 'Sent to HOD for final review',
+        note: 'Sent to Academic HOD for final review',
         at: gatepass.actions?.principal?.actedAt || gatepass.updatedAt,
         tone: 'done',
       },
       {
-        label: 'HOD Approved',
+        label: 'Academic HOD Approved',
         note: 'Request approved and sent to Security desk',
         at: gatepass.actions?.hod?.actedAt || gatepass.updatedAt,
         tone: 'done',
@@ -1269,12 +1269,12 @@ function buildStudentTimeline(gatepass) {
     timeline.push(
       {
         label: 'Forwarded by Principal',
-        note: 'Sent to HOD for final review',
+        note: 'Sent to Academic HOD for final review',
         at: gatepass.actions?.principal?.actedAt || gatepass.updatedAt,
         tone: 'done',
       },
       {
-        label: 'Rejected by HOD',
+        label: 'Rejected by Academic HOD',
         note: gatepass.rejectionReason || 'Request closed',
         at: gatepass.actions?.hod?.actedAt || gatepass.updatedAt,
         tone: 'danger',
@@ -1287,7 +1287,7 @@ function buildStudentTimeline(gatepass) {
     timeline.push(
       {
         label: 'Escalated for Coordinator Review',
-        note: 'Principal/HOD escalated this request',
+        note: 'Principal/Academic HOD escalated this request',
         at: gatepass.actions?.principal?.actedAt || gatepass.actions?.hod?.actedAt || gatepass.updatedAt,
         tone: 'done',
       },
@@ -1305,12 +1305,12 @@ function buildStudentTimeline(gatepass) {
     timeline.push(
       {
         label: 'Forwarded by Principal',
-        note: 'Sent to HOD for final review',
+        note: 'Sent to Academic HOD for final review',
         at: gatepass.actions?.principal?.actedAt || gatepass.updatedAt,
         tone: 'done',
       },
       {
-        label: 'HOD Approved',
+        label: 'Academic HOD Approved',
         note: 'Request approved and sent to Security desk',
         at: gatepass.actions?.hod?.actedAt || gatepass.updatedAt,
         tone: 'done',
@@ -1563,7 +1563,7 @@ function buildFacultyLeaveTimeline(request) {
   const timeline = [
     {
       label: 'Submitted',
-      note: 'Workload adjustment sent to HOD and short leave sent to Principal',
+      note: 'Workload adjustment sent to Academic HOD and short leave sent to Principal',
       at: request.createdAt,
       tone: 'done',
     },
@@ -1572,21 +1572,21 @@ function buildFacultyLeaveTimeline(request) {
   if (request.workloadStatus === 'approved_by_hod') {
     timeline.push({
       label: 'Workload Adjustment',
-      note: 'Approved by HOD',
+      note: 'Approved by Academic HOD',
       at: request.actions?.hod?.actedAt || request.updatedAt,
       tone: 'done',
     })
   } else if (request.workloadStatus === 'rejected_by_hod') {
     timeline.push({
       label: 'Workload Adjustment',
-      note: request.rejectionReason || 'Rejected by HOD',
+      note: request.rejectionReason || 'Rejected by Academic HOD',
       at: request.actions?.hod?.actedAt || request.updatedAt,
       tone: 'danger',
     })
   } else {
     timeline.push({
       label: 'Workload Adjustment',
-      note: 'Pending HOD approval',
+      note: 'Pending Academic HOD approval',
       at: null,
       tone: 'current',
     })

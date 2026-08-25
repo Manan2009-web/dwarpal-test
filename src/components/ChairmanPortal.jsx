@@ -489,7 +489,7 @@ function DashboardPage({ preview, previewLoading }) {
           Institutional Governance Overview
         </h2>
         <span style={{ fontSize: '0.82rem', opacity: 0.82, display: 'block', marginTop: '0.3rem' }}>
-          Full-scope visibility into campus gatepass movement, faculty leave, and export history across all departments.
+          Full-scope visibility into campus gatepass movement, professor leave, and export history across all departments.
         </span>
       </div>
 
@@ -498,7 +498,7 @@ function DashboardPage({ preview, previewLoading }) {
         <StatCard label="Total Gatepasses"  value={total}    icon={ClipboardList}  />
         <StatCard label="Approved Passes"   value={approved} icon={ShieldCheck}    tone="success" />
         <StatCard label="Pending Review"    value={pending}  icon={Hourglass}      tone="warning" />
-        <StatCard label="Faculty Requests"  value={faculty}  icon={CalendarClock}  tone="info" />
+        <StatCard label="Professor Requests" value={faculty} icon={CalendarClock}  tone="info" />
         <StatCard label="Rejected Passes"   value={rejected} icon={XCircle}        tone="danger" />
         <StatCard label="Currently Outside" value={outCount} icon={MapPin}         />
         <StatCard label="Returned"          value={returned} icon={CornerDownLeft} tone="success" />
@@ -611,7 +611,7 @@ function ExportPage({
             onChange={(v) => onFilterChange('recordPartition', v)}
             options={[
               { value: 'students', label: 'Students' },
-              { value: 'faculty',  label: 'Faculty'  },
+              { value: 'faculty',  label: 'Professors' },
               { value: 'mixed',    label: 'Mixed'    },
             ]}
           />
@@ -718,7 +718,7 @@ function ExportPage({
               <FilterSelect label="Gatepass type" value={filters.gatepassType} onChange={(v) => onFilterChange('gatepassType', v)}>
                 <option value="">All gatepasses</option>
                 <option value="student">Student gatepasses</option>
-                <option value="faculty">Faculty gatepasses</option>
+                <option value="faculty">Professor gatepasses</option>
               </FilterSelect>
             </div>
             <label className="admin-check-row">
@@ -727,7 +727,7 @@ function ExportPage({
                 checked={Boolean(filters.includeFacultyLeave)}
                 onChange={(e) => onFilterChange('includeFacultyLeave', e.target.checked)}
               />
-              <span>Include faculty leave records in export</span>
+              <span>Include professor leave records in export</span>
             </label>
           </details>
         </section>
@@ -760,7 +760,7 @@ function ExportPage({
             <>
               <div className="admin-stat-grid compact">
                 <StatCard label="Students" value={userCounts.students} icon={GraduationCap} />
-                <StatCard label="Faculty"  value={userCounts.faculty}  icon={BookUser} />
+                <StatCard label="Professors" value={userCounts.faculty}  icon={BookUser} />
                 <StatCard label="Selected" value={selectedCount}       icon={SquareCheck} tone="info" />
                 <StatCard label="Pending"  value={summary.totalPending} icon={Hourglass} tone="warning" />
               </div>
@@ -1493,7 +1493,7 @@ export default function ChairmanPortal({ currentUser, onLogout, onOpenSupport })
   }
 
   const subtitleMap = {
-    dashboard:  'Full-scope view of campus gatepass activity and faculty leave across all departments.',
+    dashboard:  'Full-scope view of campus gatepass activity and professor leave across all departments.',
     gatepasses: 'Review, approve, or reject escalated student gatepass requests.',
     export:     'Filter records, preview datasets, and download board-ready Excel or PDF reports.',
     history:    'Audit log of all exported reports generated through this portal.',

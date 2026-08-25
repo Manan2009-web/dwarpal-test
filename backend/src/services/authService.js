@@ -286,10 +286,11 @@ function applyRegistrationDetailsToUser(user, normalizedPayload) {
   // FIX: principal and admin also require a program — previously they were
   // incorrectly excluded here, which caused the Mongoose required-validator to
   // fire "Program is required" even when the user had selected one in the UI.
-  const rolesWithProgram = ['student', 'hod', 'principal', 'admin'];
+  const rolesWithProgram = ['student', 'hod', 'principal'];
   user.program = rolesWithProgram.includes(normalizedPayload.role) ? normalizedPayload.program : undefined;
 
-  user.department = normalizedPayload.role === 'security' ? undefined : normalizedPayload.department;
+  user.department = normalizedPayload.role === 'security' || normalizedPayload.role === 'admin' ? undefined : normalizedPayload.department;
+  user.accessLevel = normalizedPayload.role === 'admin' ? (normalizedPayload.accessLevel || 'full') : undefined;
   user.semester = normalizedPayload.role === 'student' ? Number(normalizedPayload.semester) : undefined;
   user.enrollmentNo = normalizedPayload.role === 'student' ? normalizedPayload.enrollmentNo : undefined;
   user.enrollment = normalizedPayload.role === 'student' ? normalizedPayload.enrollmentNo : undefined;

@@ -34,7 +34,7 @@ const features = [
   {
     icon: Shield,
     title: 'Controlled Workflows',
-    description: 'Multi-level approval pathways routing through Coordinators, HODs, and Principals.'
+    description: 'Multi-level approval pathways routing through Coordinators, Academic HODs, and Principals.'
   },
   {
     icon: Clock,

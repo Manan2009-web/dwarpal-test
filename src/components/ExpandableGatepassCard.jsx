@@ -44,11 +44,11 @@ function getGatepassIdentifier(gatepass) {
 
 function getRequestTypeLabel(gatepass) {
   if (gatepass?.requestKind === 'faculty_leave') {
-    return 'Faculty Leave'
+    return 'Professor Leave'
   }
 
   if (gatepass?.requesterType === 'faculty') {
-    return 'Faculty Gatepass'
+    return 'Professor Gatepass'
   }
 
   return 'Student Gatepass'
@@ -56,10 +56,10 @@ function getRequestTypeLabel(gatepass) {
 
 function getRequesterRoleLabel(gatepass) {
   if (gatepass?.requestKind === 'faculty_leave') {
-    return 'Faculty'
+    return 'Professor'
   }
 
-  return gatepass?.requesterType === 'faculty' ? 'Faculty' : 'Student'
+  return gatepass?.requesterType === 'faculty' ? 'Professor' : 'Student'
 }
 
 function getWorkflowSummary(gatepass) {

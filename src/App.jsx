@@ -3209,7 +3209,7 @@ function RegisterScreen({ onRegister }) {
         program: requiresProgram ? normalizedProgram : '',
         department: requiresDepartment ? normalizedDepartment : '',
         designation: ['faculty', 'hod', 'principal'].includes(form.role)
-          ? (form.role === 'hod' ? 'HOD' : form.role === 'principal' ? 'Principal' : String(form.designation).trim())
+          ? (form.role === 'hod' ? 'Academic HOD' : form.role === 'principal' ? 'Principal' : String(form.designation).trim())
           : '',
         securityZone: form.role === 'security' ? String(form.securityZone).trim() : '',
         accessLevel: form.role === 'admin' ? String(form.accessLevel).trim() : '',
@@ -3235,7 +3235,7 @@ function RegisterScreen({ onRegister }) {
       department: ['faculty', 'hod'].includes(nextRole) ? prev.department : '',
       enrollment: (prev.role === 'student') !== (nextRole === 'student') ? '' : prev.enrollment,
       semester: nextRole === 'student' ? prev.semester : '',
-      designation: nextRole === 'faculty' ? prev.designation : nextRole === 'hod' ? 'HOD' : nextRole === 'principal' ? 'Principal' : '',
+      designation: nextRole === 'faculty' ? prev.designation : nextRole === 'hod' ? 'Academic HOD' : nextRole === 'principal' ? 'Principal' : '',
       securityZone: nextRole === 'security' ? prev.securityZone : '',
       accessLevel: nextRole === 'admin' ? prev.accessLevel : '',
       authorityLevel: nextRole === 'cao' ? prev.authorityLevel : '',
@@ -3330,12 +3330,12 @@ function RegisterScreen({ onRegister }) {
 
   const roleOptions = [
     { value: 'student', label: 'Student' },
-    { value: 'faculty', label: 'Faculty' },
-    { value: 'hod', label: 'HOD' },
+    { value: 'faculty', label: 'Professor' },
+    { value: 'hod', label: 'Academic HOD' },
+    { value: 'admin', label: 'Administrator' },
     { value: 'cao', label: 'CAO' },
     { value: 'principal', label: 'Principal' },
-    { value: 'security', label: 'Security Guard' },
-    { value: 'admin', label: 'Admin' }
+    { value: 'security', label: 'Security Guard' }
   ]
 
   return (
@@ -3682,7 +3682,7 @@ function createCoordinatorAssignmentForm(currentUser) {
 function HeaderAvailabilityToggle({ currentUser, onToggle }) {
   const [isSaving, setIsSaving] = useState(false)
   const approvalEnabled = currentUser?.gatepassApprovalEnabled !== false
-  const roleLabel = currentUser?.role === 'principal' ? 'Principal' : 'HOD'
+  const roleLabel = currentUser?.role === 'principal' ? 'Principal' : 'Academic HOD'
 
   async function handleToggle() {
     if (isSaving) return
@@ -3733,7 +3733,7 @@ function GatepassAvailabilityPanel({
 }) {
   const [isSaving, setIsSaving] = useState(false)
   const approvalEnabled = currentUser?.gatepassApprovalEnabled !== false
-  const roleLabel = currentUser?.role === 'principal' ? 'Principal' : 'HOD'
+  const roleLabel = currentUser?.role === 'principal' ? 'Principal' : 'Academic HOD'
 
   async function handleToggleAvailability() {
     if (!onUpdateCurrentUserProfile || isSaving) {
@@ -4189,7 +4189,7 @@ function MultiProgramScopePanel({ currentUser, onUpdateCurrentUserProfile }) {
           <p>
             {role === 'principal'
               ? 'Manage other programs you are also principal of, so their gatepasses appear in your dashboard.'
-              : 'Manage other program+department combinations you are HOD of, so their gatepasses appear in your dashboard.'}
+              : 'Manage other program+department combinations you are Academic HOD of, so their gatepasses appear in your dashboard.'}
           </p>
         </div>
         {scopes.length > 0 ? (
@@ -4249,7 +4249,7 @@ function MultiProgramScopePanel({ currentUser, onUpdateCurrentUserProfile }) {
           <p style={{ fontSize: '0.875rem', color: 'var(--text)' }}>
             {role === 'principal'
               ? 'Are you principal of any other program?'
-              : 'Are you HOD of any other program or department?'}
+              : 'Are you Academic HOD of any other program or department?'}
           </p>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button type="button" className="btn btn-secondary" onClick={handleYes}>
@@ -5767,6 +5767,18 @@ function getRoleStats(currentUser, summary, gatepasses) {
     }
   }
 
+  if (currentUser.role === 'admin') {
+    return {
+      total: summaryStats.total ?? summaryStats.totalRequests ?? gatepasses.length,
+      pending: summaryStats.pending ?? gatepasses.filter((item) => item.status === 'Pending' || item.status === 'Forwarded').length,
+      approved: summaryStats.approved ?? gatepasses.filter((item) => item.status === 'Approved').length,
+      rejected: summaryStats.rejected ?? gatepasses.filter((item) => item.status === 'Rejected').length,
+      checkedOut: summaryStats.checkedOut ?? gatepasses.filter((item) => item.status === 'Out').length,
+      completed: summaryStats.completed ?? gatepasses.filter((item) => item.status === 'Returned' || item.status === 'Completed').length,
+      outdated: summaryStats.outdated ?? gatepasses.filter((item) => item.status === 'Outdated' || item.isOutdated).length,
+    }
+  }
+
   if (currentUser.role === 'hod') {
     return {
       pending: summaryStats.pending ?? summaryStats.pendingReviews ?? gatepasses.filter((item) => item.status === 'Pending' || item.status === 'Forwarded').length,
@@ -5819,6 +5831,17 @@ function getRoleStats(currentUser, summary, gatepasses) {
 }
 
 function getSummaryCards(role, stats) {
+  if (role === 'admin') {
+    return [
+      { label: 'Total Requests', value: stats.total, icon: QrCode },
+      { label: 'Pending Review', value: stats.pending, icon: Clock3, tone: 'warning' },
+      { label: 'Approved', value: stats.approved, icon: CheckCircle2, tone: 'success' },
+      { label: 'Rejected', value: stats.rejected, icon: XCircle, tone: 'danger' },
+      { label: 'Checked Out', value: stats.checkedOut ?? stats.out ?? 0, icon: Send, tone: 'info' },
+      { label: 'Completed', value: stats.completed ?? stats.returned ?? 0, icon: CheckCircle2, tone: 'success' },
+    ]
+  }
+
   if (role === 'student') {
     return [
       { label: 'Total Passes', value: stats.total, icon: QrCode },
@@ -5833,7 +5856,7 @@ function getSummaryCards(role, stats) {
   if (role === 'faculty') {
     if (stats.coordinatorEnabled) {
       return [
-        { label: 'Faculty Requests', value: stats.total, icon: QrCode },
+        { label: 'Professor Requests', value: stats.total, icon: QrCode },
         { label: 'Coordinator Queue', value: stats.coordinatorPending, icon: Clock3, tone: 'warning' },
         { label: 'Approved', value: stats.approved, icon: CheckCircle2, tone: 'success' },
         { label: 'Rejected', value: stats.rejected, icon: XCircle, tone: 'danger' },
@@ -5889,7 +5912,7 @@ function getSummaryCards(role, stats) {
   if (role === 'cao') {
     return [
       { label: 'Total', value: stats.total, icon: QrCode },
-      { label: 'Pending Faculty', value: stats.pending, icon: Clock3, tone: 'warning' },
+      { label: 'Pending Professor', value: stats.pending, icon: Clock3, tone: 'warning' },
       { label: 'Approved', value: stats.approved, icon: CheckCircle2, tone: 'success' },
       { label: 'Rejected', value: stats.rejected, icon: XCircle, tone: 'danger' },
     ]
@@ -5973,7 +5996,7 @@ function getAvailableActions(role, gatepass, onGatepassAction, securityStation =
     return [
       { label: 'Approve', tone: 'success', onClick: handleAction('approve') },
       { label: 'Reject', tone: 'danger', onClick: handleAction('reject') },
-      { label: 'Send to HOD', tone: 'secondary', onClick: handleAction('forward') },
+      { label: 'Send to Academic HOD', tone: 'secondary', onClick: handleAction('forward') },
     ]
   }
 
@@ -6073,11 +6096,12 @@ function getPageSubtitle(user, page) {
 function getListTitle(user) {
   if (user?.role === 'faculty') {
     return user?.coordinatorAssignment?.isCoordinator
-      ? 'Faculty and coordinator review queue'
+      ? 'Professor and coordinator review queue'
       : 'Leave application history'
   }
   if (user?.role === 'principal') return 'Principal review queue'
-  if (user?.role === 'hod') return 'HOD review queue'
+  if (user?.role === 'hod') return 'Academic HOD review queue'
+  if (user?.role === 'admin') return 'Administrator overview & review queue'
   if (user?.role === 'cao') return 'CAO review queue'
   if (user?.role === 'campus_security') return 'Campus Security (Bouncer) clearance queue'
   if (user?.role === 'chairman') return 'Chairman review queue'

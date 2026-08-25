@@ -100,7 +100,7 @@ async function sendExport(req, res, format) {
     await AuditLog.create({
       actor: req.user._id,
       resourceType: 'ReportExport',
-      action: req.user.role === 'chairman' ? 'CHAIRMAN_EXPORT' : 'REPORT_EXPORT',
+      action: req.user.role === 'admin' ? 'ADMIN_EXPORT' : req.user.role === 'chairman' ? 'CHAIRMAN_EXPORT' : 'REPORT_EXPORT',
       message: `Exported ${dataset.recordCount} records as ${format.toUpperCase()} (${fileName})`,
       metadata: {
         format,

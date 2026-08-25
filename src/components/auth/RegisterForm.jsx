@@ -288,8 +288,8 @@ export default function RegisterForm({
               {['faculty', 'hod', 'principal'].includes(form.role) ? (
                 <FormField
                   id="register-designation"
-                  label={form.role === 'principal' ? 'Designation (Principal)' : form.role === 'hod' ? 'Designation (HOD)' : 'Designation'}
-                  value={form.role === 'faculty' ? form.designation : form.role === 'hod' ? 'HOD' : 'Principal'}
+                  label={form.role === 'principal' ? 'Designation (Principal)' : form.role === 'hod' ? 'Designation (Academic HOD)' : 'Designation (Professor)'}
+                  value={form.role === 'faculty' ? form.designation : form.role === 'hod' ? 'Academic HOD' : 'Principal'}
                   onChange={(val) => updateFormField('designation', val)}
                   placeholder="Enter your designation"
                   error={fieldErrors.designation}

@@ -4,8 +4,8 @@ import { ActionButton, ModalForm, SelectField } from './ui'
 import { sanitizeName, sanitizeText, trimInput } from '../lib/sanitize'
 
 const REQUIRED_FIELD_MESSAGE = 'Please fill this field'
-const ALL_STEP_TITLES = ['Faculty & Leave Details', 'Applicant Declaration', 'Short Leave Application']
-const STANDARD_STEP_TITLES = ['Faculty & Leave Details', 'Applicant Declaration']
+const ALL_STEP_TITLES = ['Professor & Leave Details', 'Applicant Declaration', 'Short Leave Application']
+const STANDARD_STEP_TITLES = ['Professor & Leave Details', 'Applicant Declaration']
 
 function getTodayInputValue() {
   return new Date().toISOString().slice(0, 10)
@@ -26,7 +26,7 @@ function buildInitialForm(currentUser) {
   const facultyName = currentUser?.name || ''
   const employeeId = currentUser?.employeeId || ''
   const department = currentUser?.department || ''
-  const designation = 'Faculty'
+  const designation = 'Professor'
 
   return {
     facultyDetails: {
@@ -565,13 +565,13 @@ export default function FacultyLeaveWizard({ open, currentUser, onClose, onSubmi
   return (
     <ModalForm
       open={open}
-      title="Faculty Leave Application"
+      title="Professor Leave Application"
       subtitle={`Step ${step} of ${totalSteps} - ${stepTitles[step - 1]}`}
       onClose={isSubmitting ? undefined : onClose}
       className="faculty-leave-modal"
     >
       <form className="modal-form faculty-leave-wizard" onSubmit={handleSubmit} noValidate>
-        <div className="wizard-stepper" aria-label="Faculty leave request steps">
+        <div className="wizard-stepper" aria-label="Professor leave request steps">
           {stepTitles.map((title, index) => {
             const stepNumber = index + 1
             const stepState = step === stepNumber ? 'current' : step > stepNumber ? 'complete' : 'upcoming'
@@ -592,7 +592,7 @@ export default function FacultyLeaveWizard({ open, currentUser, onClose, onSubmi
           <>
             <section className="wizard-section">
               <div className="wizard-section-header">
-                <h4>Faculty Details</h4>
+                <h4>Professor Details</h4>
               </div>
               <div className="wizard-grid wizard-grid-two">
                 <label>
@@ -820,7 +820,7 @@ export default function FacultyLeaveWizard({ open, currentUser, onClose, onSubmi
                         ) : null}
                       </label>
                       <label>
-                        <FieldLabel required>Adjusted Faculty Name</FieldLabel>
+                        <FieldLabel required>Adjusted Professor Name</FieldLabel>
                         <input
                           type="text"
                           value={row.adjustedFacultyName}
@@ -832,7 +832,7 @@ export default function FacultyLeaveWizard({ open, currentUser, onClose, onSubmi
                         ) : null}
                       </label>
                       <label>
-                        <FieldLabel>Signature of Adjusted Faculty</FieldLabel>
+                        <FieldLabel>Signature of Adjusted Professor</FieldLabel>
                         <input
                           type="text"
                           value={row.adjustedFacultySignature}
@@ -920,7 +920,7 @@ export default function FacultyLeaveWizard({ open, currentUser, onClose, onSubmi
                 ) : null}
               </label>
               <label>
-                <FieldLabel required>Faculty Signature / Digital Acknowledgment</FieldLabel>
+                <FieldLabel required>Professor Signature / Digital Acknowledgment</FieldLabel>
                 <input
                   type="text"
                   value={form.declaration.digitalAcknowledgmentName}
@@ -1103,7 +1103,7 @@ export default function FacultyLeaveWizard({ open, currentUser, onClose, onSubmi
                   ) : null}
                 </label>
                 <label>
-                  <FieldLabel required>Faculty Name / Digital Signature</FieldLabel>
+                  <FieldLabel required>Professor Name / Digital Signature</FieldLabel>
                   <input
                     type="text"
                     value={form.shortLeave.digitalSignatureName}

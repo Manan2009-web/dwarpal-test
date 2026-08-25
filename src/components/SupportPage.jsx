@@ -18,7 +18,7 @@ const FAQ_ITEMS = [
     icon: CheckCircle2,
     question: 'Who reviews and approves my gatepass?',
     answer:
-      'Student gatepasses are reviewed by your department\'s Head of Department (HOD) or the Principal, depending on your program. Faculty gatepasses route to the Chief Administrative Officer (CAO) or Principal. Once approved, the status badge turns green and a QR code becomes available. The entire workflow is auditable — you can see who approved your request and when.',
+      'Student gatepasses are reviewed by your department\'s Academic Head of Department (Academic HOD) or the Principal, depending on your program. Professor gatepasses route to the Chief Administrative Officer (CAO) or Principal. Once approved, the status badge turns green and a QR code becomes available. The entire workflow is auditable — you can see who approved your request and when.',
   },
   {
     icon: QrCode,

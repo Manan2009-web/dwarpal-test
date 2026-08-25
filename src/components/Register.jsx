@@ -98,13 +98,13 @@ export default function Register({ onRegister }) {
       errors.role = 'Please select a role'
     }
 
-    // Program validation (required for HOD, Principal)
+    // Program validation (required for Academic HOD, Principal)
     const requiresProgram = form.role === 'hod' || form.role === 'principal'
     if (requiresProgram && !form.program) {
       errors.program = 'Program selection is required'
     }
 
-    // Department validation (required for Faculty and HOD)
+    // Department validation (required for Professor and Academic HOD)
     const requiresDepartment = form.role === 'faculty' || form.role === 'hod'
     if (requiresDepartment) {
       if (form.role === 'hod' && !form.program) {
@@ -340,8 +340,9 @@ export default function Register({ onRegister }) {
                 }`}
               >
                 <option value="" disabled>Select Role</option>
-                <option value="faculty">Faculty</option>
-                <option value="hod">HOD</option>
+                <option value="faculty">Professor</option>
+                <option value="hod">Academic HOD</option>
+                <option value="admin">Administrator</option>
                 <option value="cao">CAO</option>
                 <option value="security">Security / Gatekeeper</option>
                 <option value="campus_security">Campus Security (Bouncer / Gatekeeper)</option>

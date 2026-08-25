@@ -197,11 +197,11 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: null,
-      required: [function() { return ['student', 'principal', 'admin', 'hod'].includes(this.role); }, 'Program is required'],
+      required: [function() { return ['student', 'principal', 'hod'].includes(this.role); }, 'Program is required'],
       validate: {
         validator(value) {
           if (!value) {
-            return !['student', 'principal', 'admin', 'hod'].includes(this.role);
+            return !['student', 'principal', 'hod'].includes(this.role);
           }
           return STUDENT_PROGRAMS.includes(value);
         },
@@ -311,16 +311,7 @@ const userSchema = new mongoose.Schema(
     accessLevel: {
       type: String,
       trim: true,
-      default: null,
-      validate: {
-        validator(value) {
-          if (this.role === 'admin') {
-            return Boolean(value);
-          }
-          return true;
-        },
-        message: 'Access level is required for admins'
-      }
+      default: 'full'
     },
     authorityLevel: {
       type: String,
@@ -583,7 +574,7 @@ userSchema.pre('validate', function syncLegacyFields(next) {
     this.department = undefined;
     this.designation = undefined;
     this.securityZone = undefined;
-    this.accessLevel = this.accessLevel ? String(this.accessLevel).trim() : undefined;
+    this.accessLevel = this.accessLevel ? String(this.accessLevel).trim() : 'full';
     this.authorityLevel = undefined;
   } else if (this.role === 'cao') {
     this.enrollmentNo = undefined;

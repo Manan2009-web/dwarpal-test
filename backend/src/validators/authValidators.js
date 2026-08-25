@@ -97,7 +97,7 @@ const registerValidation = [
     .customSanitizer(normalizeProgram)
     .custom((value, { req }) => {
       const role = String(req.body.role || '').trim().toLowerCase();
-      if (!['principal', 'admin', 'hod', 'student'].includes(role)) {
+      if (!['principal', 'hod', 'student'].includes(role)) {
         return true;
       }
 
@@ -177,12 +177,12 @@ const registerValidation = [
   body('accessLevel')
     .optional({ values: 'falsy' })
     .trim()
-    .custom((value, { req }) => {
+    .customSanitizer((value, { req }) => {
       const role = String(req.body.role || '').trim().toLowerCase();
-      if (role === 'admin' && !value) {
-        throw new Error('Access level is required');
+      if (role === 'admin') {
+        return String(value || 'full').trim();
       }
-      return true;
+      return value ? String(value).trim() : undefined;
     }),
   body('authorityLevel')
     .optional({ values: 'falsy' })

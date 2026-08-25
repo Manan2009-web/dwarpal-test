@@ -150,7 +150,7 @@ function getAdminNavItems(currentUser) {
       items.push({ key: 'students', label: 'Students', icon: GraduationCap, to: '/admin/students' })
     }
     items.push(
-      { key: 'faculty', label: 'Faculty', icon: BookUser, to: '/admin/faculty' },
+      { key: 'faculty', label: 'Professors', icon: BookUser, to: '/admin/faculty' },
       { key: 'coordinators', label: 'Coordinators', icon: UserCheck, to: '/admin/coordinators' },
       { key: 'export', label: 'Export Center', icon: FolderDown, to: '/admin/export' },
       { key: 'history', label: 'Export History', icon: History, to: '/admin/export/history' },
@@ -571,7 +571,7 @@ function ExportFilterPanel({ filters, options, onChange, onReset, lockedPartitio
             label="Employee ID"
             value={filters.employeeId}
             onChange={(value) => onChange('employeeId', value)}
-            placeholder="Faculty or staff employee ID"
+            placeholder="Professor or staff employee ID"
           />
         </div>
       </details>
@@ -586,7 +586,7 @@ function ExportFilterPanel({ filters, options, onChange, onReset, lockedPartitio
             <FilterSelect label="Data partition" value={filters.recordPartition} onChange={(value) => onChange('recordPartition', value)} disabled={Boolean(lockedPartition)}>
               {(filterOptions.recordPartitions || ['students', 'faculty', 'mixed']).map((item) => (
                 <option key={item} value={item}>
-                  {item}
+                  {item === 'faculty' ? 'professors' : item}
                 </option>
               ))}
             </FilterSelect>
@@ -657,8 +657,8 @@ function ExportFilterPanel({ filters, options, onChange, onReset, lockedPartitio
             ))}
           </FilterSelect>
           {!isCoord && (
-            <FilterSelect label="Faculty" value={filters.facultyId} onChange={(value) => onChange('facultyId', value)}>
-              <option value="">Any faculty</option>
+            <FilterSelect label="Professor" value={filters.facultyId} onChange={(value) => onChange('facultyId', value)}>
+              <option value="">Any professor</option>
               {(people.faculty || []).map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.label}
@@ -688,7 +688,7 @@ function ExportFilterPanel({ filters, options, onChange, onReset, lockedPartitio
           <FilterSelect label="Gatepass type" value={filters.gatepassType} onChange={(value) => onChange('gatepassType', value)}>
             <option value="">All gatepasses</option>
             <option value="student">Student gatepasses</option>
-            <option value="faculty">Faculty gatepasses</option>
+            <option value="faculty">Professor gatepasses</option>
           </FilterSelect>
           <FilterSelect label="Leave type" value={filters.leaveType} onChange={(value) => onChange('leaveType', value)}>
             <option value="">All leave types</option>
@@ -768,7 +768,7 @@ function PreviewPanel({ preview, loading, error, selectedCount }) {
       </div>
       <div className="admin-stat-grid compact">
         <StatCard label="Students" value={userCounts.students} icon={GraduationCap} />
-        <StatCard label="Faculty" value={userCounts.faculty} icon={BookUser} />
+        <StatCard label="Professors" value={userCounts.faculty} icon={BookUser} />
         <StatCard label="Selected" value={selectedCount} icon={SquareCheck} tone="info" />
         <StatCard label="Pending" value={summary.totalPending} icon={Hourglass} tone="warning" />
       </div>
@@ -1101,7 +1101,7 @@ function DashboardOverview({ preview, options, currentUser, onStudentClick }) {
     ? { label: 'Rejected Passes', value: summary.totalRejected || 0, icon: XCircle, tone: 'danger' }
     : currentUser?.role === 'hod'
       ? { label: 'Active Outside', value: activeCount, icon: MapPin, tone: 'info' }
-      : { label: 'Faculty Leaves', value: summary.totalFacultyRequests || 0, icon: CalendarClock, tone: 'info' }
+      : { label: 'Professor Leaves', value: summary.totalFacultyRequests || 0, icon: CalendarClock, tone: 'info' }
 
   const showLeaderboard = studentLeaderboard.length > 0 || isCoord || ['hod', 'principal', 'admin', 'cao'].includes(currentUser?.role)
 
@@ -1705,13 +1705,13 @@ function ExportWorkspace({
             lockedPartition === 'students'
               ? 'Students'
               : lockedPartition === 'faculty'
-                ? 'Faculty'
+                ? 'Professors'
                 : 'Mixed / Combined',
         },
       ]
     : [
         { value: 'students', label: 'Students' },
-        { value: 'faculty', label: 'Faculty' },
+        { value: 'faculty', label: 'Professors' },
         { value: 'mixed', label: 'Mixed / Combined' },
       ]
 
@@ -1726,7 +1726,7 @@ function ExportWorkspace({
             <div className="admin-panel-heading">
               <div>
                 <p className="admin-eyebrow">Export Data</p>
-                <h2>Students, faculty, mixed, selected, filtered, and bulk exports</h2>
+                <h2>Students, professors, mixed, selected, filtered, and bulk exports</h2>
               </div>
             </div>
             <div className="admin-toolbar-grid">
@@ -2039,13 +2039,13 @@ export default function AdminPortal({ currentUser, onLogout, onOpenSupport = nul
   }
 
   const titleMap = {
-    dashboard: 'Admin Dashboard',
+    dashboard: currentUser?.role === 'admin' ? 'Administrator Dashboard' : 'Admin Dashboard',
     gatepasses: 'Gatepass Operations',
     students: currentUser?.role === 'it' ? 'Add Student' : 'Students',
     'student-history': 'Student Registration History',
     emails: 'Email Queue Management',
     notifications: 'IT Notifications & Error Center',
-    faculty: 'Faculty',
+    faculty: 'Professors',
     coordinators: 'Coordinators',
     reports: 'Reports',
     export: 'Export Center',

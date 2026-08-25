@@ -77,6 +77,10 @@ function normalizeRole(value) {
     .trim()
     .toLowerCase();
 
+  if (normalizedRole === 'administrator') {
+    return 'admin';
+  }
+
   return ROLES.includes(normalizedRole) ? normalizedRole : '';
 }
 

@@ -102,7 +102,7 @@ export default function LegalDocs({ onManageCookies }) {
                 Sending push notifications and email OTPs for approval status changes, security scans, and account events.
               </PolicyGridCard>
               <PolicyGridCard title="Audit Log &amp; Safety">
-                Enabling administrators (Principals, HODs, CAOs) to monitor campus attendance, resolve access disputes, and ensure safety compliance.
+                Enabling administrators (Principals, Academic HODs, CAOs) to monitor campus attendance, resolve access disputes, and ensure safety compliance.
               </PolicyGridCard>
               <PolicyGridCard title="System Security">
                 Authenticating logins via multi-factor verification (OTP + WebAuthn passkeys) to prevent unauthorized access.
