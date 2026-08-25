@@ -115,6 +115,7 @@ const APPROVED_GATEPASS_STATUSES = new Set([
   'approved_by_principal',
   'approved_by_hod',
   'approved_by_coordinator',
+  'approved_by_admin',
   'approved_by_chairman',
 ])
 const REJECTED_GATEPASS_STATUSES = new Set([
@@ -123,6 +124,7 @@ const REJECTED_GATEPASS_STATUSES = new Set([
   'rejected_by_coordinator',
   'rejected_by_cao',
   'rejected_by_campus_security',
+  'rejected_by_admin',
   'rejected_by_chairman',
 ])
 const PENDING_GATEPASS_STATUSES = new Set([
@@ -130,6 +132,7 @@ const PENDING_GATEPASS_STATUSES = new Set([
   'forwarded_to_hod',
   'forwarded_to_coordinator',
   'forwarded_to_campus_security',
+  'forwarded_to_admin',
   'forwarded_to_chairman',
   'pending_cao',
 ])
@@ -1136,6 +1139,7 @@ function getDisplayStatus(status, gatepass = null) {
     status === 'forwarded_to_hod' ||
     status === 'forwarded_to_coordinator' ||
     status === 'forwarded_to_campus_security' ||
+    status === 'forwarded_to_admin' ||
     status === 'forwarded_to_chairman'
   ) {
     return 'Forwarded'
@@ -1255,6 +1259,39 @@ function buildStudentTimeline(gatepass) {
     return timeline
   }
 
+  if (gatepass.status === 'forwarded_to_admin') {
+    timeline.push(
+      {
+        label: 'Escalated to Administrator',
+        note: 'Sent to Administrator because Security | Bouncer did not take action',
+        at: gatepass.updatedAt,
+        tone: 'done',
+      },
+      { label: 'Administrator Review', note: 'Pending approval', at: null, tone: 'current' },
+      { label: 'Security Exit', note: 'Will unlock after approval', at: null, tone: 'upcoming' },
+    )
+    return timeline
+  }
+
+  if (gatepass.status === 'approved_by_admin') {
+    timeline.push(
+      {
+        label: 'Escalated to Administrator',
+        note: 'Sent to Administrator for escalation review',
+        at: gatepass.updatedAt,
+        tone: 'done',
+      },
+      {
+        label: 'Administrator Approved',
+        note: 'Request approved and sent to Security desk',
+        at: gatepass.actions?.admin?.actedAt || gatepass.updatedAt,
+        tone: 'done',
+      },
+      { label: 'Security Exit', note: 'Ready for OUT verification', at: null, tone: 'current' },
+    )
+    return timeline
+  }
+
   if (gatepass.status === 'forwarded_to_chairman') {
     timeline.push(
       {
@@ -1328,6 +1365,24 @@ function buildStudentTimeline(gatepass) {
         label: 'Rejected by Coordinator',
         note: gatepass.rejectionReason || 'Request closed',
         at: gatepass.actions?.coordinator?.actedAt || gatepass.updatedAt,
+        tone: 'danger',
+      },
+    )
+    return timeline
+  }
+
+  if (gatepass.status === 'rejected_by_admin') {
+    timeline.push(
+      {
+        label: 'Escalated to Administrator',
+        note: 'Sent to Administrator for escalation review',
+        at: gatepass.updatedAt,
+        tone: 'done',
+      },
+      {
+        label: 'Rejected by Administrator',
+        note: gatepass.rejectionReason || 'Request closed',
+        at: gatepass.actions?.admin?.actedAt || gatepass.updatedAt,
         tone: 'danger',
       },
     )
@@ -1580,6 +1635,14 @@ export function toUiGatepass(gatepass) {
       coordinator: {
         status: gatepass.coordinatorAction?.status || null,
         actedAt: gatepass.coordinatorAction?.actedAt || null,
+      },
+      admin: {
+        status: gatepass.adminAction?.status || null,
+        actedAt: gatepass.adminAction?.actedAt || null,
+      },
+      chairman: {
+        status: gatepass.chairmanAction?.status || null,
+        actedAt: gatepass.chairmanAction?.actedAt || null,
       },
       cao: {
         status: gatepass.caoAction?.status || null,
@@ -2474,6 +2537,7 @@ function buildGatepassStatusQuery(statusFilter, role = '') {
   if (statusFilter === 'Pending') {
     if (role === 'principal') return 'pending_principal'
     if (role === 'hod') return 'forwarded_to_hod'
+    if (role === 'admin') return 'forwarded_to_admin,forwarded_to_chairman'
     if (role === 'chairman') return 'forwarded_to_chairman'
     if (role === 'campus_security') return 'forwarded_to_campus_security'
     return 'pending_principal,pending_cao'

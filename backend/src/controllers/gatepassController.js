@@ -153,6 +153,15 @@ const getPendingForCao = asyncHandler(async (req, res) => {
   });
 });
 
+const getPendingForAdmin = asyncHandler(async (req, res) => {
+  const result = await gatepassService.getPendingGatepassesForRole(req.user, req.query);
+  return sendSuccess(res, {
+    message: 'Administrator pending gatepasses fetched successfully',
+    data: result.gatepasses,
+    meta: result.meta
+  });
+});
+
 const getPendingForSecurity = asyncHandler(async (req, res) => {
   const result = await gatepassService.getPendingGatepassesForRole(req.user, req.query);
   return sendSuccess(res, {
@@ -334,6 +343,7 @@ module.exports = {
   getGatepassById,
   getGatepassHistory,
   getMyGatepasses,
+  getPendingForAdmin,
   getPendingForCao,
   getPendingForHod,
   getPendingForCoordinator,

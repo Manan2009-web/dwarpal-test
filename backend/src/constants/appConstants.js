@@ -169,15 +169,18 @@ const STUDENT_GATEPASS_STATUSES = Object.freeze([
   'forwarded_to_hod',
   'forwarded_to_coordinator',
   'forwarded_to_campus_security',
+  'forwarded_to_admin',
   'forwarded_to_chairman',
   'approved_by_principal',
   'approved_by_hod',
   'approved_by_coordinator',
+  'approved_by_admin',
   'approved_by_chairman',
   'rejected_by_principal',
   'rejected_by_hod',
   'rejected_by_coordinator',
   'rejected_by_campus_security',
+  'rejected_by_admin',
   'rejected_by_chairman',
   'approved_final',
   'checked_out_by_security',
@@ -204,7 +207,8 @@ const GATEPASS_STATUSES = Object.freeze([
 
 const APPROVED_GATEPASS_STATUSES = Object.freeze([
   'approved_final',
-  'approved_by_cao'
+  'approved_by_cao',
+  'approved_by_admin'
 ]);
 
 const PENDING_GATEPASS_STATUSES = Object.freeze([
@@ -212,6 +216,7 @@ const PENDING_GATEPASS_STATUSES = Object.freeze([
   'forwarded_to_hod',
   'forwarded_to_coordinator',
   'forwarded_to_campus_security',
+  'forwarded_to_admin',
   'forwarded_to_chairman',
   'pending_cao'
 ]);
@@ -220,6 +225,7 @@ const BOUNCER_VISIBLE_STATUSES = Object.freeze([
   'approved_by_principal',
   'approved_by_hod',
   'approved_by_coordinator',
+  'approved_by_admin',
   'approved_by_chairman',
   'forwarded_to_campus_security'
 ]);
@@ -245,6 +251,7 @@ const APPROVAL_LEVELS = Object.freeze([
   'cao',
   'campus_security',
   'security',
+  'admin',
   'chairman',
   'completed',
   'cancelled'

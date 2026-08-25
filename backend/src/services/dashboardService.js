@@ -131,7 +131,7 @@ async function getDashboardSummary(user) {
       }),
       Gatepass.countDocuments({
         ...baseFilter,
-        status: { $in: ['forwarded_to_hod', 'forwarded_to_coordinator', 'forwarded_to_campus_security', 'forwarded_to_chairman', 'pending_cao'] },
+        status: { $in: ['forwarded_to_hod', 'forwarded_to_coordinator', 'forwarded_to_campus_security', 'forwarded_to_admin', 'forwarded_to_chairman', 'pending_cao'] },
         ...activeTimeFilter
       }),
       Gatepass.countDocuments({
@@ -140,11 +140,11 @@ async function getDashboardSummary(user) {
       }),
       Gatepass.countDocuments({
         ...baseFilter,
-        status: { $in: ['rejected_by_principal', 'rejected_by_hod', 'rejected_by_coordinator', 'rejected_by_cao'] }
+        status: { $in: ['rejected_by_principal', 'rejected_by_hod', 'rejected_by_coordinator', 'rejected_by_admin', 'rejected_by_cao'] }
       }),
       Gatepass.countDocuments({
         ...baseFilter,
-        status: { $in: ['pending_principal', 'forwarded_to_hod', 'forwarded_to_coordinator', 'forwarded_to_campus_security', 'forwarded_to_chairman', 'pending_cao', ...APPROVED_GATEPASS_STATUSES] },
+        status: { $in: ['pending_principal', 'forwarded_to_hod', 'forwarded_to_coordinator', 'forwarded_to_campus_security', 'forwarded_to_admin', 'forwarded_to_chairman', 'pending_cao', ...APPROVED_GATEPASS_STATUSES] },
         ...outdatedFilter
       }),
       getRecentGatepasses(baseFilter)
@@ -390,7 +390,7 @@ async function getDashboardSummary(user) {
       Gatepass.countDocuments({ applicantType: 'student' }),
       Gatepass.countDocuments({
         applicantType: 'student',
-        status: { $in: ['pending_principal', 'forwarded_to_hod', 'forwarded_to_coordinator', 'forwarded_to_campus_security', 'forwarded_to_chairman', 'pending_cao'] },
+        status: { $in: ['pending_principal', 'forwarded_to_hod', 'forwarded_to_coordinator', 'forwarded_to_campus_security', 'forwarded_to_admin', 'forwarded_to_chairman', 'pending_cao'] },
         ...activeTimeFilter
       }),
       Gatepass.countDocuments({
@@ -399,11 +399,11 @@ async function getDashboardSummary(user) {
       }),
       Gatepass.countDocuments({
         applicantType: 'student',
-        status: { $in: ['rejected_by_principal', 'rejected_by_hod', 'rejected_by_coordinator', 'rejected_by_chairman', 'rejected'] }
+        status: { $in: ['rejected_by_principal', 'rejected_by_hod', 'rejected_by_coordinator', 'rejected_by_campus_security', 'rejected_by_admin', 'rejected_by_chairman', 'rejected'] }
       }),
       Gatepass.countDocuments({
         applicantType: 'student',
-        status: { $in: ['pending_principal', 'forwarded_to_hod', 'forwarded_to_coordinator', 'forwarded_to_campus_security', 'forwarded_to_chairman', 'pending_cao'] },
+        status: { $in: ['pending_principal', 'forwarded_to_hod', 'forwarded_to_coordinator', 'forwarded_to_campus_security', 'forwarded_to_admin', 'forwarded_to_chairman', 'pending_cao'] },
         ...outdatedFilter
       }),
       FacultyLeaveRequest.countDocuments({}),

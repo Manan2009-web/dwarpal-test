@@ -6025,6 +6025,23 @@ function getAvailableActions(role, gatepass, onGatepassAction, securityStation =
     ]
   }
 
+  if (role === 'admin') {
+    const isAdminStage = [
+      'forwarded_to_admin',
+      'forwarded_to_chairman',
+      'forwarded_to_campus_security',
+      'approved_by_principal',
+      'approved_by_hod',
+      'approved_by_coordinator'
+    ].includes(gatepass.rawStatus || gatepass.status)
+    if (isAdminStage) {
+      return [
+        { label: 'Approve', tone: 'success', onClick: handleAction('approve') },
+        { label: 'Reject', tone: 'danger', onClick: handleAction('reject') },
+      ]
+    }
+  }
+
   if (role === 'chairman') {
     const isChairmanStage = (gatepass.rawStatus || gatepass.status) === 'forwarded_to_chairman'
     if (isChairmanStage) {
@@ -6040,6 +6057,7 @@ function getAvailableActions(role, gatepass, onGatepassAction, securityStation =
       'approved_by_principal',
       'approved_by_hod',
       'approved_by_coordinator',
+      'approved_by_admin',
       'approved_by_chairman',
       'forwarded_to_campus_security'
     ].includes(gatepass.rawStatus || gatepass.status)

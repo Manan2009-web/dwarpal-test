@@ -151,7 +151,7 @@ const autoEscalationSchema = new mongoose.Schema(
     },
     blockedStage: {
       type: String,
-      enum: ['principal', 'hod', 'coordinator', 'campus_security', 'chairman', null],
+      enum: ['principal', 'hod', 'coordinator', 'campus_security', 'admin', 'chairman', null],
       default: null
     },
     code: {
@@ -429,7 +429,7 @@ const gatepassSchema = new mongoose.Schema(
     },
     forwardedToRole: {
       type: String,
-      enum: ['principal', 'hod', 'coordinator', 'cao', 'security', 'campus_security', 'chairman'],
+      enum: ['principal', 'hod', 'coordinator', 'cao', 'security', 'campus_security', 'admin', 'chairman'],
       default: null
     },
     principalAction: {
@@ -451,6 +451,12 @@ const gatepassSchema = new mongoose.Schema(
       })
     },
     campusSecurityAction: {
+      type: approvalActionSchema,
+      default: () => ({
+        status: 'not_required'
+      })
+    },
+    adminAction: {
       type: approvalActionSchema,
       default: () => ({
         status: 'not_required'
