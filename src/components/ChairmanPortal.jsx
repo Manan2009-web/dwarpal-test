@@ -46,9 +46,8 @@ import {
   XCircle,
 } from 'lucide-react'
 import AppBrand from './AppBrand'
-import ExpandableGatepassCard from './ExpandableGatepassCard'
 import { useToast } from './ToastProvider'
-import { SkeletonTableRows, SkeletonGatepassCard } from './ui/SkeletonLoader'
+import { SkeletonTableRows } from './ui/SkeletonLoader'
 import {
   downloadAdminExport,
   fetchAdminExportHistory,
@@ -56,8 +55,6 @@ import {
   fetchAdminExportPreview,
   fetchAdminExportRecords,
   getApiErrorMessage,
-  fetchWorkspace,
-  updateRequestStatus
 } from '../lib/dwarpalApi'
 
 /* ─────────────────────────────────────────────
@@ -82,7 +79,6 @@ const DEFAULT_FILTERS = {
 
 const CHAIRMAN_NAV = [
   { key: 'dashboard', label: 'Dashboard',       icon: LayoutDashboard, to: '/chairman' },
-  { key: 'gatepasses', label: 'Approvals Queue', icon: ClipboardList,   to: '/chairman/gatepasses' },
   { key: 'export',    label: 'Export Centre',   icon: FolderDown,      to: '/chairman/export' },
   { key: 'history',   label: 'Export History',  icon: History,         to: '/chairman/history' },
 ]
@@ -110,8 +106,9 @@ function formatDateTime(value) {
 function buildFiltersForRequest(filters) {
   const result = { ...filters }
   Object.keys(result).forEach((key) => {
-    const val = result[key]
-    if (val === '' || val === null || val === undefined) delete result[key]
+    if (result[key] === '' || result[key] === null || result[key] === undefined) {
+      delete result[key]
+    }
   })
   if (!result.datePreset) delete result.datePreset
   if (result.includeFacultyLeave === true) delete result.includeFacultyLeave // keep only when false
@@ -121,7 +118,6 @@ function buildFiltersForRequest(filters) {
 function getSection(pathname) {
   if (pathname.startsWith('/chairman/export')) return 'export'
   if (pathname.startsWith('/chairman/history')) return 'history'
-  if (pathname.startsWith('/chairman/gatepasses')) return 'gatepasses'
   return 'dashboard'
 }
 
@@ -1058,152 +1054,7 @@ function HistoryPage({ history, loading, onRefresh }) {
   )
 }
 
-/* ─────────────────────────────────────────────
-   Page: Approvals Queue
-   ───────────────────────────────────────────── */
 
-function ApprovalsPage({
-  gatepasses,
-  meta,
-  loading,
-  statusFilter,
-  onStatusFilterChange,
-  searchTerm,
-  onSearchTermChange,
-  page,
-  onPageChange,
-  onGatepassAction,
-  onRejectClick,
-  expandedId,
-  onToggleExpand
-}) {
-  const statusOptions = ['All', 'Pending', 'Forwarded', 'Approved', 'Rejected', 'Outdated']
-
-  const cards = useMemo(() => {
-    return gatepasses.map((gp) => {
-      let actions = []
-      if (gp.rawStatus === 'forwarded_to_chairman') {
-        actions = [
-          { label: 'Approve', tone: 'success', onClick: () => onGatepassAction(gp, 'approve') },
-          { label: 'Reject', tone: 'danger', onClick: () => onRejectClick(gp) }
-        ]
-      }
-      return { gatepass: gp, actions }
-    })
-  }, [gatepasses, onGatepassAction, onRejectClick])
-
-  return (
-    <div className="admin-page-stack">
-      <section className="admin-wide-panel" style={{ padding: '24px', background: 'var(--app-surface)', borderRadius: '12px', border: '1px solid var(--app-border)', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        <div className="admin-panel-heading" style={{ borderBottom: '1px solid var(--app-border)', paddingBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-          <div>
-            <p className="admin-eyebrow">Institutional Reviews</p>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Approvals Queue</h2>
-          </div>
-        </div>
-
-        <div className="workspace-top" style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* Search */}
-          <div className="admin-field" style={{ flex: '1', minWidth: '240px', margin: 0 }}>
-            <div className="admin-filter-search-wrap" style={{ position: 'relative' }}>
-              <input
-                type="text"
-                placeholder="Search by ID or student name..."
-                value={searchTerm}
-                onChange={(e) => onSearchTermChange(e.target.value)}
-                className="admin-filter-search-input"
-                style={{
-                  width: '100%',
-                  padding: '10px 12px 10px 36px',
-                  borderRadius: '8px',
-                  border: '1px solid var(--app-border)',
-                  background: 'var(--app-surface-subtle)',
-                  color: 'var(--app-text)',
-                  outline: 'none'
-                }}
-              />
-              <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--app-shell-muted)' }} />
-            </div>
-          </div>
-
-          {/* Filters */}
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            {statusOptions.map((opt) => (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => onStatusFilterChange(opt)}
-                className={`admin-text-button ${statusFilter === opt ? 'active' : ''}`}
-                style={{
-                  padding: '8px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid',
-                  borderColor: statusFilter === opt ? 'var(--app-accent)' : 'var(--app-border)',
-                  background: statusFilter === opt ? 'var(--app-accent-transparent)' : 'var(--app-surface-subtle)',
-                  color: statusFilter === opt ? 'var(--app-accent-strong)' : 'var(--app-text-muted)',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                {opt}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {loading ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <SkeletonGatepassCard />
-            <SkeletonGatepassCard />
-            <SkeletonGatepassCard />
-          </div>
-        ) : cards.length > 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {cards.map(({ gatepass, actions }) => (
-              <ExpandableGatepassCard
-                key={gatepass.id}
-                gatepass={gatepass}
-                currentUserRole="chairman"
-                actions={actions}
-                expanded={expandedId === gatepass.id}
-                onToggle={() => onToggleExpand(expandedId === gatepass.id ? '' : gatepass.id)}
-              />
-            ))}
-
-            {meta.totalPages > 1 && (
-              <div className="admin-pager" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', marginTop: '16px' }}>
-                <button
-                  disabled={page <= 1}
-                  onClick={() => onPageChange(page - 1)}
-                  className="admin-icon-button"
-                  style={{ cursor: page <= 1 ? 'not-allowed' : 'pointer', opacity: page <= 1 ? 0.4 : 1 }}
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <span style={{ fontSize: '0.9rem', color: 'var(--app-text-muted)' }}>
-                  Page {page} of {meta.totalPages}
-                </span>
-                <button
-                  disabled={page >= meta.totalPages}
-                  onClick={() => onPageChange(page + 1)}
-                  className="admin-icon-button"
-                  style={{ cursor: page >= meta.totalPages ? 'not-allowed' : 'pointer', opacity: page >= meta.totalPages ? 0.4 : 1 }}
-                >
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="admin-empty-state" style={{ minHeight: '200px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'var(--app-text-muted)', fontSize: '1rem' }}>
-            No gatepasses found in this queue.
-          </div>
-        )}
-      </section>
-    </div>
-  )
-}
 
 /* ─────────────────────────────────────────────
    Main Component
@@ -1229,17 +1080,6 @@ export default function ChairmanPortal({ currentUser, onLogout, onOpenSupport })
   const [exportFormat,   setExportFormat]   = useState('excel')
   const [selectedRows,   setSelectedRows]   = useState({})
   
-  /* ── Approvals Queue state ── */
-  const [gatepasses, setGatepasses] = useState([])
-  const [gatepassMeta, setGatepassMeta] = useState({})
-  const [gatepassPage, setGatepassPage] = useState(1)
-  const [gatepassLoading, setGatepassLoading] = useState(false)
-  const [gatepassStatusFilter, setGatepassStatusFilter] = useState('Pending')
-  const [gatepassSearch, setGatepassSearch] = useState('')
-  const [rejectRequest, setRejectRequest] = useState(null)
-  const [rejectionReason, setRejectionReason] = useState('')
-  const [expandedGatepassId, setExpandedGatepassId] = useState('')
-
   /* ── Loading state ── */
   const [optionsLoading,  setOptionsLoading]  = useState(true)
   const [previewLoading,  setPreviewLoading]  = useState(true)
@@ -1345,68 +1185,6 @@ export default function ChairmanPortal({ currentUser, onLogout, onOpenSupport })
     if (activeSection === 'history') loadHistory()
   }, [activeSection, loadHistory])
 
-  /* ── Load approvals queue ── */
-  const loadGatepasses = useCallback((signal) => {
-    setGatepassLoading(true)
-    fetchWorkspace(
-      'chairman',
-      signal,
-      {
-        page: gatepassPage,
-        limit: 10,
-        statusFilter: gatepassStatusFilter,
-        searchTerm: gatepassSearch
-      }
-    )
-      .then((res) => {
-        setGatepasses(res.gatepasses || [])
-        setGatepassMeta(res.gatepassesMeta || {})
-      })
-      .catch((err) => {
-        if (err?.name === 'AbortError') return
-        toast.error({ title: 'Fetch failed', message: getApiErrorMessage(err, 'Unable to load approvals queue.') })
-      })
-      .finally(() => setGatepassLoading(false))
-  }, [gatepassPage, gatepassStatusFilter, gatepassSearch, toast])
-
-  useEffect(() => {
-    if (activeSection !== 'gatepasses') return
-    const ctrl = new AbortController()
-    loadGatepasses(ctrl.signal)
-    return () => ctrl.abort()
-  }, [activeSection, loadGatepasses])
-
-  const handleGatepassAction = async (gatepass, action, extraBody = null) => {
-    try {
-      await updateRequestStatus(gatepass, action, extraBody)
-      toast.success({
-        title: action === 'approve' ? 'Approved' : 'Rejected',
-        message: `Gatepass was successfully ${action === 'approve' ? 'approved' : 'rejected'}.`
-      })
-      loadGatepasses()
-      return { ok: true }
-    } catch (err) {
-      toast.error({
-        title: 'Action failed',
-        message: getApiErrorMessage(err, 'Unable to update gatepass status.')
-      })
-      return { ok: false, error: err.message }
-    }
-  }
-
-  const handleRejectClick = (gatepass) => {
-    setRejectRequest(gatepass)
-    setRejectionReason('')
-  }
-
-  const handleRejectSubmit = async () => {
-    if (!rejectRequest) return
-    const res = await handleGatepassAction(rejectRequest, 'reject', { rejectionReason })
-    if (res.ok) {
-      setRejectRequest(null)
-    }
-  }
-
   /* ── Filter handlers ── */
   function handleFilterChange(key, value) {
     setRecordsPage(1)
@@ -1487,14 +1265,12 @@ export default function ChairmanPortal({ currentUser, onLogout, onOpenSupport })
   /* ── Title map ── */
   const titleMap = {
     dashboard:  'Institutional Overview',
-    gatepasses: 'Approvals Queue',
     export:     'Export Centre',
     history:    'Export History',
   }
 
   const subtitleMap = {
     dashboard:  'Full-scope view of campus gatepass activity and professor leave across all departments.',
-    gatepasses: 'Review, approve, or reject escalated student gatepass requests.',
     export:     'Filter records, preview datasets, and download board-ready Excel or PDF reports.',
     history:    'Audit log of all exported reports generated through this portal.',
   }
@@ -1570,59 +1346,7 @@ export default function ChairmanPortal({ currentUser, onLogout, onOpenSupport })
             onRefresh={loadHistory}
           />
         )}
-
-        {activeSection === 'gatepasses' && (
-          <ApprovalsPage
-            gatepasses={gatepasses}
-            meta={gatepassMeta}
-            loading={gatepassLoading}
-            statusFilter={gatepassStatusFilter}
-            onStatusFilterChange={setGatepassStatusFilter}
-            searchTerm={gatepassSearch}
-            onSearchTermChange={setGatepassSearch}
-            page={gatepassPage}
-            onPageChange={setGatepassPage}
-            onGatepassAction={handleGatepassAction}
-            onRejectClick={handleRejectClick}
-            expandedId={expandedGatepassId}
-            onToggleExpand={setExpandedGatepassId}
-          />
-        )}
       </main>
-
-      {rejectRequest ? (
-        <div className="modal-backdrop" style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-          <div style={{ background: 'var(--app-surface)', padding: '24px', borderRadius: '12px', width: '90%', maxWidth: '480px', border: '1px solid var(--app-border)' }}>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '12px' }}>Reject Gatepass Request</h3>
-            <p style={{ color: 'var(--app-text-muted)', marginBottom: '16px' }}>Please specify a reason for rejecting the student's gatepass request:</p>
-            <textarea
-              style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--app-border)', background: 'var(--app-surface-subtle)', color: 'var(--app-text)', minHeight: '100px', marginBottom: '20px', outline: 'none', resize: 'none' }}
-              placeholder="Reason for rejection..."
-              value={rejectionReason}
-              onChange={(e) => setRejectionReason(e.target.value)}
-            />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-              <button
-                type="button"
-                onClick={() => setRejectRequest(null)}
-                className="admin-secondary-link"
-                style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '8px 16px', fontWeight: '600' }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={!rejectionReason.trim()}
-                onClick={handleRejectSubmit}
-                className="admin-primary-button"
-                style={{ padding: '8px 16px', borderRadius: '8px', background: '#ef4444', color: '#fff', border: 'none', fontWeight: '600', cursor: rejectionReason.trim() ? 'pointer' : 'not-allowed', opacity: rejectionReason.trim() ? 1 : 0.6 }}
-              >
-                Reject Request
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </div>
   )
 }
