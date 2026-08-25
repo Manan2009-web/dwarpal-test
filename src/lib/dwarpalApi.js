@@ -2828,8 +2828,27 @@ async function fetchWorkspaceRequests(role, signal, requestOptions = {}) {
     return mergeWorkspaceSourceResults([studentGatepasses, facultyLeaves], normalizedRequestOptions)
   }
 
+  if (normalizedRole === 'admin') {
+    if (normalizedRequestOptions.statusFilter === 'Pending') {
+      return fetchSingleWorkspaceCollection({
+        endpoint: '/gatepasses/pending/admin',
+        signal,
+        mapper: toUiGatepass,
+        requestOptions: normalizedRequestOptions,
+      })
+    }
+
+    return fetchSingleWorkspaceCollection({
+      endpoint: '/gatepasses/history',
+      signal,
+      mapper: toUiGatepass,
+      requestOptions: normalizedRequestOptions,
+      statusParam: buildGatepassStatusQuery(normalizedRequestOptions.statusFilter, normalizedRole),
+    })
+  }
+
   return fetchSingleWorkspaceCollection({
-    endpoint: '/gatepasses',
+    endpoint: '/gatepasses/history',
     signal,
     mapper: toUiGatepass,
     requestOptions: normalizedRequestOptions,

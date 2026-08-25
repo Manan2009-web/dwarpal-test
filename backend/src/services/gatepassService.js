@@ -1616,6 +1616,8 @@ function buildAccessFilter(actor) {
       return { status: { $in: SECURITY_VISIBLE_STATUSES } };
     case 'campus_security':
       return { applicantType: 'student' };
+    case 'admin':
+      return { applicantType: { $in: ['student', 'faculty'] } };
     case 'chairman':
       return {
         applicantType: 'student',
@@ -1691,6 +1693,10 @@ function canUserAccessGatepass(actor, gatepass) {
 
   if (actor.role === 'campus_security') {
     return gatepass.applicantType === 'student';
+  }
+
+  if (actor.role === 'admin') {
+    return ['student', 'faculty'].includes(gatepass.applicantType);
   }
 
   if (actor.role === 'chairman') {

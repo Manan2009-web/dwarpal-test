@@ -684,6 +684,10 @@ function buildAccessFilter(actor) {
     };
   }
 
+  if (actor.role === 'admin') {
+    return {};
+  }
+
   throw new AppError('Unsupported role for faculty leave access', 403);
 }
 
@@ -698,7 +702,7 @@ function canUserAccessRequest(actor, request) {
     return toId(request.hodReviewer) === actorId || toId(request.hodAction?.actionBy) === actorId;
   }
 
-  if (actor.role === 'principal') {
+  if (actor.role === 'principal' || actor.role === 'admin') {
     return true;
   }
 
