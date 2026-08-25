@@ -1193,8 +1193,8 @@ function resolveRoleLabel(role) {
     case 'hod': return 'Academic HOD';
     case 'coordinator': return 'Class Coordinator';
     case 'chairman': return 'Director';
-    case 'campus_security': return 'Campus Security';
-    case 'security': return 'Security';
+    case 'campus_security': return 'Security | Bouncer';
+    case 'security': return 'Security | Main Gate';
     default: return String(role || 'Approver').toUpperCase();
   }
 }
@@ -2460,7 +2460,7 @@ async function approveGatepass(gatepassId, actor, payload, requestMeta) {
       'approved_by_chairman'
     ];
     if (gatepass.applicantType !== 'student' || !allowedBouncerStatuses.includes(gatepass.status)) {
-      throw new AppError('Campus Security (Bouncer) can only verify/approve student gatepasses awaiting clearance.', 400);
+      throw new AppError('Security | Bouncer can only verify/approve student gatepasses awaiting clearance.', 400);
     }
 
     const isEscalated = gatepass.status === 'forwarded_to_campus_security';
@@ -2481,11 +2481,11 @@ async function approveGatepass(gatepassId, actor, payload, requestMeta) {
       fromLevel: 'campus_security',
       toLevel: 'security',
       trigger: 'approval',
-      note: 'Verified and ticked by Campus Security (Bouncer). Ready for exit.',
+      note: 'Verified and ticked by Security | Bouncer. Ready for exit.',
       actedBy: actor._id,
       actedByRole: actor.role
     });
-    auditMessage = `Gatepass ${gatepass.passNumber} verified and ticked by Campus Security (Bouncer)`;
+    auditMessage = `Gatepass ${gatepass.passNumber} verified and ticked by Security | Bouncer`;
 
     notifications.push({
       recipient: gatepass.createdBy._id,
@@ -2493,8 +2493,8 @@ async function approveGatepass(gatepassId, actor, payload, requestMeta) {
       gatepass: gatepass._id,
       type: 'gatepass_approved',
       status: 'approved',
-      title: 'Gatepass verified by Bouncer',
-      message: `Your gatepass ${gatepass.passNumber} was verified and ticked by Campus Security. You may now scan your QR at the main gate.`,
+      title: 'Gatepass verified by Security | Bouncer',
+      message: `Your gatepass ${gatepass.passNumber} was verified and ticked by Security | Bouncer. You may now scan your QR at the main gate.`,
       metadata: buildGatepassNotificationMetadata(gatepass, {
         verificationToken: gatepass.verificationToken,
         qrVerificationUrl: gatepass.qrVerificationUrl
@@ -2767,7 +2767,7 @@ async function rejectGatepass(gatepassId, actor, payload, requestMeta) {
       'approved_by_chairman'
     ];
     if (gatepass.applicantType !== 'student' || !allowedBouncerStatuses.includes(gatepass.status)) {
-      throw new AppError('Campus Security (Bouncer) can only reject student gatepasses awaiting clearance.', 400);
+      throw new AppError('Security | Bouncer can only reject student gatepasses awaiting clearance.', 400);
     }
 
     gatepass.status = 'rejected_by_campus_security';
@@ -2781,11 +2781,11 @@ async function rejectGatepass(gatepassId, actor, payload, requestMeta) {
       fromLevel: 'campus_security',
       toLevel: 'cancelled',
       trigger: 'rejection',
-      note: payload.rejectionReason || 'Rejected by Campus Security (Bouncer).',
+      note: payload.rejectionReason || 'Rejected by Security | Bouncer.',
       actedBy: actor._id,
       actedByRole: actor.role
     });
-    auditMessage = `Gatepass ${gatepass.passNumber} rejected by Campus Security (Bouncer)`;
+    auditMessage = `Gatepass ${gatepass.passNumber} rejected by Security | Bouncer`;
   } else if (actor.role === 'chairman') {
     if (gatepass.applicantType !== 'student' || gatepass.status !== 'forwarded_to_chairman') {
       throw new AppError('Director can only reject forwarded student gatepasses', 400);

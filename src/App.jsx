@@ -340,7 +340,7 @@ function getActionToastMeta(request, action) {
     return {
       tone: 'success',
       title: `${requestLabel} Campus Cleared`,
-      message: `${requestLabel} received campus clearance from Campus Security (Bouncer).`,
+      message: `${requestLabel} received campus clearance from Security | Bouncer.`,
     }
   }
 
@@ -3335,7 +3335,8 @@ function RegisterScreen({ onRegister }) {
     { value: 'admin', label: 'Administrator' },
     { value: 'cao', label: 'CAO' },
     { value: 'principal', label: 'Principal' },
-    { value: 'security', label: 'Security Guard' },
+    { value: 'security', label: 'Security | Main Gate' },
+    { value: 'campus_security', label: 'Security | Bouncer' },
     { value: 'chairman', label: 'Director' }
   ]
 
@@ -6104,9 +6105,9 @@ function getListTitle(user) {
   if (user?.role === 'hod') return 'Academic HOD review queue'
   if (user?.role === 'admin') return 'Administrator overview & review queue'
   if (user?.role === 'cao') return 'CAO review queue'
-  if (user?.role === 'campus_security') return 'Campus Security (Bouncer) clearance queue'
+  if (user?.role === 'campus_security') return 'Security | Bouncer clearance queue'
   if (user?.role === 'chairman') return 'Director review queue'
-  if (user?.role === 'security') return 'Security verification queue'
+  if (user?.role === 'security') return 'Security | Main Gate verification queue'
   return 'Gatepass history'
 }
 

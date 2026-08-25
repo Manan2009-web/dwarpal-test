@@ -401,7 +401,7 @@ export default function SecurityVerificationPanel({
       const nextAction = getNextSecurityAction(updatedGatepass, securityStation)
       const actionMessage =
         verificationResult.nextAction === 'campusClear'
-          ? 'Campus clearance recorded successfully by Campus Security.'
+          ? 'Campus clearance recorded successfully by Security | Bouncer.'
           : verificationResult.nextAction === 'markOut'
             ? 'Gatepass marked OUT successfully.'
             : 'Gatepass marked as returned successfully.'
