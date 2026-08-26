@@ -136,6 +136,18 @@ const PENDING_GATEPASS_STATUSES = new Set([
   'forwarded_to_chairman',
   'pending_cao',
 ])
+const BOUNCER_VISIBLE_STATUSES = new Set([
+  'approved_by_principal',
+  'approved_by_hod',
+  'approved_by_coordinator',
+  'approved_by_chairman',
+  'forwarded_to_campus_security',
+])
+const SECURITY_VISIBLE_STATUSES = new Set([
+  ...APPROVED_GATEPASS_STATUSES,
+  'checked_out_by_security',
+  'completed',
+])
 const GENERIC_API_MESSAGES = new Set(['Validation error', 'Please review the highlighted fields.', 'Request failed.'])
 const DEFAULT_AUTH_SESSION_TIMEOUT_MS = 5000
 

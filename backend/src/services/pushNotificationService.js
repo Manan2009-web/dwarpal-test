@@ -169,19 +169,31 @@ async function sendPushNotification(userId, title, message, data = {}) {
       if (subscriptions.length) {
         const relatedRoute = String(data.relatedRoute || '/app/notifications').trim() || '/app/notifications';
         const link = buildClientUrl(relatedRoute);
+        const tag = data.notificationId || data.referenceId || `dwarpal-${Date.now()}`;
         
         const pushPayload = JSON.stringify({
           title,
           body: message,
           icon: '/dwarpal-icon-192.png',
           badge: '/dwarpal-badge-96.png',
+          tag,
+          renotify: true,
+          requireInteraction: true,
+          silent: false,
           vibrate: [200, 100, 200, 100, 200],
+          timestamp: Date.now(),
           data: {
             ...data,
             relatedRoute,
             link
           }
         });
+
+        const webPushOptions = {
+          TTL: 86400,
+          urgency: 'high',
+          topic: 'dwarpal-notifications'
+        };
 
         const staleSubscriptions = [];
 
@@ -194,7 +206,7 @@ async function sendPushNotification(userId, title, message, data = {}) {
             }
           };
 
-          return webpush.sendNotification(pushSubscription, pushPayload)
+          return webpush.sendNotification(pushSubscription, pushPayload, webPushOptions)
             .then(() => {
               successCount++;
               delivered = true;
@@ -296,10 +308,12 @@ function buildGatepassPushPayload({ title, body, gatepassId, passNumber, related
     body,
     icon: '/dwarpal-icon-192.png',
     badge: '/dwarpal-badge-96.png',
-    tag: tag || `gatepass-${gatepassId}`,
+    tag: tag || (gatepassId ? `gatepass-${gatepassId}` : `dwarpal-${Date.now()}`),
     renotify: true,
     requireInteraction: true,
+    silent: false,
     vibrate: [200, 100, 200, 100, 200],
+    timestamp: Date.now(),
     actions,
     data: {
       gatepassId,
@@ -370,6 +384,11 @@ async function sendGatepassPushNotification(userId, opts) {
 
       if (subscriptions.length) {
         const pushPayload = buildGatepassPushPayload(opts);
+        const webPushOptions = {
+          TTL: 86400,
+          urgency: 'high',
+          topic: 'dwarpal-gatepasses'
+        };
         const staleIds = [];
 
         await Promise.all(
@@ -377,7 +396,8 @@ async function sendGatepassPushNotification(userId, opts) {
             webpush
               .sendNotification(
                 { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } },
-                pushPayload
+                pushPayload,
+                webPushOptions
               )
               .catch((err) => {
                 if (err.statusCode === 410 || err.statusCode === 404) {

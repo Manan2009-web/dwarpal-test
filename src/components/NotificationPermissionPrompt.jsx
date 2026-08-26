@@ -15,9 +15,9 @@ export function getNotificationPermissionMeta(status, supported = true) {
   if (status === 'granted') {
     return {
       tone: 'success',
-      badge: 'Enabled',
-      title: 'Phone & desktop notifications active',
-      description: 'DwarPal is configured to send real-time gatepass approvals, rejections, and security alerts to this device.',
+      badge: 'Active & Floating',
+      title: 'Phone & desktop floating alerts active',
+      description: 'DwarPal is configured to pop up floating alerts, play chime, and vibrate for gatepasses and campus alerts across all your devices.',
       actionLabel: 'Review status',
     }
   }
@@ -37,7 +37,7 @@ export function getNotificationPermissionMeta(status, supported = true) {
       tone: 'info',
       badge: 'Later',
       title: 'Notifications not enabled yet',
-      description: 'Enable them to receive app-like updates for approvals, rejections, and gate activity on phone and desktop.',
+      description: 'Enable them to receive floating pop-up updates for approvals, rejections, and gate activity on phone and desktop.',
       actionLabel: 'Enable notifications',
     }
   }
@@ -46,7 +46,7 @@ export function getNotificationPermissionMeta(status, supported = true) {
     tone: 'info',
     badge: 'Available',
     title: 'Phone & desktop notifications available',
-    description: 'Enable push alerts for instant gatepass status updates even when DwarPal is closed or running in background.',
+    description: 'Enable push alerts for instant floating gatepass updates even when DwarPal is closed or running in background.',
     actionLabel: 'Enable notifications',
   }
 }
@@ -66,6 +66,11 @@ export function NotificationPermissionCard({
         <span className="eyebrow">Device Notifications</span>
         <h4>{meta.title}</h4>
         <p>{meta.description}</p>
+        {status === 'granted' ? (
+          <p style={{ marginTop: '0.4rem', fontSize: '0.8rem', opacity: 0.88 }}>
+            💡 <strong>Phone Tip:</strong> On Android (Xiaomi/HyperOS, Samsung, Oppo, Vivo), ensure <em>&quot;Floating notifications / Pop on screen&quot;</em> is enabled in <strong>Phone Settings &gt; Apps &gt; Chrome/DwarPal &gt; Notifications</strong>.
+          </p>
+        ) : null}
       </div>
       <div className="notification-permission-card-actions">
         <span className={`notification-summary-chip notification-summary-chip-${meta.tone}`}>{meta.badge}</span>
@@ -110,8 +115,8 @@ export default function NotificationPermissionPrompt({
         </div>
         <div className="permission-prompt-copy">
           <span className="eyebrow">Stay updated</span>
-          <h3>Allow DwarPal push notifications?</h3>
-          <p>Get app-like alerts for approvals, rejections, forwarded requests, and important gate verification activity.</p>
+          <h3>Allow DwarPal floating push notifications?</h3>
+          <p>Get instant floating pop-ups, audio chimes, and haptic vibrations for approvals, rejections, forwarded requests, and security bouncer activity across all your devices.</p>
         </div>
         <div className="permission-prompt-actions">
           <ActionButton type="button" tone="secondary" onClick={onMaybeLater}>

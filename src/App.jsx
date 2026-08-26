@@ -39,6 +39,7 @@ import PrivacyPreferencesBanner from './components/PrivacyPreferencesBanner'
 import PasswordInput from './components/PasswordInput'
 import { SkeletonNotificationList } from './components/ui/SkeletonLoader'
 import OtpCodeInput from './components/OtpCodeInput'
+import { subscribeUserToPush } from './lib/webPush'
 
 const AccessPortal = lazy(() => import('./components/AccessPortal'))
 const AdminPortal = lazy(() => import('./components/AdminPortal'))
@@ -794,9 +795,13 @@ function App() {
       setNotificationPromptOpen(false)
 
       if (nextState === 'granted') {
+        subscribeUserToPush().catch((err) => {
+          console.warn('[App] Immediate Web Push subscription:', err)
+        })
+
         toast.success({
           title: 'Notifications enabled',
-          message: 'DwarPal can now use browser and push-style notifications for future workflow updates on this device.',
+          message: 'DwarPal can now use floating & push notifications for future workflow updates on this device.',
         })
         return
       }

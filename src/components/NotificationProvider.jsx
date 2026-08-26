@@ -295,7 +295,14 @@ export function NotificationProvider({ children, currentUser, notificationPermis
 
       shownToastIdsRef.current.add(notification.id)
 
+      const isTestNotification =
+        notification.metadata?.isTest === true ||
+        notification.metadata?.source === 'test_notification_button' ||
+        notification.type === 'system' ||
+        String(notification.referenceId || '').startsWith('TEST-')
+
       if (
+        !isTestNotification &&
         notification.senderId &&
         notification.senderId === currentUser?.id &&
         notification.recipientId === currentUser?.id
@@ -319,34 +326,35 @@ export function NotificationProvider({ children, currentUser, notificationPermis
       // 1. Tactile haptic vibration for mobile phones
       if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
         try {
-          navigator.vibrate([150, 60, 150])
+          navigator.vibrate([200, 100, 200, 100, 200])
         } catch {
           // Ignore vibration failures
         }
       }
 
-      // 2. Play audio chime when tab is active
-      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-        playNotificationSound()
-      }
+      // 2. Play audio chime
+      playNotificationSound()
 
-      // 3. Fallback background notification (safe for mobile and desktop)
+      // 3. Floating system / desktop / mobile notification when tab is backgrounded
       if (
         typeof document !== 'undefined' &&
         document.visibilityState === 'hidden' &&
         typeof window !== 'undefined' &&
         typeof window.Notification !== 'undefined' &&
-        window.Notification.permission === 'granted' &&
-        !pushReady
+        window.Notification.permission === 'granted'
       ) {
         const title = notification.title || 'DwarPal'
         const bodyText = [notification.message, notification.referenceId].filter(Boolean).join(' | ')
         const options = {
           body: bodyText,
-          tag: notification.id || 'dwarpal-toast',
+          tag: notification.id || `dwarpal-${Date.now()}`,
           icon: '/dwarpal-icon-192.png',
           badge: '/dwarpal-badge-96.png',
-          vibrate: [200, 100, 200],
+          renotify: true,
+          requireInteraction: true,
+          silent: false,
+          vibrate: [200, 100, 200, 100, 200],
+          timestamp: Date.now(),
           data: {
             relatedRoute: notification.relatedRoute || '/app/notifications',
           },
@@ -355,9 +363,14 @@ export function NotificationProvider({ children, currentUser, notificationPermis
         // On mobile Android/Chrome, new Notification() is forbidden in window scope.
         // Use ServiceWorkerRegistration.showNotification() when available.
         if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-          navigator.serviceWorker.ready
+          navigator.serviceWorker
+            .getRegistration()
+            .then((reg) => reg || navigator.serviceWorker.ready)
             .then((registration) => {
-              return registration.showNotification(title, options)
+              if (registration && typeof registration.showNotification === 'function') {
+                return registration.showNotification(title, options)
+              }
+              throw new Error('SW showNotification unavailable')
             })
             .catch(() => {
               try {
@@ -389,7 +402,7 @@ export function NotificationProvider({ children, currentUser, notificationPermis
         }
       }
     },
-    [currentUser?.id, playNotificationSound, pushReady, toast],
+    [currentUser?.id, playNotificationSound, toast],
   )
 
   // One-time gesture listener to unlock Web Audio AudioContext on mobile devices
@@ -883,44 +896,65 @@ export function NotificationProvider({ children, currentUser, notificationPermis
       }
     }
 
-    // 3. Immediate local system/desktop/mobile notification via ServiceWorker if permission granted
+    // 3. Immediate local system/desktop/mobile floating notification
     let localDelivered = false
     if (
-      typeof navigator !== 'undefined' &&
-      'serviceWorker' in navigator &&
+      typeof window !== 'undefined' &&
       typeof Notification !== 'undefined' &&
       Notification.permission === 'granted'
     ) {
+      const title = '🔔 DwarPal Notification Test'
+      const options = {
+        body: 'Great! Floating notifications, sound, and haptic vibration are active on this device.',
+        icon: '/dwarpal-icon-192.png',
+        badge: '/dwarpal-badge-96.png',
+        tag: `dwarpal-test-${Date.now()}`,
+        renotify: true,
+        requireInteraction: true,
+        silent: false,
+        vibrate: [200, 100, 200, 100, 200],
+        timestamp: Date.now(),
+        data: {
+          relatedRoute: '/app/notifications',
+        },
+      }
+
       try {
-        const reg = await navigator.serviceWorker.ready
-        if (reg && typeof reg.showNotification === 'function') {
-          await reg.showNotification('🔔 DwarPal Notification Test', {
-            body: 'Great! Notifications, sound, and haptic vibration are active on this device.',
-            icon: '/dwarpal-icon-192.png',
-            badge: '/dwarpal-badge-96.png',
-            tag: `dwarpal-test-${Date.now()}`,
-            vibrate: [200, 100, 200, 100, 200],
-            data: {
-              relatedRoute: '/app/notifications',
-            },
-          })
-          localDelivered = true
+        if ('serviceWorker' in navigator) {
+          const reg = (await navigator.serviceWorker.getRegistration()) || (await navigator.serviceWorker.ready)
+          if (reg && typeof reg.showNotification === 'function') {
+            await reg.showNotification(title, options)
+            localDelivered = true
+          }
         }
       } catch (err) {
-        console.warn('[NotificationProvider] Local test notification dispatch:', err)
+        console.warn('[NotificationProvider] SW local test notification dispatch:', err)
+      }
+
+      if (!localDelivered) {
+        try {
+          const browserNotification = new window.Notification(title, options)
+          browserNotification.onclick = () => {
+            window.focus()
+            browserNotification.close()
+          }
+          localDelivered = true
+        } catch (err) {
+          console.warn('[NotificationProvider] Window Notification error:', err)
+        }
       }
     }
 
-    // 4. Request backend Web Push / FCM and Socket.io broadcast to all user sessions
+    // 4. Request backend Web Push / FCM and Socket.io broadcast to all user sessions & registered devices
     try {
       const result = await sendTestPushNotification()
       const deviceCount = result?.activePushDevices ?? (result?.data?.activePushDevices ?? 0)
-      toast.info({
-        title: 'Test Notification Dispatched',
+      toast.success({
+        title: '🔔 Test Notification Sent',
         message:
           deviceCount > 0
-            ? `Test notification sent to ${deviceCount} registered device(s)!`
-            : 'Test notification triggered. To receive push on phone, open DwarPal on your phone and tap Enable Notifications.',
+            ? `Test alert dispatched to ${deviceCount} registered push device(s) & all active tabs!`
+            : 'Test notification triggered! (To receive background push on your phone, open DwarPal on phone and tap Enable Notifications).',
       })
       return result
     } catch (error) {
@@ -928,7 +962,7 @@ export function NotificationProvider({ children, currentUser, notificationPermis
       if (localDelivered) {
         toast.info({
           title: 'Test Notification Active',
-          message: 'Local notification delivered! (Push server sync in progress).',
+          message: 'Local floating notification delivered!',
         })
       } else {
         toast.warning({

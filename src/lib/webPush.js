@@ -42,7 +42,11 @@ export async function subscribeUserToPush() {
   }
 
   try {
-    const registration = await navigator.serviceWorker.ready
+    let registration = await navigator.serviceWorker.getRegistration()
+    if (!registration) {
+      registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
+    }
+    await navigator.serviceWorker.ready
 
     const vapidPublicKey = await getVapidPublicKey()
     if (!vapidPublicKey) {
