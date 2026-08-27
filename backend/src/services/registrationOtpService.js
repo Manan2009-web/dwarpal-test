@@ -209,11 +209,17 @@ async function verifyRegistrationOtp(payload, requestMeta = {}) {
     email: user.email,
     fullName: user.fullName,
     role: user.role,
+    enrollmentNo: user.enrollmentNo,
+    employeeId: user.employeeId,
+    program: user.program,
+    department: user.department,
+    semester: user.semester,
     collegeName: require('../config/env').collegeName
   }).catch((err) => {
     console.warn('[staff-welcome] Failed to send staff welcome email:', err.message || err, {
       email: user.email,
-      role: user.role
+      role: user.role,
+      enrollmentNo: user.enrollmentNo
     });
   });
 

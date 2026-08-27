@@ -1084,22 +1084,35 @@ async function sendStudentOnboardingEmail({ email, fullName, enrollmentNo, tempo
   });
 }
 
-async function sendStaffWelcomeEmail({ email, fullName, role, collegeName }) {
+async function sendStaffWelcomeEmail({ email, fullName, role, enrollmentNo, employeeId, program, department, semester, collegeName }) {
   if (!isEmailConfigured()) {
-    console.info('[email] Email sending not configured — skipping staff welcome email.', { to: maskEmail(email) });
+    console.info('[email] Email sending not configured — skipping welcome email.', { to: maskEmail(email) });
     return { skipped: true, reason: 'email_not_configured' };
   }
 
-  const safeFullName    = escapeHtml(fullName || 'Team Member');
-  const safeRole        = escapeHtml(role || 'Staff');
+  const isStudent       = String(role || '').toLowerCase() === 'student';
+  const safeFullName    = escapeHtml(fullName || (isStudent ? 'Student' : 'Team Member'));
+  const safeRole        = escapeHtml(role ? role.charAt(0).toUpperCase() + role.slice(1) : (isStudent ? 'Student' : 'Staff'));
+  const safeEnrollmentNo= escapeHtml(String(enrollmentNo || '').trim());
+  const safeEmployeeId  = escapeHtml(String(employeeId || '').trim());
+  const safeProgram     = escapeHtml(String(program || '').trim());
+  const safeDepartment  = escapeHtml(String(department || '').trim());
+  const safeSemester    = semester ? escapeHtml(String(semester).trim()) : '';
   const safeCollegeName = escapeHtml(collegeName || env.collegeName || 'Neotech Campus');
-  const loginUrl        = 'https://dwarpal-test.vercel.app';
+  const clientUrl       = env.clientUrl || 'https://dwarpal-test.vercel.app';
+  const loginUrl        = isStudent ? `${clientUrl}/login` : clientUrl;
   const safeLoginUrl    = escapeHtml(loginUrl);
   const year            = new Date().getFullYear();
 
+  const subject = isStudent
+    ? (safeEnrollmentNo
+        ? `Welcome to DwarPal — Your Student Account is Ready (Enrollment: ${safeEnrollmentNo})`
+        : 'Welcome to DwarPal — Your Student Account is Ready')
+    : `Welcome to DwarPal — Your ${safeRole} Account is Ready`;
+
   const html = `<!doctype html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DwarPal — Account Registration Received</title></head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${isStudent ? 'DwarPal — Student Account Ready' : 'DwarPal — Account Registration Received'}</title></head>
 <body style="margin:0;padding:0;background:#f0f4f8;font-family:'Segoe UI',Helvetica,Arial,sans-serif;color:#1e293b;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f4f8;padding:32px 16px;">
   <tr><td align="center">
@@ -1110,19 +1123,33 @@ async function sendStaffWelcomeEmail({ email, fullName, role, collegeName }) {
         <div style="display:inline-block;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);border-radius:10px;padding:8px 22px;margin-bottom:18px;">
           <span style="font-size:22px;font-weight:800;color:#ffffff;letter-spacing:0.06em;">&#127968; DwarPal</span>
         </div>
-        <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#ffffff;line-height:1.3;">Welcome to Your Smart Campus Gateway</h1>
-        <p style="margin:0;font-size:14px;color:#bfdbfe;">Your institutional account workspace is ready.</p>
+        <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#ffffff;line-height:1.3;">
+          ${isStudent ? 'Welcome to DwarPal Smart Campus' : 'Welcome to Your Smart Campus Gateway'}
+        </h1>
+        <p style="margin:0;font-size:14px;color:#bfdbfe;">
+          ${isStudent ? 'Your Student Account &amp; Digital Gatepass Access is Ready.' : 'Your institutional account workspace is ready.'}
+        </p>
       </td></tr>
 
       <!-- ═══ BODY ═══ -->
       <tr><td style="background:#ffffff;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 16px 16px;padding:36px 40px;">
 
         <p style="margin:0 0 8px;font-size:17px;font-weight:600;color:#1e293b;">Hi ${safeFullName},</p>
-        <p style="margin:0 0 28px;font-size:14px;line-height:1.75;color:#475569;">
-          Your <strong>${safeRole}</strong> registration request has been received by the
-          <strong>Campus Operations &amp; IT Desk</strong>. Your department management workspace
-          on the DwarPal platform is now active and awaiting your first sign-in.
+        <p style="margin:0 0 24px;font-size:14px;line-height:1.75;color:#475569;">
+          ${isStudent
+            ? 'Your <strong>Student Account</strong> has been successfully registered on the DwarPal gatepass network. You can now use your account to apply for gatepasses, track clearance status, and pass through campus security seamlessly.'
+            : `Your <strong>${safeRole}</strong> registration request has been received by the <strong>Campus Operations &amp; IT Desk</strong>. Your department management workspace on the DwarPal platform is now active and awaiting your first sign-in.`
+          }
         </p>
+
+        ${isStudent && safeEnrollmentNo ? `
+        <!-- ── Student Enrollment Callout Box ── -->
+        <div style="background:#eff6ff;border:2px dashed #3b82f6;border-radius:12px;padding:20px;margin:0 0 24px;text-align:center;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:#1e40af;margin-bottom:6px;">&#127891; Your GTU Enrollment Number</div>
+          <div style="font-size:24px;font-weight:800;color:#1e3a8a;font-family:'Courier New',Courier,monospace;letter-spacing:0.08em;margin-bottom:6px;user-select:all;-webkit-user-select:all;">${safeEnrollmentNo}</div>
+          <p style="margin:0;font-size:12px;color:#64748b;line-height:1.5;">Please copy and save this enrollment number. You will use it with your password to log in to DwarPal anytime.</p>
+        </div>
+        ` : ''}
 
         <!-- ── Info Card ── -->
         <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:12px;padding:6px 0;margin:0 0 24px;overflow:hidden;">
@@ -1138,6 +1165,28 @@ async function sendStaffWelcomeEmail({ email, fullName, role, collegeName }) {
           </table>
           <div style="height:1px;background:#e2e8f0;"></div>
 
+          ${isStudent && safeEnrollmentNo ? `
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="padding:14px 22px 6px;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">Enrollment Number</td>
+            </tr>
+            <tr>
+              <td style="padding:0 22px 14px;font-size:16px;font-weight:700;color:#1e40af;font-family:'Courier New',Courier,monospace;letter-spacing:0.04em;">${safeEnrollmentNo}</td>
+            </tr>
+          </table>
+          <div style="height:1px;background:#e2e8f0;"></div>
+          ` : (!isStudent && safeEmployeeId ? `
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="padding:14px 22px 6px;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">Employee ID</td>
+            </tr>
+            <tr>
+              <td style="padding:0 22px 14px;font-size:15px;font-weight:700;color:#1e40af;font-family:'Courier New',Courier,monospace;letter-spacing:0.04em;">${safeEmployeeId}</td>
+            </tr>
+          </table>
+          <div style="height:1px;background:#e2e8f0;"></div>
+          ` : '')}
+
           <table width="100%" cellpadding="0" cellspacing="0">
             <tr>
               <td style="padding:14px 22px 6px;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">Role</td>
@@ -1148,9 +1197,21 @@ async function sendStaffWelcomeEmail({ email, fullName, role, collegeName }) {
           </table>
           <div style="height:1px;background:#e2e8f0;"></div>
 
+          ${(safeProgram || safeDepartment) ? `
           <table width="100%" cellpadding="0" cellspacing="0">
             <tr>
-              <td style="padding:14px 22px 6px;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">Admin Dashboard</td>
+              <td style="padding:14px 22px 6px;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">Academic Scope</td>
+            </tr>
+            <tr>
+              <td style="padding:0 22px 14px;font-size:14px;font-weight:600;color:#334155;">${[safeProgram, safeDepartment, safeSemester ? `Semester ${safeSemester}` : ''].filter(Boolean).join(' • ')}</td>
+            </tr>
+          </table>
+          <div style="height:1px;background:#e2e8f0;"></div>
+          ` : ''}
+
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="padding:14px 22px 6px;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">${isStudent ? 'Student Login Portal' : 'Login Portal'}</td>
             </tr>
             <tr>
               <td style="padding:0 22px 14px;font-size:13px;word-break:break-word;overflow-wrap:break-word;">
@@ -1163,18 +1224,25 @@ async function sendStaffWelcomeEmail({ email, fullName, role, collegeName }) {
         <!-- ── Info Banner ── -->
         <table width="100%" cellpadding="0" cellspacing="0" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;margin:0 0 28px;">
           <tr><td style="padding:14px 20px;">
-            <p style="margin:0;font-size:13px;color:#1e40af;"><strong>&#8505; Next Steps:</strong> Sign in to your dashboard using the credentials you set during registration. You may be asked to complete an OTP verification on your first login.</p>
+            <p style="margin:0;font-size:13px;color:#1e40af;line-height:1.6;">
+              ${isStudent
+                ? `<strong>&#8505; How to Sign In:</strong> Open the DwarPal portal, enter your GTU Enrollment Number (<strong>${safeEnrollmentNo || 'your registered enrollment'}</strong>) and your password.`
+                : '<strong>&#8505; Next Steps:</strong> Sign in to your dashboard using the credentials you set during registration. You may be asked to complete an OTP verification on your first login.'
+              }
+            </p>
           </td></tr>
         </table>
 
         <!-- ── CTA Button ── -->
         <div style="text-align:center;margin:0 0 32px;">
-          <a href="${safeLoginUrl}" style="display:inline-block;background:linear-gradient(135deg,#1e40af,#1d4ed8);color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:14px 38px;border-radius:50px;letter-spacing:0.04em;">Open Admin Dashboard &rarr;</a>
+          <a href="${safeLoginUrl}" style="display:inline-block;background:linear-gradient(135deg,#1e40af,#1d4ed8);color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:14px 38px;border-radius:50px;letter-spacing:0.04em;">
+            ${isStudent ? 'Open Student Portal &rarr;' : 'Open Admin Dashboard &rarr;'}
+          </a>
         </div>
 
         <!-- ── Footer ── -->
         <div style="border-top:1px solid #e2e8f0;padding-top:20px;text-align:center;">
-          <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.6;">If you did not initiate this registration, please contact your IT administrator immediately.<br/>&copy; ${year} DwarPal &bull; ${safeCollegeName}</p>
+          <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.6;">If you did not initiate this registration, please contact your campus administrator immediately.<br/>&copy; ${year} DwarPal &bull; ${safeCollegeName}</p>
         </div>
 
       </td></tr>
@@ -1184,7 +1252,27 @@ async function sendStaffWelcomeEmail({ email, fullName, role, collegeName }) {
 </body>
 </html>`;
 
-  const text = [
+  const textLines = isStudent ? [
+    `Welcome to DwarPal — Your Student Account is Ready`,
+    '',
+    `Hi ${fullName},`,
+    '',
+    `Your Student Account has been registered successfully on DwarPal.`,
+    '',
+    `======================================================`,
+    `🎓 GTU ENROLLMENT NUMBER: ${enrollmentNo || 'Registered in College Records'}`,
+    `======================================================`,
+    '',
+    `Name      : ${fullName}`,
+    `Role      : Student`,
+    ...(program || department ? [`Department: ${[program, department, semester ? `Sem ${semester}` : ''].filter(Boolean).join(' • ')}`] : []),
+    `Login URL : ${loginUrl}`,
+    '',
+    `Sign in using your Enrollment Number (${enrollmentNo}) and the password you set during registration.`,
+    '',
+    `If you did not initiate this registration, contact campus administration.`,
+    `© ${year} DwarPal • ${collegeName || env.collegeName || 'Neotech Campus'}`
+  ] : [
     `Welcome to DwarPal — Account Registration Received`,
     '',
     `Hi ${fullName},`,
@@ -1192,19 +1280,23 @@ async function sendStaffWelcomeEmail({ email, fullName, role, collegeName }) {
     `Your ${role} registration has been received by the Campus Operations & IT Desk.`,
     'Your department management workspace on DwarPal is now active.',
     '',
-    `Admin Dashboard: ${loginUrl}`,
+    ...(employeeId ? [`Employee ID: ${employeeId}`] : []),
+    `Dashboard: ${loginUrl}`,
     '',
     'Sign in using the credentials you set during registration.',
     '',
-    'If you did not initiate this registration, contact your IT administrator.'
-  ].join('\n');
+    'If you did not initiate this registration, contact your IT administrator.',
+    `© ${year} DwarPal • ${collegeName || env.collegeName || 'Neotech Campus'}`
+  ];
+
+  const text = textLines.join('\n');
 
   return sendMail({
     to: email,
-    subject: `Welcome to DwarPal — Your ${role} Account is Ready`,
+    subject,
     html,
     text,
-    context: 'staff-welcome'
+    context: isStudent ? 'student-welcome' : 'staff-welcome'
   });
 }
 
@@ -1219,6 +1311,7 @@ module.exports = {
   sendStudentLoginOtpEmail,
   sendStudentOnboardingEmail,
   sendStaffWelcomeEmail,
+  sendWelcomeEmail: sendStaffWelcomeEmail,
   sendVerificationOtpEmail,
   sendMail
 };
