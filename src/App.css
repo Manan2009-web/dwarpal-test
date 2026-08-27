@@ -3746,7 +3746,10 @@ button {
   position: absolute;
   right: 0;
   top: calc(100% + 0.75rem);
-  width: min(370px, 88vw);
+  width: min(390px, 90vw);
+  max-height: min(540px, calc(100vh - 110px));
+  display: flex;
+  flex-direction: column;
   border-radius: 24px;
   border: 1px solid var(--line);
   background: var(--app-surface);
@@ -3757,13 +3760,18 @@ button {
   pointer-events: none;
   transform: translateY(-8px);
   transition: opacity 180ms ease, transform 180ms ease;
-  z-index: 100;
+  z-index: 1000;
+  box-sizing: border-box;
 }
 
 .notification-panel.open {
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0);
+}
+
+.notification-panel-header {
+  flex-shrink: 0;
 }
 
 .notification-item,
@@ -3800,7 +3808,6 @@ button {
 }
 
 .notification-panel-summary,
-.notification-panel-list,
 .notification-item-main,
 .notification-item-actions,
 .notification-item-meta-row,
@@ -3810,13 +3817,41 @@ button {
 }
 
 .notification-panel-summary {
+  flex-shrink: 0;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.55rem;
   margin: 0.8rem 0 1rem;
 }
 
 .notification-panel-list {
+  display: flex;
+  flex-direction: column;
   gap: 0.75rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 380px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.notification-panel-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.notification-panel-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.notification-panel-list::-webkit-scrollbar-thumb {
+  background: var(--control-border, rgba(148, 163, 184, 0.45));
+  border-radius: 999px;
+}
+
+.notification-panel-list::-webkit-scrollbar-thumb:hover {
+  background: var(--app-shell-muted, rgba(100, 116, 139, 0.75));
 }
 
 .notification-item-main {

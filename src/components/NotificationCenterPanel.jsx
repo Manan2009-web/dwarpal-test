@@ -36,7 +36,7 @@ export default function NotificationCenterPanel({
   onTestNotification,
   testingNotification = false,
 }) {
-  const recentNotifications = notifications.slice(0, 6)
+  const recentNotifications = notifications.slice(0, 50)
 
   return (
     <div className={`notification-panel ${open ? 'open' : ''}`} role="dialog" aria-label="Notification center">
