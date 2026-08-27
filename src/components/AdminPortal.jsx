@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   BarChart3,
@@ -42,6 +42,8 @@ import AppBrand from './AppBrand'
 import StudentManagementPanel from './StudentManagementPanel'
 import ItNotificationsPanel from './ItNotificationsPanel'
 import ExpandableGatepassCard from './ExpandableGatepassCard'
+import NotificationCenterPanel from './NotificationCenterPanel'
+import { useNotifications } from './NotificationProvider'
 import { useToast } from './ToastProvider'
 import { SkeletonTableRows, SkeletonGatepassCard } from './ui/SkeletonLoader'
 import {
@@ -321,6 +323,127 @@ function AdminSidebar({ currentUser, activeSection, isOpen, onLinkClick }) {
   )
 }
 
+function AdminNotificationBell({ currentUser }) {
+  const {
+    notifications,
+    unreadCount,
+    loading: notificationsLoading,
+    socketConnected,
+    markNotificationRead,
+    markAllRead,
+    triggerTestNotification,
+  } = useNotifications()
+
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [testingNotification, setTestingNotification] = useState(false)
+  const wrapperRef = useRef(null)
+
+  // Close panel when clicking outside
+  useEffect(() => {
+    if (!notificationsOpen) return undefined
+
+    function handlePointerDown(event) {
+      if (!wrapperRef.current?.contains(event.target)) {
+        setNotificationsOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => document.removeEventListener('mousedown', handlePointerDown)
+  }, [notificationsOpen])
+
+  const handleOpenNotification = useCallback((notification) => {
+    if (!notification.isRead) {
+      markNotificationRead(notification.id)
+    }
+    setNotificationsOpen(false)
+  }, [markNotificationRead])
+
+  const handleMarkNotificationRead = useCallback((id) => {
+    markNotificationRead(id)
+  }, [markNotificationRead])
+
+  const handleMarkAllRead = useCallback(() => {
+    markAllRead()
+  }, [markAllRead])
+
+  const handleTestNotification = useCallback(async () => {
+    setTestingNotification(true)
+    try {
+      await triggerTestNotification()
+    } finally {
+      setTestingNotification(false)
+    }
+  }, [triggerTestNotification])
+
+  // IT users see a link to the IT Notifications page instead
+  if (currentUser?.role === 'it') {
+    return (
+      <Link
+        className="admin-icon-button"
+        to="/admin/notifications"
+        title="IT Notifications & Error Center"
+        aria-label="IT Notifications & Error Center"
+      >
+        <Bell size={18} strokeWidth={1.5} />
+      </Link>
+    )
+  }
+
+  return (
+    <div className="notification-wrapper" ref={wrapperRef} style={{ position: 'relative' }}>
+      <button
+        type="button"
+        className={`admin-icon-button notification-toggle ${notificationsOpen ? 'active' : ''}`}
+        onClick={() => setNotificationsOpen((prev) => !prev)}
+        aria-label="Open notifications"
+        aria-expanded={notificationsOpen}
+        title="Notifications"
+        style={{ position: 'relative' }}
+      >
+        <Bell size={18} strokeWidth={1.5} />
+        {unreadCount > 0 ? (
+          <span
+            className="notification-dot"
+            style={{
+              position: 'absolute',
+              top: '2px',
+              right: '2px',
+              minWidth: '16px',
+              height: '16px',
+              padding: '0 3px',
+              borderRadius: '999px',
+              background: 'var(--app-danger, #EF4444)',
+              color: '#fff',
+              fontSize: '0.65rem',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              lineHeight: 1,
+              pointerEvents: 'none',
+            }}
+          >
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </span>
+        ) : null}
+      </button>
+      <NotificationCenterPanel
+        open={notificationsOpen}
+        notifications={notifications}
+        unreadCount={unreadCount}
+        loading={notificationsLoading}
+        socketConnected={socketConnected}
+        onOpenNotification={handleOpenNotification}
+        onMarkNotificationRead={handleMarkNotificationRead}
+        onMarkAllRead={handleMarkAllRead}
+        onTestNotification={handleTestNotification}
+        testingNotification={testingNotification}
+      />
+    </div>
+  )
+}
+
 function AdminHeader({ currentUser, title, subtitle, onRefresh, refreshing, onToggleSidebar, isSidebarOpen, onOpenSupport, onLogout, onOpenResignModal }) {
   return (
     <header className="admin-header">
@@ -378,14 +501,7 @@ function AdminHeader({ currentUser, title, subtitle, onRefresh, refreshing, onTo
           </button>
         ) : null}
 
-        <Link
-          className="admin-icon-button"
-          to={currentUser?.role === 'it' ? '/admin/notifications' : '/admin/notifications'}
-          title="IT Notifications & Error Center"
-          aria-label="IT Notifications & Error Center"
-        >
-          <Bell size={18} strokeWidth={1.5} />
-        </Link>
+        <AdminNotificationBell currentUser={currentUser} />
         
         <Link
           className="admin-icon-button"
