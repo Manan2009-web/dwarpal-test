@@ -79,8 +79,8 @@ export default function PrivacyPreferencesBanner({ open, onAccept, onReject }) {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'stretch',
-        gap: '1rem',
-        padding: '1.25rem'
+        gap: '0.85rem',
+        boxSizing: 'border-box',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>

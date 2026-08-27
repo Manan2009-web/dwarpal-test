@@ -779,7 +779,7 @@ function EmailManagementPanel({ currentUser }) {
         {/* Toolbar: Search and Filter */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
           
-          <div style={{ position: 'relative', minWidth: '250px' }}>
+          <div style={{ position: 'relative', flex: '1 1 220px', minWidth: 0, maxWidth: '100%' }}>
             <span style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--app-text-muted)' }}>
               <Search size={16} />
             </span>

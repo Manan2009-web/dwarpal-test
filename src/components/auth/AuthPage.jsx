@@ -57,7 +57,7 @@ export default function AuthPage({ left, right }) {
   // Dual-panel (split screen) mode for AccessPortalScreen
   return (
     <div
-      className="tw:relative tw:isolate tw:min-h-screen tw:overflow-y-auto tw:bg-dwarpal-surface tw:font-sans tw:text-dwarpal-ink"
+      className="tw:relative tw:isolate tw:min-h-screen tw:w-full tw:max-w-[100vw] tw:overflow-x-hidden tw:overflow-y-auto tw:bg-dwarpal-surface tw:font-sans tw:text-dwarpal-ink"
       style={{
         backgroundImage: `
           radial-gradient(circle at top left, rgba(255, 255, 255, 0.95) 0, rgba(255, 255, 255, 0.42) 24%, transparent 46%),
@@ -76,8 +76,8 @@ export default function AuthPage({ left, right }) {
       />
       <motion.div
         aria-hidden="true"
-        className="tw:absolute tw:right-[-5rem] tw:top-[-3rem] tw:h-72 tw:w-72 tw:rounded-full tw:bg-[rgba(129,183,255,0.2)] tw:blur-3xl tw:pointer-events-none"
-        animate={reduceMotion ? undefined : { x: [0, -28, 0], y: [0, 18, 0] }}
+        className="tw:absolute tw:right-0 tw:top-[-3rem] tw:h-72 tw:w-72 tw:rounded-full tw:bg-[rgba(129,183,255,0.2)] tw:blur-3xl tw:pointer-events-none"
+        animate={reduceMotion ? undefined : { x: [0, -18, 0], y: [0, 18, 0] }}
         transition={reduceMotion ? undefined : { duration: 15, ease: 'easeInOut', repeat: Infinity }}
       />
 

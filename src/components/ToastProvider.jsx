@@ -75,9 +75,9 @@ function ToastItem({ toast, onDismiss }) {
       layout
       className={`notification-toast notification-toast-${toast.tone}`}
       role={toast.tone === 'error' || toast.tone === 'warning' ? 'alert' : 'status'}
-      initial={{ opacity: 0, x: 80, scale: 0.96 }}
-      animate={{ opacity: 1, x: 0, scale: 1 }}
-      exit={{ opacity: 0, x: 60, scale: 0.96 }}
+      initial={{ opacity: 0, y: -14, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -10, scale: 0.96 }}
       transition={TOAST_SPRING}
       whileHover={{ scale: 1.01 }}
     >
