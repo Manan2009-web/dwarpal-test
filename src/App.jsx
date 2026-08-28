@@ -56,6 +56,7 @@ const LegalDocs = lazy(() => import('./components/LegalDocs'))
 const SupportPage = lazy(() => import('./components/SupportPage'))
 const NotFoundPage = lazy(() => import('./components/NotFoundPage'))
 const StudentRegisterPage = lazy(() => import('./components/auth/StudentRegisterPage'))
+const BloomLandingPage = lazy(() => import('./components/BloomLandingPage'))
 const Aurora = lazy(() => import('./components/ui/Aurora'))
 import { useToast } from './components/ToastProvider'
 import { usePushSubscription } from './hooks/usePushSubscription'
@@ -2136,6 +2137,34 @@ function App() {
           <ErrorBoundary>
             <Suspense fallback={<LoadingSpinner />}>
               <StudentRegisterPage />
+            </Suspense>
+          </ErrorBoundary>
+        } />
+        <Route path="/bloom" element={
+          <ErrorBoundary>
+            <Suspense fallback={<LoadingSpinner />}>
+              <BloomLandingPage />
+            </Suspense>
+          </ErrorBoundary>
+        } />
+        <Route path="/luxury" element={
+          <ErrorBoundary>
+            <Suspense fallback={<LoadingSpinner />}>
+              <BloomLandingPage />
+            </Suspense>
+          </ErrorBoundary>
+        } />
+        <Route path="/preview" element={
+          <ErrorBoundary>
+            <Suspense fallback={<LoadingSpinner />}>
+              <BloomLandingPage />
+            </Suspense>
+          </ErrorBoundary>
+        } />
+        <Route path="/v2" element={
+          <ErrorBoundary>
+            <Suspense fallback={<LoadingSpinner />}>
+              <BloomLandingPage />
             </Suspense>
           </ErrorBoundary>
         } />
