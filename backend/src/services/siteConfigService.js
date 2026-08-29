@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const SiteConfig = require('../models/SiteConfig');
 const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
@@ -7,6 +8,16 @@ const AppError = require('../utils/appError');
 const { ERROR_CODES } = require('../utils/appError');
 const pickUser = require('../utils/pickUser');
 const bcrypt = require('bcryptjs');
+
+function getSafeActorObjectId(actor) {
+  if (!actor || !actor._id) return null;
+  const idStr = String(actor._id);
+  if (mongoose.Types.ObjectId.isValid(idStr) && idStr.length === 24) {
+    return new mongoose.Types.ObjectId(idStr);
+  }
+  return null;
+}
+
 
 let cachedPublicConfig = null;
 let cachedConfigTimestamp = 0;
@@ -106,12 +117,12 @@ async function updateCmsConfig(cmsData, actor, requestMeta = {}) {
     config.cms.branding = { ...config.cms.branding.toObject(), ...cmsData.branding };
   }
 
-  config.lastUpdatedBy = actor?._id || null;
+  config.lastUpdatedBy = getSafeActorObjectId(actor);
   await config.save();
   invalidateConfigCache();
 
   await AuditLog.create({
-    actor: actor?._id || null,
+    actor: getSafeActorObjectId(actor),
     resourceType: 'SiteConfig',
     resourceId: config._id.toString(),
     action: 'UPDATE_CMS',
@@ -140,12 +151,12 @@ async function updateRulesConfig(rulesData, actor, requestMeta = {}) {
     config.rules.gatepass = { ...config.rules.gatepass.toObject(), ...rulesData.gatepass };
   }
 
-  config.lastUpdatedBy = actor?._id || null;
+  config.lastUpdatedBy = getSafeActorObjectId(actor);
   await config.save();
   invalidateConfigCache();
 
   await AuditLog.create({
-    actor: actor?._id || null,
+    actor: getSafeActorObjectId(actor),
     resourceType: 'SiteConfig',
     resourceId: config._id.toString(),
     action: 'UPDATE_RULES',
@@ -192,12 +203,12 @@ async function updateFeatureFlags(featuresData, actor, requestMeta = {}) {
     };
   }
 
-  config.lastUpdatedBy = actor?._id || null;
+  config.lastUpdatedBy = getSafeActorObjectId(actor);
   await config.save();
   invalidateConfigCache();
 
   await AuditLog.create({
-    actor: actor?._id || null,
+    actor: getSafeActorObjectId(actor),
     resourceType: 'SiteConfig',
     resourceId: config._id.toString(),
     action: 'UPDATE_FEATURE_FLAGS',
@@ -218,15 +229,15 @@ async function setCampusLockdown(lockdownData, actor, requestMeta = {}) {
     enabled,
     reason: String(lockdownData.reason || '').trim(),
     initiatedAt: enabled ? new Date() : null,
-    initiatedBy: enabled ? actor?._id || null : null
+    initiatedBy: enabled ? getSafeActorObjectId(actor) : null
   };
 
-  config.lastUpdatedBy = actor?._id || null;
+  config.lastUpdatedBy = getSafeActorObjectId(actor);
   await config.save();
   invalidateConfigCache();
 
   await AuditLog.create({
-    actor: actor?._id || null,
+    actor: getSafeActorObjectId(actor),
     resourceType: 'SiteConfig',
     resourceId: config._id.toString(),
     action: enabled ? 'CAMPUS_LOCKDOWN_INITIATED' : 'CAMPUS_LOCKDOWN_LIFTED',
@@ -237,6 +248,7 @@ async function setCampusLockdown(lockdownData, actor, requestMeta = {}) {
     ipAddress: requestMeta.ipAddress || '',
     userAgent: requestMeta.userAgent || ''
   }).catch(() => {});
+
 
   return config;
 }
@@ -328,7 +340,7 @@ async function updateMasterUser(userId, payload, actor, requestMeta = {}) {
   await user.save();
 
   await AuditLog.create({
-    actor: actor?._id || null,
+    actor: getSafeActorObjectId(actor),
     resourceType: 'User',
     resourceId: user._id.toString(),
     action: 'MASTER_USER_UPDATE',
@@ -337,6 +349,7 @@ async function updateMasterUser(userId, payload, actor, requestMeta = {}) {
     ipAddress: requestMeta.ipAddress || '',
     userAgent: requestMeta.userAgent || ''
   }).catch(() => {});
+
 
   return pickUser(user);
 }
