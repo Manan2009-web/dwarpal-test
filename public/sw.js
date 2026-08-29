@@ -1,23 +1,22 @@
-const CACHE_NAME = 'dwarpal-v1.3'
+const CACHE_NAME = 'dwarpal-v2.1'
 const PRECACHE_URLS = [
   '/',
-  '/index.html',
   '/manifest.json',
   '/dwarpal-icon-192.png',
   '/dwarpal-icon-512.png',
   '/dwarpal-badge-96.png'
 ]
 
-// Install event: cache initial shell assets
+// Install event: skip waiting immediately to activate newest code
 self.addEventListener('install', (event) => {
+  self.skipWaiting()
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(PRECACHE_URLS))
-      .then(() => self.skipWaiting())
+      .then((cache) => cache.addAll(PRECACHE_URLS).catch(() => {}))
   )
 })
 
-// Activate event: clean up stale cache versions
+// Activate event: immediately purge ALL old cache versions
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -35,6 +34,10 @@ self.addEventListener('fetch', (event) => {
   const { request } = event
 
   // Skip non-GET requests immediately
+  if (request.method !== 'GET') {
+    return
+  }
+
   const url = new URL(request.url)
 
   // 0. Only intercept same-origin requests (prevents adblockers/3rd-party fetch rejection errors like GTM)
@@ -53,14 +56,14 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // 2. Navigation / Page layout (index.html, manifest.json): Network-First with Cache Fallback
-  if (request.mode === 'navigate' || PRECACHE_URLS.includes(url.pathname)) {
+  // 2. Navigation / Page layout (HTML): Network-First with Cache Fallback
+  if (request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html') {
     event.respondWith(
       fetch(request)
         .then((response) => {
           if (response && response.status === 200) {
             const clone = response.clone()
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone)).catch(() => {})
           }
           return response
         })
@@ -69,29 +72,22 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // 3. Static assets (JS, CSS, Fonts, Images): Cache-First with Network Fallback & update
+  // 3. Static assets: Network-First for dynamic Vite hashes with Cache fallback
   event.respondWith(
-    caches.match(request).then((cachedResponse) => {
-      if (cachedResponse) {
-        // Fetch fresh asset in background to update cache asynchronously (Stale-While-Revalidate pattern)
-        fetch(request).then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, networkResponse))
-          }
-        }).catch(() => { /* ignore background sync errors */ })
-        return cachedResponse
-      }
-
-      return fetch(request).then((response) => {
-        if (response && response.status === 200) {
-          const clone = response.clone()
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
+    fetch(request)
+      .then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+          const clone = networkResponse.clone()
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone)).catch(() => {})
         }
-        return response
-      }).catch(() => cachedResponse || null)
-    })
+        return networkResponse
+      })
+      .catch(() => {
+        return caches.match(request).then((cached) => cached || Response.error())
+      })
   )
 })
+
 
 // Push event listener: handle background push notifications with action buttons
 self.addEventListener('push', (event) => {

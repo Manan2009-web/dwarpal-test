@@ -193,11 +193,12 @@
               window.caches
                 .keys()
                 .then((cacheKeys) => {
-                  const stale = cacheKeys.filter((key) => key.startsWith('dwarpal-legacy-'))
+                  const stale = cacheKeys.filter((key) => key.startsWith('dwarpal-legacy-') || key.startsWith('dwarpal-v1'))
                   return Promise.allSettled(stale.map((key) => window.caches.delete(key)))
                 }),
             )
           }
+
 
           Promise.allSettled(cleanupTasks).catch(() => {
             // Ignore cleanup failures so startup never blocks.
