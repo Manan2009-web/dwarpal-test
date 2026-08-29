@@ -52,8 +52,8 @@ const DEFAULT_SITE_CONFIG = {
   },
   rules: {
     departments: DEPARTMENTS || [],
-    programs: STUDENT_PROGRAMS || [],
-    semesters: SEMESTERS || [1, 2, 3, 4, 5, 6, 7, 8],
+    programs: PROGRAM_OPTIONS || [],
+    semesters: SEMESTER_OPTIONS || [1, 2, 3, 4, 5, 6, 7, 8],
     gatepass: {
       minReasonLength: 5,
       maxReasonLength: 500,
