@@ -1,10 +1,23 @@
-import React, { Suspense, lazy } from 'react'
+import React, { Suspense, lazy, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 const DotField = lazy(() => import('./ui/DotField'))
 
 export default function LandingPage() {
+  const navigate = useNavigate()
+  const [logoClicks, setLogoClicks] = useState(0)
+
+  const handleLogoClick = () => {
+    const next = logoClicks + 1
+    if (next >= 5) {
+      navigate('/master-control')
+      return
+    }
+    setLogoClicks(next)
+    setTimeout(() => setLogoClicks(0), 3000)
+  }
+
   return (
     <div 
       className="tw:min-h-screen tw:w-full tw:flex tw:flex-col tw:items-center tw:justify-center tw:relative tw:overflow-hidden tw:select-none"
@@ -39,12 +52,17 @@ export default function LandingPage() {
         {/* Header */}
         <header className="tw:w-full tw:max-w-7xl tw:mx-auto tw:px-8 tw:py-8 tw:flex tw:items-center tw:justify-between tw:z-30 tw:relative tw:transform-gpu">
           {/* Logo */}
-          <div className="tw:flex tw:items-center tw:gap-2.5">
+          <div 
+            onClick={handleLogoClick}
+            className="tw:flex tw:items-center tw:gap-2.5 tw:cursor-pointer tw:select-none"
+            title="DwarPal"
+          >
             <span className="tw:text-[#163247] tw:font-mono tw:text-lg tw:font-black tw:tracking-[0.35em] tw:uppercase">
               Dwarpal
             </span>
             <span className="tw:h-1.5 tw:w-1.5 tw:rounded-full tw:bg-[#2f6db5] tw:animate-ping" />
           </div>
+
 
           {/* Liquid Glass Badge */}
           <div className="tw:flex tw:items-center tw:gap-3 tw:border tw:border-[rgba(105,143,176,0.16)] tw:bg-white/60 tw:backdrop-blur-xl tw:shadow-sm tw:px-4 tw:py-2 tw:rounded-full tw:transform-gpu tw:backface-hidden">
