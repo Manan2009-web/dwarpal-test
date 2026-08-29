@@ -34,8 +34,19 @@ export default function LoadingPage({ onFinished }) {
       })
     }, 45) // Adjust tick interval for a smooth loading rate
 
-    return () => clearInterval(interval)
-  }, [])
+    // Absolute maximum fallback so intro loader never hangs
+    const safetyTimer = setTimeout(() => {
+      setProgress(100)
+      if (typeof onFinished === 'function') {
+        onFinished()
+      }
+    }, 2200)
+
+    return () => {
+      clearInterval(interval)
+      clearTimeout(safetyTimer)
+    }
+  }, [onFinished])
 
   useEffect(() => {
     if (progress === 100) {
@@ -44,7 +55,7 @@ export default function LoadingPage({ onFinished }) {
         if (typeof onFinished === 'function') {
           onFinished()
         }
-      }, 400) // Small delay at 100% to let user see "Access granted" before fadeout
+      }, 350)
       return () => clearTimeout(timeout)
     }
   }, [progress, onFinished])

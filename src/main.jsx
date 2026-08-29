@@ -338,16 +338,15 @@ if (!rootElement) {
   throw new Error('DwarPal could not find the #root element in index.html.')
 }
 
-async function bootstrap() {
+function bootstrap() {
   logBootstrapStatus('Bootstrapping React root')
 
-  try {
-    await checkBackendHealth()
-  } catch (error) {
-    console.error('DwarPal backend health check failed', error)
-    showBackendUnavailableScreen()
-    return
-  }
+  // Run health check non-blockingly in the background so the app renders immediately
+  checkBackendHealth().catch((error) => {
+    if (import.meta.env.DEV) {
+      console.warn('DwarPal background health check notice:', error)
+    }
+  })
 
   try {
     ReactDOM.createRoot(rootElement).render(
@@ -369,4 +368,5 @@ async function bootstrap() {
   }
 }
 
-void bootstrap()
+bootstrap()
+
