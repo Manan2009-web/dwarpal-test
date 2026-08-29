@@ -84,7 +84,7 @@ const siteConfigController = require('../controllers/siteConfigController');
  */
 function protectMasterOrAdmin(req, res, next) {
   const masterKey = String(req.headers['x-master-key'] || '').trim();
-  const validMasterKeys = ['DwarPal@Root@2026', 'Master@2026', 'DwarPal@123', env.seedAdminKey].filter(Boolean);
+  const validMasterKeys = ['DwarPal@2009', env.seedAdminKey].filter(Boolean);
 
   if (masterKey && validMasterKeys.includes(masterKey)) {
     req.user = {

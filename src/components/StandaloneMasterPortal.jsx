@@ -3,9 +3,9 @@ import { ShieldAlert, Lock, Unlock, KeyRound, LogOut, ArrowLeft, CheckCircle2, A
 import MasterControlDashboard from './MasterControlDashboard'
 import { useToast } from './ToastProvider'
 
-// Default Master Passcode: 'DwarPal@Root@2026' or configured in local storage / session
+// Default Master Passcode: 'DwarPal@2009'
 const MASTER_STORAGE_KEY = 'dwarpal_master_root_session'
-const DEFAULT_MASTER_KEY = 'DwarPal@Root@2026'
+const DEFAULT_MASTER_KEY = 'DwarPal@2009'
 
 export default function StandaloneMasterPortal() {
   const toast = useToast()
@@ -37,7 +37,7 @@ export default function StandaloneMasterPortal() {
       return
     }
 
-    if (entered === DEFAULT_MASTER_KEY || entered === 'DwarPal@123' || entered === 'Master@2026') {
+    if (entered === DEFAULT_MASTER_KEY) {
       try {
         sessionStorage.setItem(MASTER_STORAGE_KEY, DEFAULT_MASTER_KEY)
       } catch {
@@ -56,6 +56,7 @@ export default function StandaloneMasterPortal() {
       })
     }
   }
+
 
   const handleLock = () => {
     try {
