@@ -421,10 +421,20 @@ export function getRealtimeBaseUrl() {
   }
 }
 
+function readMasterSessionKey() {
+  if (typeof window === 'undefined') return ''
+  try {
+    return window.sessionStorage.getItem('dwarpal_master_root_session') || window.localStorage.getItem('dwarpal_master_root_session') || ''
+  } catch {
+    return ''
+  }
+}
+
 function buildHeaders(customHeaders = {}) {
   const headers = new Headers(customHeaders)
   const token = readAuthToken()
   const portalAccessToken = readPortalAccessToken()
+  const masterKey = readMasterSessionKey()
 
   if (token) {
     headers.set('Authorization', `Bearer ${token}`)
@@ -434,8 +444,13 @@ function buildHeaders(customHeaders = {}) {
     headers.set('x-portal-access-token', portalAccessToken)
   }
 
+  if (masterKey) {
+    headers.set('x-master-key', masterKey)
+  }
+
   return headers
 }
+
 
 export function storeAuthToken(token) {
   if (typeof window === 'undefined' || !token) return
