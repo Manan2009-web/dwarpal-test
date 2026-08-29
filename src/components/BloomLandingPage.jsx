@@ -7,6 +7,7 @@ import {
   Menu,
   X,
 } from 'lucide-react'
+import { useSiteConfig } from './SiteConfigContext'
 
 // Import generated 3D visual assets
 import heroMeadowImg from '../assets/hero_meadow.jpg'
@@ -75,9 +76,14 @@ const FAQS = [
 ]
 
 export default function BloomLandingPage() {
+  const { config } = useSiteConfig()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [activeUseCase, setActiveUseCase] = useState(0)
   const [openFaq, setOpenFaq] = useState(0)
+
+  const activeFaqs = (config?.cms?.faqs && config.cms.faqs.length > 0)
+    ? config.cms.faqs.map((f) => ({ q: f.question, a: f.answer }))
+    : FAQS
 
   return (
     <div
@@ -101,7 +107,7 @@ export default function BloomLandingPage() {
           <Link to="/" className="tw:flex tw:items-center tw:gap-2.5 tw:group">
             <span className="tw:text-lg tw:font-black tw:text-[#181926]">✦</span>
             <span className="tw:text-lg tw:font-bold tw:tracking-tight tw:text-[#181926] group-hover:tw:text-[#4f46e5] tw:transition-colors">
-              DwarPal
+              {config?.cms?.branding?.siteTitle?.split('—')[0]?.trim() || 'DwarPal'}
             </span>
           </Link>
 
@@ -114,65 +120,63 @@ export default function BloomLandingPage() {
             <a href="#faq" className="hover:tw:text-[#181926] tw:transition-colors">FAQ</a>
           </nav>
 
-          {/* Header Action CTA */}
-          <div className="tw:hidden tw:sm:tw:flex tw:items-center tw:gap-3">
+          {/* Desktop CTA Action */}
+          <div className="tw:hidden tw:md:tw:flex tw:items-center tw:gap-3">
             <Link
-              to="/student/login"
-              className="tw:text-xs tw:font-semibold tw:text-neutral-600 hover:tw:text-[#181926] tw:px-3 tw:py-2 tw:transition-colors"
+              to={config?.cms?.hero?.ctaPrimaryLink || '/access-portal'}
+              className="tw:text-xs tw:font-semibold tw:text-[#181926] hover:tw:text-neutral-600 tw:transition-colors tw:px-3 tw:py-2"
             >
-              Student Login
+              Sign In
             </Link>
-
             <Link
-              to="/access-portal"
-              className="tw:px-5 tw:py-2 tw:rounded-full tw:bg-[#181926] hover:tw:bg-neutral-800 tw:text-white tw:text-xs tw:font-semibold tw:shadow-sm tw:transition-all hover:tw:shadow-md"
+              to={config?.cms?.hero?.ctaPrimaryLink || '/access-portal'}
+              className="tw:px-5 tw:py-2.5 tw:rounded-full tw:bg-[#181926] hover:tw:bg-neutral-800 tw:text-white tw:text-xs tw:font-semibold tw:shadow-sm hover:tw:shadow tw:transition-all"
             >
-              Launch Portal
+              {config?.cms?.hero?.ctaPrimaryText || 'Launch App'}
             </Link>
           </div>
 
-          {/* Mobile Menu Trigger */}
+          {/* Mobile Hamburger Button */}
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="tw:md:tw:hidden tw:p-2 tw:rounded-full tw:bg-neutral-100 tw:text-[#181926]"
-            aria-label="Toggle Menu"
+            className="tw:md:hidden tw:p-2 tw:text-[#181926]"
+            aria-label="Toggle navigation menu"
           >
-            {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
+            {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
         </header>
 
-        {/* Mobile Dropdown */}
+        {/* Mobile Flyout Menu */}
         <AnimatePresence>
           {mobileMenuOpen && (
             <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="tw:md:tw:hidden tw:px-6 tw:py-5 tw:bg-neutral-50 tw:border-b tw:border-neutral-200 tw:space-y-4"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="tw:md:hidden tw:px-6 tw:py-4 tw:bg-white tw:border-b tw:border-neutral-100 tw:space-y-3 tw:text-xs"
             >
-              <nav className="tw:flex tw:flex-col tw:space-y-3 tw:text-sm tw:font-medium tw:text-neutral-700">
+              <div className="tw:flex tw:flex-col tw:gap-3 tw:font-medium tw:text-neutral-700">
                 <a href="#about" onClick={() => setMobileMenuOpen(false)}>DwarPal Pass</a>
                 <a href="#features" onClick={() => setMobileMenuOpen(false)}>Features</a>
                 <a href="#usecases" onClick={() => setMobileMenuOpen(false)}>Departments</a>
                 <a href="#security" onClick={() => setMobileMenuOpen(false)}>Security</a>
                 <a href="#faq" onClick={() => setMobileMenuOpen(false)}>FAQ</a>
-              </nav>
-
-              <div className="tw:pt-3 tw:border-t tw:border-neutral-200 tw:flex tw:flex-col tw:gap-2.5">
+              </div>
+              <div className="tw:pt-3 tw:border-t tw:border-neutral-100 tw:flex tw:flex-col tw:gap-2">
                 <Link
-                  to="/student/login"
+                  to={config?.cms?.hero?.ctaPrimaryLink || '/access-portal'}
                   onClick={() => setMobileMenuOpen(false)}
-                  className="tw:text-center tw:py-2.5 tw:rounded-full tw:bg-white tw:border tw:border-neutral-200 tw:text-xs tw:font-semibold tw:text-[#181926]"
+                  className="tw:text-center tw:py-2.5 tw:rounded-full tw:bg-neutral-100 tw:text-[#181926] tw:text-xs tw:font-semibold"
                 >
-                  Student Login
+                  Sign In
                 </Link>
                 <Link
-                  to="/access-portal"
+                  to={config?.cms?.hero?.ctaPrimaryLink || '/access-portal'}
                   onClick={() => setMobileMenuOpen(false)}
                   className="tw:text-center tw:py-2.5 tw:rounded-full tw:bg-[#181926] tw:text-white tw:text-xs tw:font-semibold"
                 >
-                  Launch Access Portal
+                  {config?.cms?.hero?.ctaPrimaryText || 'Launch Access Portal'}
                 </Link>
               </div>
             </motion.div>
@@ -192,21 +196,21 @@ export default function BloomLandingPage() {
 
             {/* Main Headline */}
             <h1 className="tw:text-4xl tw:sm:tw:text-5xl tw:md:tw:text-6xl tw:font-normal tw:tracking-tight tw:text-[#181926] tw:leading-[1.12]">
-              Where Campus Moves
+              {config?.cms?.hero?.headline || 'Where Campus Moves'}
             </h1>
 
             {/* Subtitle */}
             <p className="tw:text-xs tw:sm:tw:text-sm tw:text-neutral-600 tw:max-w-md tw:mx-auto tw:leading-relaxed tw:font-normal">
-              An intelligent, utility-driven digital gatepass designed for instant student leave accrual and seamless institutional trust.
+              {config?.cms?.hero?.subheadline || 'An intelligent, utility-driven digital gatepass designed for instant student leave accrual and seamless institutional trust.'}
             </p>
 
             {/* Center Pill CTA Button */}
             <div className="tw:pt-2">
               <Link
-                to="/access-portal"
+                to={config?.cms?.hero?.ctaPrimaryLink || '/access-portal'}
                 className="tw:inline-block tw:px-7 tw:py-3 tw:rounded-full tw:bg-[#181926] hover:tw:bg-neutral-800 tw:text-white tw:text-xs tw:font-semibold tw:shadow-md hover:tw:shadow-lg tw:transition-all"
               >
-                Access workspace
+                {config?.cms?.hero?.ctaPrimaryText || 'Access workspace'}
               </Link>
             </div>
           </div>
@@ -435,7 +439,7 @@ export default function BloomLandingPage() {
             </div>
 
             <div className="tw:space-y-3">
-              {FAQS.map((faq, idx) => {
+              {activeFaqs.map((faq, idx) => {
                 const isOpen = openFaq === idx
                 return (
                   <div

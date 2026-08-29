@@ -74,11 +74,23 @@ router.post('/email-queue/resend-all', protect, requireVerifiedEmail, authorize(
 router.post('/email-queue/resend-selected', protect, requireVerifiedEmail, authorize('it', 'admin'), adminController.queueSelectedStudents);
 router.post('/email-queue/retry-failed', protect, requireVerifiedEmail, authorize('it', 'admin'), adminController.retryFailedEmails);
 
+const siteConfigController = require('../controllers/siteConfigController');
+
 // IT Notifications & System Errors
 router.get('/it-notifications', protect, requireVerifiedEmail, authorize('it', 'admin'), adminController.listItNotifications);
 router.get('/it-notifications/stats', protect, requireVerifiedEmail, authorize('it', 'admin'), adminController.getItNotificationStats);
 router.post('/it-notifications/test', protect, requireVerifiedEmail, authorize('it', 'admin'), adminController.createTestItNotification);
 router.post('/it-notifications/clear', protect, requireVerifiedEmail, authorize('it', 'admin'), adminController.clearItNotifications);
+
+// Master Control & Global Site Configuration (Super Admin / IT / Chairman)
+router.get('/site-config', protect, requireVerifiedEmail, authorize('it', 'admin', 'chairman', 'principal', 'cao'), siteConfigController.getFullConfig);
+router.put('/site-config/cms', protect, requireVerifiedEmail, authorize('it', 'admin', 'chairman'), siteConfigController.updateCms);
+router.put('/site-config/rules', protect, requireVerifiedEmail, authorize('it', 'admin', 'chairman'), siteConfigController.updateRules);
+router.put('/site-config/features', protect, requireVerifiedEmail, authorize('it', 'admin', 'chairman'), siteConfigController.updateFeatures);
+router.post('/site-config/lockdown', protect, requireVerifiedEmail, authorize('it', 'admin', 'chairman', 'principal', 'cao'), siteConfigController.setLockdown);
+router.get('/site-config/master-users', protect, requireVerifiedEmail, authorize('it', 'admin', 'chairman', 'principal', 'cao'), siteConfigController.getMasterUsers);
+router.patch('/site-config/master-users/:id', protect, requireVerifiedEmail, authorize('it', 'admin', 'chairman'), siteConfigController.updateMasterUser);
+router.get('/site-config/system-health', protect, requireVerifiedEmail, authorize('it', 'admin', 'chairman', 'principal', 'cao'), siteConfigController.getSystemHealth);
 
 router.get('/export/options', requireAuth, requireVerifiedEmail, allowAdminAccess, scopeFilterMiddleware, exportController.getOptions);
 router.get('/export/preview', requireAuth, requireVerifiedEmail, allowAdminAccess, scopeFilterMiddleware, exportController.getPreview);

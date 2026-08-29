@@ -3678,4 +3678,75 @@ export async function clearItNotifications(mode = 'all') {
   return payload?.data || { deletedCount: 0 }
 }
 
+// ── Master Control & Site Configuration Endpoints ─────────────────────────
+
+export async function fetchPublicSiteConfig(signal) {
+  try {
+    const payload = await apiRequest('/public/site-config', { signal })
+    return payload?.data || null
+  } catch (err) {
+    console.warn('[dwarpalApi] Could not fetch public site-config, using fallback:', err)
+    return null
+  }
+}
+
+export async function fetchAdminSiteConfig(signal) {
+  const payload = await apiRequest('/admin/site-config', { signal })
+  return payload?.data || null
+}
+
+export async function updateCmsConfig(cmsData) {
+  const payload = await apiRequest('/admin/site-config/cms', {
+    method: 'PUT',
+    body: cmsData,
+  })
+  return payload?.data || null
+}
+
+export async function updateRulesConfig(rulesData) {
+  const payload = await apiRequest('/admin/site-config/rules', {
+    method: 'PUT',
+    body: rulesData,
+  })
+  return payload?.data || null
+}
+
+export async function updateFeatureFlags(featuresData) {
+  const payload = await apiRequest('/admin/site-config/features', {
+    method: 'PUT',
+    body: featuresData,
+  })
+  return payload?.data || null
+}
+
+export async function setEmergencyLockdown(lockdownData) {
+  const payload = await apiRequest('/admin/site-config/lockdown', {
+    method: 'POST',
+    body: lockdownData,
+  })
+  return payload?.data || null
+}
+
+export async function fetchMasterUsers(params = {}, signal) {
+  const payload = await apiRequest(`/admin/site-config/master-users${buildQueryString(params)}`, { signal })
+  return {
+    users: Array.isArray(payload?.data) ? payload.data : [],
+    meta: payload?.meta || { page: 1, limit: 20, total: 0, totalPages: 1 },
+  }
+}
+
+export async function updateMasterUserAccount(userId, payload) {
+  const response = await apiRequest(`/admin/site-config/master-users/${userId}`, {
+    method: 'PATCH',
+    body: payload,
+  })
+  return response?.data || null
+}
+
+export async function fetchSystemHealthOverview(signal) {
+  const payload = await apiRequest('/admin/site-config/system-health', { signal })
+  return payload?.data || null
+}
+
 export { ApiError }
+

@@ -5,6 +5,7 @@ import {
   AlertTriangle, ChevronLeft, QrCode, CheckCircle2, RefreshCw,
   Fingerprint, MessageSquare, Undo2, Siren,
 } from 'lucide-react'
+import { useSiteConfig } from './SiteConfigContext'
 import { ActionButton } from './ui'
 
 const FAQ_ITEMS = [
@@ -54,11 +55,17 @@ const FAQ_ITEMS = [
 
 export default function SupportPage() {
   const navigate = useNavigate()
+  const { config } = useSiteConfig()
   const [openIndex, setOpenIndex] = useState(null)
 
   const toggleFaq = (index) => {
     setOpenIndex(openIndex === index ? null : index)
   }
+
+  const support = config?.cms?.support || {}
+  const activeFaqs = (config?.cms?.faqs && config.cms.faqs.length > 0)
+    ? config.cms.faqs.map((f) => ({ question: f.question, answer: f.answer, icon: CheckCircle2 }))
+    : FAQ_ITEMS
 
   return (
     <div className="legal-page">
@@ -81,7 +88,7 @@ export default function SupportPage() {
             </div>
             <div>
               <h1 className="legal-header-title">Help &amp; Support</h1>
-              <p className="legal-header-meta">Campus Gatepass Assistance · Mon–Sat, 9 AM – 5 PM IST</p>
+              <p className="legal-header-meta">Campus Gatepass Assistance · {support.operatingHours || 'Mon–Sat, 8 AM – 6 PM IST'}</p>
             </div>
           </div>
         </div>
@@ -113,8 +120,8 @@ export default function SupportPage() {
               <div className="support-contact-card">
                 <div className="support-contact-icon"><Mail size={20} /></div>
                 <strong>Email Support</strong>
-                <a href="mailto:dwarpal@neotech.ac.in" className="policy-link support-contact-value">
-                  dwarpal@neotech.ac.in
+                <a href={`mailto:${support.supportEmail || 'dwarpal@neotech.ac.in'}`} className="policy-link support-contact-value">
+                  {support.supportEmail || 'dwarpal@neotech.ac.in'}
                 </a>
                 <span className="support-contact-note">Response within 24–48 hours</span>
               </div>
@@ -122,8 +129,8 @@ export default function SupportPage() {
               <div className="support-contact-card">
                 <div className="support-contact-icon"><Clock3 size={20} /></div>
                 <strong>Support Hours</strong>
-                <span className="support-contact-value">Monday – Saturday</span>
-                <span className="support-contact-note">9:00 AM – 5:00 PM IST</span>
+                <span className="support-contact-value">{support.operatingHours || 'Monday – Saturday'}</span>
+                <span className="support-contact-note">{support.officeLocation || 'Central Security Cabin / IT Desk'}</span>
               </div>
 
               <div className="support-contact-card">
@@ -131,12 +138,16 @@ export default function SupportPage() {
                 <strong>Campus IT Helpdesk</strong>
                 <div className="support-contact-value" style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                   <span>
-                    Manan Dabgar —{' '}
-                    <a href="tel:+919328563802" className="policy-link">+91 93285 63802</a>
+                    Primary Helpline —{' '}
+                    <a href={`tel:${support.primaryPhone || '+919328563802'}`} className="policy-link">
+                      {support.primaryPhone || '+91 93285 63802'}
+                    </a>
                   </span>
                   <span>
-                    Atharva Chitale —{' '}
-                    <a href="tel:+919265793539" className="policy-link">+91 92657 93539</a>
+                    Secondary Helpline —{' '}
+                    <a href={`tel:${support.secondaryPhone || '+919265793539'}`} className="policy-link">
+                      {support.secondaryPhone || '+91 92657 93539'}
+                    </a>
                   </span>
                 </div>
                 <span className="support-contact-note">For urgent gate queries</span>
@@ -153,7 +164,7 @@ export default function SupportPage() {
             </h2>
 
             <div className="support-faq-list">
-              {FAQ_ITEMS.map((item, idx) => {
+              {activeFaqs.map((item, idx) => {
                 const isOpen = openIndex === idx
                 return (
                   <div key={idx} className={`support-faq-item ${isOpen ? 'open' : ''}`}>
@@ -206,3 +217,4 @@ export default function SupportPage() {
     </div>
   )
 }
+

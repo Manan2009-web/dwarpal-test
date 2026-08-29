@@ -153,6 +153,7 @@ function getAdminNavItems(currentUser) {
     items.push({ key: 'approvals', label: 'Approvals Queue', icon: CheckCircle2, to: '/admin/approvals' })
   }
 
+
   items.push(
     { key: 'gatepasses', label: 'Gatepass Ops', icon: ClipboardList, to: '/admin/gatepasses' },
     { key: 'reports', label: 'Reports', icon: BarChart3, to: '/admin/reports' },
@@ -173,6 +174,7 @@ function getAdminNavItems(currentUser) {
   items.push({ key: 'settings', label: 'Settings', icon: SlidersVertical, to: '/admin/settings' })
   return items
 }
+
 
 function buildFiltersForRequest(filters) {
   const request = { ...filters }
@@ -2470,6 +2472,7 @@ export default function AdminPortal({ currentUser, onLogout, onOpenSupport = nul
     history: 'Export History',
     settings: 'Settings',
   }
+
 
   return (
     <div className={`admin-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>

@@ -40,6 +40,7 @@ import PasswordInput from './components/PasswordInput'
 import { SkeletonNotificationList } from './components/ui/SkeletonLoader'
 import OtpCodeInput from './components/OtpCodeInput'
 import { subscribeUserToPush } from './lib/webPush'
+import { SiteConfigProvider } from './components/SiteConfigContext'
 
 const AccessPortal = lazy(() => import('./components/AccessPortal'))
 const AdminPortal = lazy(() => import('./components/AdminPortal'))
@@ -57,6 +58,7 @@ const SupportPage = lazy(() => import('./components/SupportPage'))
 const NotFoundPage = lazy(() => import('./components/NotFoundPage'))
 const StudentRegisterPage = lazy(() => import('./components/auth/StudentRegisterPage'))
 const BloomLandingPage = lazy(() => import('./components/BloomLandingPage'))
+const StandaloneMasterPortal = lazy(() => import('./components/StandaloneMasterPortal'))
 const Aurora = lazy(() => import('./components/ui/Aurora'))
 import { useToast } from './components/ToastProvider'
 import { usePushSubscription } from './hooks/usePushSubscription'
@@ -2042,170 +2044,203 @@ function App() {
   }
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route
-          path="/"
-          element={<DefaultRoute currentUser={currentUser} authReady={authReady} portalAccess={portalAccess} />}
-        />
-        <Route
-          path="/access-portal"
-          element={
-            currentUser ? (
-              <Navigate to={getLandingPathForUser(currentUser)} replace />
-            ) : (portalAccess || getPortalAccessSession()) ? (
-              <Navigate to="/login" replace />
-            ) : (
-              <Suspense fallback={<LoadingSpinner />}>
-                <AccessPortal onAccessGranted={savePortalAccess} />
-              </Suspense>
-            )
-          }
-        />
-        <Route
-          path="/login"
-          element={
-            <PublicAuthRoute currentUser={currentUser} authReady={authReady} portalAccess={portalAccess}>
-              <LoginScreen onLogin={login} portalAccess={portalAccess} />
-            </PublicAuthRoute>
-          }
-        />
-        <Route
-          path="/student/login"
-          element={
-            <PublicAuthRoute currentUser={currentUser} authReady={authReady} targetRole="student">
-              <LoginScreen onLogin={login} portalAccess={{ accessType: 'student', token: 'STUDENT_DIRECT_PORTAL' }} />
-            </PublicAuthRoute>
-          }
-        />
-        <Route
-          path="/security/login"
-          element={
-            <PublicAuthRoute currentUser={currentUser} authReady={authReady} targetRole="faculty">
-              <LoginScreen onLogin={login} portalAccess={{ accessType: 'faculty', token: 'FACULTY_DIRECT_PORTAL' }} />
-            </PublicAuthRoute>
-          }
-        />
-        <Route
-          path="/gatekeeper/login"
-          element={
-            <PublicAuthRoute currentUser={currentUser} authReady={authReady} targetRole="faculty">
-              <LoginScreen onLogin={login} portalAccess={{ accessType: 'faculty', token: 'FACULTY_DIRECT_PORTAL' }} />
-            </PublicAuthRoute>
-          }
-        />
-        <Route
-          path="/faculty/login"
-          element={
-            <PublicAuthRoute currentUser={currentUser} authReady={authReady} targetRole="faculty">
-              <LoginScreen onLogin={login} portalAccess={{ accessType: 'faculty', token: 'FACULTY_DIRECT_PORTAL' }} />
-            </PublicAuthRoute>
-          }
-        />
-        <Route
-          path="/register"
-          element={
-            <PublicAuthRoute currentUser={currentUser} authReady={authReady} portalAccess={{ accessType: 'faculty', token: 'FACULTY_DIRECT_PORTAL' }} isRegisterRoute={true}>
-              <Suspense fallback={<LoadingSpinner />}>
-                <Register setCurrentUser={setCurrentUser} onRegister={registerAccount} />
-              </Suspense>
-            </PublicAuthRoute>
-          }
-        />
-        <Route path="/privacy-policy" element={
-          <ErrorBoundary>
-            <Suspense fallback={<LoadingSpinner />}>
-              <LegalDocs onManageCookies={() => setCookieBannerForcedOpen(true)} />
-            </Suspense>
-          </ErrorBoundary>
-        } />
-        <Route path="/support" element={
-          <ErrorBoundary>
-            <Suspense fallback={<LoadingSpinner />}>
-              <SupportPage />
-            </Suspense>
-          </ErrorBoundary>
-        } />
-        <Route path="/student/register" element={
-          <ErrorBoundary>
-            <Suspense fallback={<LoadingSpinner />}>
-              <StudentRegisterPage />
-            </Suspense>
-          </ErrorBoundary>
-        } />
-        <Route path="/register/student" element={
-          <ErrorBoundary>
-            <Suspense fallback={<LoadingSpinner />}>
-              <StudentRegisterPage />
-            </Suspense>
-          </ErrorBoundary>
-        } />
-        <Route path="/bloom" element={
-          <ErrorBoundary>
-            <Suspense fallback={<LoadingSpinner />}>
-              <BloomLandingPage />
-            </Suspense>
-          </ErrorBoundary>
-        } />
-        <Route path="/luxury" element={
-          <ErrorBoundary>
-            <Suspense fallback={<LoadingSpinner />}>
-              <BloomLandingPage />
-            </Suspense>
-          </ErrorBoundary>
-        } />
-        <Route path="/preview" element={
-          <ErrorBoundary>
-            <Suspense fallback={<LoadingSpinner />}>
-              <BloomLandingPage />
-            </Suspense>
-          </ErrorBoundary>
-        } />
-        <Route path="/v2" element={
-          <ErrorBoundary>
-            <Suspense fallback={<LoadingSpinner />}>
-              <BloomLandingPage />
-            </Suspense>
-          </ErrorBoundary>
-        } />
-        <Route
-          path="/app/:page"
-          element={renderAppShellRoute()}
-        />
-        <Route path="/user/:page" element={renderUserRoute()} />
-        <Route path="/admin/*" element={renderAdminRoute()} />
-        <Route path="/chairman/*" element={renderChairmanRoute()} />
-        <Route path="/chairman" element={renderChairmanRoute()} />
-        <Route path="/student/dashboard" element={renderAppShellRoute('student')} />
-        <Route path="/faculty/dashboard" element={renderAppShellRoute('faculty')} />
-        <Route path="/principal/dashboard" element={renderAppShellRoute('principal')} />
-        <Route path="/hod/dashboard" element={renderAppShellRoute('hod')} />
-        <Route path="/security/dashboard" element={renderAppShellRoute('security')} />
-        <Route path="/cao/dashboard" element={renderAppShellRoute('cao')} />
-        <Route
-          path="*"
-          element={
+    <SiteConfigProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route
+            path="/"
+            element={<DefaultRoute currentUser={currentUser} authReady={authReady} portalAccess={portalAccess} />}
+          />
+          <Route
+            path="/access-portal"
+            element={
+              currentUser ? (
+                <Navigate to={getLandingPathForUser(currentUser)} replace />
+              ) : (portalAccess || getPortalAccessSession()) ? (
+                <Navigate to="/login" replace />
+              ) : (
+                <Suspense fallback={<LoadingSpinner />}>
+                  <AccessPortal onAccessGranted={savePortalAccess} />
+                </Suspense>
+              )
+            }
+          />
+          <Route
+            path="/login"
+            element={
+              <PublicAuthRoute currentUser={currentUser} authReady={authReady} portalAccess={portalAccess}>
+                <LoginScreen onLogin={login} portalAccess={portalAccess} />
+              </PublicAuthRoute>
+            }
+          />
+          <Route
+            path="/student/login"
+            element={
+              <PublicAuthRoute currentUser={currentUser} authReady={authReady} targetRole="student">
+                <LoginScreen onLogin={login} portalAccess={{ accessType: 'student', token: 'STUDENT_DIRECT_PORTAL' }} />
+              </PublicAuthRoute>
+            }
+          />
+          <Route
+            path="/security/login"
+            element={
+              <PublicAuthRoute currentUser={currentUser} authReady={authReady} targetRole="faculty">
+                <LoginScreen onLogin={login} portalAccess={{ accessType: 'faculty', token: 'FACULTY_DIRECT_PORTAL' }} />
+              </PublicAuthRoute>
+            }
+          />
+          <Route
+            path="/gatekeeper/login"
+            element={
+              <PublicAuthRoute currentUser={currentUser} authReady={authReady} targetRole="faculty">
+                <LoginScreen onLogin={login} portalAccess={{ accessType: 'faculty', token: 'FACULTY_DIRECT_PORTAL' }} />
+              </PublicAuthRoute>
+            }
+          />
+          <Route
+            path="/faculty/login"
+            element={
+              <PublicAuthRoute currentUser={currentUser} authReady={authReady} targetRole="faculty">
+                <LoginScreen onLogin={login} portalAccess={{ accessType: 'faculty', token: 'FACULTY_DIRECT_PORTAL' }} />
+              </PublicAuthRoute>
+            }
+          />
+          <Route
+            path="/register"
+            element={
+              <PublicAuthRoute currentUser={currentUser} authReady={authReady} portalAccess={{ accessType: 'faculty', token: 'FACULTY_DIRECT_PORTAL' }} isRegisterRoute={true}>
+                <Suspense fallback={<LoadingSpinner />}>
+                  <Register setCurrentUser={setCurrentUser} onRegister={registerAccount} />
+                </Suspense>
+              </PublicAuthRoute>
+            }
+          />
+          <Route path="/privacy-policy" element={
             <ErrorBoundary>
               <Suspense fallback={<LoadingSpinner />}>
-                <NotFoundPage currentUser={currentUser} />
+                <LegalDocs onManageCookies={() => setCookieBannerForcedOpen(true)} />
               </Suspense>
             </ErrorBoundary>
-          }
-        />
-      </Routes>
-      <FeatureBoundary label="Privacy preferences banner">
-        <PrivacyPreferencesBanner
-          open={!cookieConsent || cookieBannerForcedOpen}
-          onAccept={() => handleCookiePreferenceChange('accepted')}
-          onReject={() => handleCookiePreferenceChange('rejected')}
-        />
-      </FeatureBoundary>
-      <Suspense fallback={null}>
-        <SupportModal open={supportModalOpen} onClose={() => setSupportModalOpen(false)} support={SUPPORT_CONFIG} />
-      </Suspense>
-      {/* TEMP_DISABLED_OTP */}
-    </BrowserRouter>
+          } />
+          <Route path="/support" element={
+            <ErrorBoundary>
+              <Suspense fallback={<LoadingSpinner />}>
+                <SupportPage />
+              </Suspense>
+            </ErrorBoundary>
+          } />
+          <Route path="/student/register" element={
+            <ErrorBoundary>
+              <Suspense fallback={<LoadingSpinner />}>
+                <StudentRegisterPage />
+              </Suspense>
+            </ErrorBoundary>
+          } />
+          <Route path="/register/student" element={
+            <ErrorBoundary>
+              <Suspense fallback={<LoadingSpinner />}>
+                <StudentRegisterPage />
+              </Suspense>
+            </ErrorBoundary>
+          } />
+          <Route path="/bloom" element={
+            <ErrorBoundary>
+              <Suspense fallback={<LoadingSpinner />}>
+                <BloomLandingPage />
+              </Suspense>
+            </ErrorBoundary>
+          } />
+          <Route path="/luxury" element={
+            <ErrorBoundary>
+              <Suspense fallback={<LoadingSpinner />}>
+                <BloomLandingPage />
+              </Suspense>
+            </ErrorBoundary>
+          } />
+          <Route path="/preview" element={
+            <ErrorBoundary>
+              <Suspense fallback={<LoadingSpinner />}>
+                <BloomLandingPage />
+              </Suspense>
+            </ErrorBoundary>
+          } />
+          <Route path="/v2" element={
+            <ErrorBoundary>
+              <Suspense fallback={<LoadingSpinner />}>
+                <BloomLandingPage />
+              </Suspense>
+            </ErrorBoundary>
+          } />
+          <Route
+            path="/app/:page"
+            element={renderAppShellRoute()}
+          />
+          <Route
+            path="/master-control"
+            element={
+              <ErrorBoundary>
+                <Suspense fallback={<LoadingSpinner />}>
+                  <StandaloneMasterPortal />
+                </Suspense>
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="/super-admin"
+            element={
+              <ErrorBoundary>
+                <Suspense fallback={<LoadingSpinner />}>
+                  <StandaloneMasterPortal />
+                </Suspense>
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="/root-portal"
+            element={
+              <ErrorBoundary>
+                <Suspense fallback={<LoadingSpinner />}>
+                  <StandaloneMasterPortal />
+                </Suspense>
+              </ErrorBoundary>
+            }
+          />
+          <Route path="/user/:page" element={renderUserRoute()} />
+          <Route path="/admin/*" element={renderAdminRoute()} />
+          <Route path="/chairman/*" element={renderChairmanRoute()} />
+          <Route path="/chairman" element={renderChairmanRoute()} />
+          <Route path="/student/dashboard" element={renderAppShellRoute('student')} />
+          <Route path="/faculty/dashboard" element={renderAppShellRoute('faculty')} />
+          <Route path="/principal/dashboard" element={renderAppShellRoute('principal')} />
+          <Route path="/hod/dashboard" element={renderAppShellRoute('hod')} />
+          <Route path="/security/dashboard" element={renderAppShellRoute('security')} />
+          <Route path="/cao/dashboard" element={renderAppShellRoute('cao')} />
+          <Route
+            path="*"
+            element={
+              <ErrorBoundary>
+                <Suspense fallback={<LoadingSpinner />}>
+                  <NotFoundPage currentUser={currentUser} />
+                </Suspense>
+              </ErrorBoundary>
+            }
+          />
+        </Routes>
+        <FeatureBoundary label="Privacy preferences banner">
+          <PrivacyPreferencesBanner
+            open={!cookieConsent || cookieBannerForcedOpen}
+            onAccept={() => handleCookiePreferenceChange('accepted')}
+            onReject={() => handleCookiePreferenceChange('rejected')}
+          />
+        </FeatureBoundary>
+        <Suspense fallback={null}>
+          <SupportModal open={supportModalOpen} onClose={() => setSupportModalOpen(false)} support={SUPPORT_CONFIG} />
+        </Suspense>
+        {/* TEMP_DISABLED_OTP */}
+      </BrowserRouter>
+    </SiteConfigProvider>
   )
+
 }
 
 function ProtectedRoute({ currentUser, authReady, children }) {
