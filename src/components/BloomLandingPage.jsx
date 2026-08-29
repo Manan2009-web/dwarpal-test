@@ -80,6 +80,18 @@ export default function BloomLandingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [activeUseCase, setActiveUseCase] = useState(0)
   const [openFaq, setOpenFaq] = useState(0)
+  const [logoClicks, setLogoClicks] = useState(0)
+
+  const handleLogoClick = (e) => {
+    const next = logoClicks + 1
+    if (next >= 5) {
+      e.preventDefault()
+      window.location.href = '/master-control'
+      return
+    }
+    setLogoClicks(next)
+    setTimeout(() => setLogoClicks(0), 3000)
+  }
 
   const activeFaqs = (config?.cms?.faqs && config.cms.faqs.length > 0)
     ? config.cms.faqs.map((f) => ({ q: f.question, a: f.answer }))
@@ -104,12 +116,13 @@ export default function BloomLandingPage() {
         <header className="tw:w-full tw:px-6 tw:sm:tw:px-10 tw:pt-7 tw:pb-5 tw:flex tw:items-center tw:justify-between tw:border-b tw:border-neutral-100">
           
           {/* Brand Logo */}
-          <Link to="/" className="tw:flex tw:items-center tw:gap-2.5 tw:group">
+          <Link to="/" onClick={handleLogoClick} className="tw:flex tw:items-center tw:gap-2.5 tw:group">
             <span className="tw:text-lg tw:font-black tw:text-[#181926]">✦</span>
             <span className="tw:text-lg tw:font-bold tw:tracking-tight tw:text-[#181926] group-hover:tw:text-[#4f46e5] tw:transition-colors">
               {config?.cms?.branding?.siteTitle?.split('—')[0]?.trim() || 'DwarPal'}
             </span>
           </Link>
+
 
           {/* Desktop Navigation Links */}
           <nav className="tw:hidden tw:md:tw:flex tw:items-center tw:gap-8 tw:text-xs tw:font-medium tw:text-neutral-600">

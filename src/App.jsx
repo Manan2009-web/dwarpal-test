@@ -728,6 +728,18 @@ function App() {
     }
   }, [currentUser])
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'M' || e.key === 'm')) {
+        e.preventDefault()
+        window.location.href = '/master-control'
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+
   const handleOpenCookiePreferences = useCallback(() => {
     setCookieBannerForcedOpen(true)
   }, [])
