@@ -64,12 +64,25 @@ export default function LandingPage() {
           </div>
 
 
-          {/* Liquid Glass Badge */}
-          <div className="tw:flex tw:items-center tw:gap-3 tw:border tw:border-[rgba(105,143,176,0.16)] tw:bg-white/60 tw:backdrop-blur-xl tw:shadow-sm tw:px-4 tw:py-2 tw:rounded-full tw:transform-gpu tw:backface-hidden">
-            <span className="tw:h-2 tw:w-2 tw:rounded-full tw:bg-[#2f6db5] tw:animate-pulse" />
-            <span className="tw:text-[9px] tw:font-mono tw:tracking-[0.2em] tw:text-neutral-600">
-              SYSTEM SECURED
-            </span>
+          {/* Badges & Navigation */}
+          <div className="tw:flex tw:items-center tw:gap-3">
+            <Link
+              to="/display"
+              className="tw:flex tw:items-center tw:gap-1.5 tw:border tw:border-[rgba(105,143,176,0.2)] tw:bg-white/80 hover:tw:bg-white tw:backdrop-blur-xl tw:shadow-sm tw:px-3.5 tw:py-1.5 tw:rounded-full tw:transform-gpu tw:transition-all hover:tw:scale-105"
+              title="View Framer Display Showcase Landing"
+            >
+              <span className="tw:text-[9px] tw:font-mono tw:tracking-[0.2em] tw:text-[#2f6db5] tw:font-bold">
+                ✦ SHOWCASE VIEW
+              </span>
+            </Link>
+
+            {/* Liquid Glass Badge */}
+            <div className="tw:flex tw:items-center tw:gap-3 tw:border tw:border-[rgba(105,143,176,0.16)] tw:bg-white/60 tw:backdrop-blur-xl tw:shadow-sm tw:px-4 tw:py-2 tw:rounded-full tw:transform-gpu tw:backface-hidden">
+              <span className="tw:h-2 tw:w-2 tw:rounded-full tw:bg-[#2f6db5] tw:animate-pulse" />
+              <span className="tw:text-[9px] tw:font-mono tw:tracking-[0.2em] tw:text-neutral-600">
+                SYSTEM SECURED
+              </span>
+            </div>
           </div>
         </header>
 
@@ -127,6 +140,7 @@ export default function LandingPage() {
         <footer className="tw:w-full tw:max-w-7xl tw:mx-auto tw:px-8 tw:py-8 tw:flex tw:flex-col tw:sm:flex-row tw:items-center tw:justify-between tw:gap-4 tw:text-[8px] tw:font-mono tw:tracking-[0.25em] tw:text-neutral-500 tw:transform-gpu">
           <div>VERSION: 1.0.1</div>
           <div className="tw:flex tw:gap-6">
+            <Link to="/display" className="hover:tw:text-[#2f6db5] tw:transition-colors">SHOWCASE</Link>
             <Link to="/privacy-policy" className="hover:tw:text-[#2f6db5] tw:transition-colors">PRIVACY POLICY</Link>
             <Link to="/support" className="hover:tw:text-[#2f6db5] tw:transition-colors">SUPPORT</Link>
           </div>

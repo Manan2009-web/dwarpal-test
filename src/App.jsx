@@ -58,6 +58,7 @@ const SupportPage = lazy(() => import('./components/SupportPage'))
 const NotFoundPage = lazy(() => import('./components/NotFoundPage'))
 const StudentRegisterPage = lazy(() => import('./components/auth/StudentRegisterPage'))
 const BloomLandingPage = lazy(() => import('./components/BloomLandingPage'))
+const DisplayLandingPage = lazy(() => import('./components/DisplayLandingPage'))
 const StandaloneMasterPortal = lazy(() => import('./components/StandaloneMasterPortal'))
 const Aurora = lazy(() => import('./components/ui/Aurora'))
 import { useToast } from './components/ToastProvider'
@@ -2180,6 +2181,27 @@ function App() {
             <ErrorBoundary>
               <Suspense fallback={<LoadingSpinner />}>
                 <BloomLandingPage />
+              </Suspense>
+            </ErrorBoundary>
+          } />
+          <Route path="/display" element={
+            <ErrorBoundary>
+              <Suspense fallback={<LoadingSpinner />}>
+                <DisplayLandingPage />
+              </Suspense>
+            </ErrorBoundary>
+          } />
+          <Route path="/showcase" element={
+            <ErrorBoundary>
+              <Suspense fallback={<LoadingSpinner />}>
+                <DisplayLandingPage />
+              </Suspense>
+            </ErrorBoundary>
+          } />
+          <Route path="/framer" element={
+            <ErrorBoundary>
+              <Suspense fallback={<LoadingSpinner />}>
+                <DisplayLandingPage />
               </Suspense>
             </ErrorBoundary>
           } />
