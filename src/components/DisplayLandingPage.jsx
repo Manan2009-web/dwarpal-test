@@ -371,10 +371,10 @@ export default function DisplayLandingPage() {
         <div className="tw:flex tw:items-center tw:gap-3">
           <Link
             to="/access-portal"
-            className="tw:px-5 tw:py-2 tw:rounded-full tw:text-xs tw:font-semibold tw:transition-all hover:tw:opacity-90 tw:shadow-[0_4px_20px_0_rgba(255,255,255,0.2)]"
+            className="tw:px-5 tw:py-2 tw:rounded-full tw:text-xs tw:font-semibold tw:transition-all hover:tw:scale-105 tw:shadow-[0_0_20px_rgba(43,127,255,0.4)] tw:backdrop-blur-xl"
             style={{
-              backgroundColor: '#ffffff',
-              color: '#000000',
+              backgroundColor: '#2b7fff',
+              color: '#ffffff',
             }}
           >
             Access Portal
@@ -384,6 +384,7 @@ export default function DisplayLandingPage() {
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="tw:flex tw:md:tw:hidden tw:p-2 tw:text-[#9a9aa1] hover:tw:text-[#ffffff]"
+            style={{ background: 'transparent', border: 'none' }}
           >
             {mobileMenuOpen ? <X className="tw:w-5 tw:h-5" /> : <Menu className="tw:w-5 tw:h-5" />}
           </button>
@@ -399,7 +400,7 @@ export default function DisplayLandingPage() {
             exit={{ opacity: 0, y: -10 }}
             className="tw:fixed tw:inset-x-4 tw:top-20 tw:z-50 tw:p-6 tw:rounded-2xl tw:flex tw:flex-col tw:gap-4 tw:md:tw:hidden tw:backdrop-blur-2xl tw:shadow-2xl"
             style={{
-              backgroundColor: 'rgba(15, 15, 22, 0.75)',
+              backgroundColor: 'rgba(15, 15, 22, 0.85)',
               border: '1px solid rgba(255, 255, 255, 0.15)',
             }}
           >
@@ -434,7 +435,7 @@ export default function DisplayLandingPage() {
             <div className="tw:pt-2 tw:flex tw:flex-col tw:gap-2">
               <Link
                 to="/access-portal"
-                className="tw:w-full tw:text-center tw:py-2.5 tw:rounded-full tw:bg-white tw:text-black tw:text-xs tw:font-semibold"
+                className="tw:w-full tw:text-center tw:py-2.5 tw:rounded-full tw:bg-[#2b7fff] tw:text-white tw:text-xs tw:font-semibold tw:shadow-[0_0_20px_rgba(43,127,255,0.4)]"
               >
                 Access Portal
               </Link>
@@ -589,7 +590,10 @@ export default function DisplayLandingPage() {
                         <span className="tw:text-xs tw:font-bold tw:text-white">DwarPal Digital Pass</span>
                         <span className="tw:text-[10px] tw:text-emerald-400 tw:font-mono">VALID</span>
                       </div>
-                      <div className="tw:bg-white tw:p-4 tw:rounded-xl tw:flex tw:flex-col tw:items-center tw:justify-center">
+                      <div 
+                        className="tw:p-4 tw:rounded-xl tw:flex tw:flex-col tw:items-center tw:justify-center tw:backdrop-blur-md"
+                        style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)' }}
+                      >
                         <QrCode className="tw:w-28 tw:h-28 tw:text-black" />
                         <span className="tw:text-[11px] tw:font-mono tw:font-bold tw:text-black tw:mt-2">
                           {dynamicCode}
@@ -747,7 +751,7 @@ export default function DisplayLandingPage() {
               <div
                 className="tw:inline-flex tw:p-1.5 tw:rounded-full tw:backdrop-blur-xl"
                 style={{
-                  backgroundColor: 'rgba(0, 0, 0, 0.35)',
+                  backgroundColor: 'rgba(0, 0, 0, 0.4)',
                   border: '1px solid rgba(255, 255, 255, 0.12)',
                 }}
               >
@@ -755,9 +759,14 @@ export default function DisplayLandingPage() {
                   onClick={() => setActiveSandboxTab('student')}
                   className={`tw:px-4 tw:py-1.5 tw:rounded-full tw:text-xs tw:font-medium tw:transition-all ${
                     activeSandboxTab === 'student'
-                      ? 'tw:bg-[#ffffff] tw:text-[#000000] tw:shadow-md'
-                      : 'tw:text-[#9a9aa1] hover:tw:text-white'
+                      ? 'tw:bg-[#2b7fff] tw:text-white tw:shadow-[0_0_15px_rgba(43,127,255,0.4)]'
+                      : 'tw:bg-transparent tw:text-[#9a9aa1] hover:tw:text-white'
                   }`}
+                  style={{
+                    backgroundColor: activeSandboxTab === 'student' ? '#2b7fff' : 'transparent',
+                    border: 'none',
+                    color: activeSandboxTab === 'student' ? '#ffffff' : '#9a9aa1',
+                  }}
                 >
                   1. Dynamic Pass
                 </button>
@@ -765,9 +774,14 @@ export default function DisplayLandingPage() {
                   onClick={() => setActiveSandboxTab('terminal')}
                   className={`tw:px-4 tw:py-1.5 tw:rounded-full tw:text-xs tw:font-medium tw:transition-all ${
                     activeSandboxTab === 'terminal'
-                      ? 'tw:bg-[#ffffff] tw:text-[#000000] tw:shadow-md'
-                      : 'tw:text-[#9a9aa1] hover:tw:text-white'
+                      ? 'tw:bg-[#2b7fff] tw:text-white tw:shadow-[0_0_15px_rgba(43,127,255,0.4)]'
+                      : 'tw:bg-transparent tw:text-[#9a9aa1] hover:tw:text-white'
                   }`}
+                  style={{
+                    backgroundColor: activeSandboxTab === 'terminal' ? '#2b7fff' : 'transparent',
+                    border: 'none',
+                    color: activeSandboxTab === 'terminal' ? '#ffffff' : '#9a9aa1',
+                  }}
                 >
                   2. Optical Terminal
                 </button>
@@ -775,9 +789,14 @@ export default function DisplayLandingPage() {
                   onClick={() => setActiveSandboxTab('alerts')}
                   className={`tw:px-4 tw:py-1.5 tw:rounded-full tw:text-xs tw:font-medium tw:transition-all ${
                     activeSandboxTab === 'alerts'
-                      ? 'tw:bg-[#ffffff] tw:text-[#000000] tw:shadow-md'
-                      : 'tw:text-[#9a9aa1] hover:tw:text-white'
+                      ? 'tw:bg-[#2b7fff] tw:text-white tw:shadow-[0_0_15px_rgba(43,127,255,0.4)]'
+                      : 'tw:bg-transparent tw:text-[#9a9aa1] hover:tw:text-white'
                   }`}
+                  style={{
+                    backgroundColor: activeSandboxTab === 'alerts' ? '#2b7fff' : 'transparent',
+                    border: 'none',
+                    color: activeSandboxTab === 'alerts' ? '#ffffff' : '#9a9aa1',
+                  }}
                 >
                   3. Event Dispatch
                 </button>
@@ -809,13 +828,15 @@ export default function DisplayLandingPage() {
                           setQrTimer(15)
                         }}
                         className="tw:px-4 tw:py-2 tw:rounded-full tw:bg-white/10 tw:text-white tw:border tw:border-white/15 tw:text-xs tw:font-medium hover:tw:bg-[#2b7fff] tw:transition-colors tw:flex tw:items-center tw:gap-2 tw:backdrop-blur-xl"
+                        style={{ border: '1px solid rgba(255, 255, 255, 0.15)' }}
                       >
                         <RefreshCw className="tw:w-3.5 tw:h-3.5" />
                         <span>Regenerate Seed Hash</span>
                       </button>
                       <button
                         onClick={() => setActiveSandboxTab('terminal')}
-                        className="tw:px-4 tw:py-2 tw:rounded-full tw:bg-white tw:text-black tw:text-xs tw:font-semibold hover:tw:bg-zinc-200 tw:transition-colors tw:shadow-md"
+                        className="tw:px-4 tw:py-2 tw:rounded-full tw:bg-[#2b7fff] tw:text-white tw:text-xs tw:font-semibold hover:tw:bg-blue-600 tw:transition-colors tw:shadow-[0_0_15px_rgba(43,127,255,0.35)]"
+                        style={{ backgroundColor: '#2b7fff', border: 'none', color: '#ffffff' }}
                       >
                         Next: Simulate Gate Scan →
                       </button>
@@ -834,7 +855,10 @@ export default function DisplayLandingPage() {
                         <span className="tw:text-white">Aarav Patel (CS-042)</span>
                         <span className="tw:text-emerald-400">ACTIVE</span>
                       </div>
-                      <div className="tw:bg-white tw:p-4 tw:rounded-xl tw:flex tw:flex-col tw:items-center tw:justify-center">
+                      <div 
+                        className="tw:p-4 tw:rounded-xl tw:flex tw:flex-col tw:items-center tw:justify-center tw:backdrop-blur-md"
+                        style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)' }}
+                      >
                         <QrCode className="tw:w-28 tw:h-28 tw:text-black" />
                         <span className="tw:text-xs tw:font-mono tw:font-bold tw:text-black tw:mt-2">
                           {dynamicCode}
@@ -861,7 +885,8 @@ export default function DisplayLandingPage() {
                       <button
                         onClick={handleSimulateScan}
                         disabled={isVerifying}
-                        className="tw:px-5 tw:py-2.5 tw:rounded-full tw:bg-white tw:text-black tw:text-xs tw:font-semibold hover:tw:bg-zinc-200 tw:transition-colors tw:flex tw:items-center tw:gap-2 disabled:tw:opacity-60 tw:shadow-md"
+                        className="tw:px-5 tw:py-2.5 tw:rounded-full tw:bg-[#2b7fff] tw:text-white tw:text-xs tw:font-semibold hover:tw:bg-blue-600 tw:transition-colors tw:flex tw:items-center tw:gap-2 disabled:tw:opacity-60 tw:shadow-[0_0_20px_rgba(43,127,255,0.35)]"
+                        style={{ backgroundColor: '#2b7fff', border: 'none', color: '#ffffff' }}
                       >
                         {isVerifying ? (
                           <>
@@ -924,7 +949,8 @@ export default function DisplayLandingPage() {
                     <div className="tw:mt-6">
                       <Link
                         to="/access-portal"
-                        className="tw:px-5 tw:py-2.5 tw:rounded-full tw:bg-white tw:text-black tw:text-xs tw:font-semibold hover:tw:bg-zinc-200 tw:transition-colors tw:inline-block tw:shadow-md"
+                        className="tw:px-5 tw:py-2.5 tw:rounded-full tw:bg-[#2b7fff] tw:text-white tw:text-xs tw:font-semibold hover:tw:bg-blue-600 tw:transition-colors tw:inline-block tw:shadow-[0_0_20px_rgba(43,127,255,0.35)]"
+                        style={{ backgroundColor: '#2b7fff', color: '#ffffff' }}
                       >
                         Deploy DwarPal in Your Campus →
                       </Link>
@@ -986,7 +1012,14 @@ export default function DisplayLandingPage() {
                 >
                   <button
                     onClick={() => setOpenFaq(isOpen ? -1 : idx)}
-                    className="tw:w-full tw:p-6 tw:text-left tw:flex tw:items-center tw:justify-between tw:gap-4 hover:tw:bg-white/[0.05] tw:transition-colors"
+                    className="tw:w-full tw:p-6 tw:text-left tw:flex tw:items-center tw:justify-between tw:gap-4 tw:bg-transparent hover:tw:bg-white/[0.05] tw:transition-colors tw:text-white tw:cursor-pointer"
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'inherit',
+                      width: '100%',
+                      textAlign: 'left',
+                    }}
                   >
                     <div className="tw:flex tw:items-center tw:gap-4">
                       <span className="tw:text-sm tw:font-medium tw:text-[#9a9aa1]">
@@ -1145,10 +1178,10 @@ export default function DisplayLandingPage() {
             <div className="tw:mt-8 tw:flex tw:flex-wrap tw:items-center tw:justify-center tw:gap-3">
               <Link
                 to="/access-portal"
-                className="tw:px-6 tw:py-3 tw:rounded-full tw:text-xs tw:font-semibold tw:transition-all hover:tw:opacity-90 tw:shadow-xl"
+                className="tw:px-6 tw:py-3 tw:rounded-full tw:text-xs tw:font-semibold tw:transition-all hover:tw:scale-105 tw:shadow-[0_0_25px_rgba(43,127,255,0.45)]"
                 style={{
-                  backgroundColor: '#ffffff',
-                  color: '#000000',
+                  backgroundColor: '#2b7fff',
+                  color: '#ffffff',
                 }}
               >
                 Access Portal Now

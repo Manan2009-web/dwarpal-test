@@ -34,6 +34,14 @@ a {
   text-decoration: none;
 }
 
+button {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+}
+
 #root {
   min-height: 100vh;
   background: inherit;
