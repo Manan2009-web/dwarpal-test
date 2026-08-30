@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, lazy, Suspense } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
 import {
@@ -34,6 +34,8 @@ import {
   School,
   Terminal,
 } from 'lucide-react'
+
+const GhostFibers = lazy(() => import('./ui/GhostFibers'))
 
 // --- SELECTED WORK (MODULES) ---
 const SELECTED_WORK = [
@@ -243,54 +245,60 @@ export default function DisplayLandingPage() {
       }}
     >
       {/* ======================================================== */}
-      {/* BACKGROUND ATMOSPHERE (Grid, Ambient Spotlight & Noise)  */}
+      {/* BACKGROUND: GHOST FIBERS (React Bits) + AMBIENT GRID    */}
       {/* ======================================================== */}
       
-      {/* 1. Deep Radial Ambient Gradient */}
+      {/* 1. GhostFibers WebGL Fiber Simulation */}
+      <div className="tw:fixed tw:inset-0 tw:pointer-events-none tw:z-0 tw:w-full tw:h-full tw:overflow-hidden tw:opacity-90">
+        <Suspense fallback={null}>
+          <GhostFibers
+            lineColor="#140E35"
+            glowColor="#3437A0"
+            speed={0.2}
+            scale={2}
+            rotation={0}
+            rotationSpeed={0.25}
+            layers={4}
+            waveAmplitude={0.015}
+            waveFrequency={3}
+            waveSpeed={0.15}
+            layerSpeed={0.08}
+            twist={0.1}
+            twistFrequency={5}
+            twistSpeed={1.2}
+            lineFrequency={5}
+            lineSpacing={2}
+            lineSharpness={16}
+            glowFalloff={10}
+            glowIntensity={1.6}
+            brightness={2}
+            blueBoost={1.25}
+            vignette={0.8}
+            grain={0.05}
+            dpr={1}
+          />
+        </Suspense>
+      </div>
+
+      {/* 2. Top Center Subtle Ambient Vignette & Contrast Overlay */}
       <div 
         className="tw:fixed tw:inset-0 tw:pointer-events-none tw:z-0"
         style={{
-          background: 'radial-gradient(120% 120% at 50% 0%, #15151c 0%, #0c0c0f 40%, #09090b 100%)',
-        }}
-      />
-
-      {/* 2. Top Center Light Spotlight Flare */}
-      <div 
-        className="tw:fixed tw:top-[-20%] tw:left-1/2 tw:-translate-x-1/2 tw:w-[90vw] tw:max-w-[1000px] tw:h-[600px] tw:pointer-events-none tw:z-0"
-        style={{
-          background: 'radial-gradient(circle at 50% 20%, rgba(43, 127, 255, 0.18) 0%, rgba(99, 102, 241, 0.08) 35%, rgba(0, 0, 0, 0) 70%)',
-          filter: 'blur(100px)',
+          background: 'radial-gradient(ellipse 85% 60% at 50% 10%, rgba(9, 9, 11, 0.2) 0%, rgba(9, 9, 11, 0.75) 100%)',
         }}
       />
 
       {/* 3. Subtle Technical Grid Pattern Overlay with Radial Mask */}
       <div 
-        className="tw:fixed tw:inset-0 tw:pointer-events-none tw:z-0 tw:opacity-60"
+        className="tw:fixed tw:inset-0 tw:pointer-events-none tw:z-0 tw:opacity-40"
         style={{
           backgroundImage: `
             linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
             linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px)
           `,
           backgroundSize: '48px 48px',
-          maskImage: 'radial-gradient(ellipse 90% 70% at 50% 0%, #000 60%, transparent 100%)',
-          WebkitMaskImage: 'radial-gradient(ellipse 90% 70% at 50% 0%, #000 60%, transparent 100%)',
-        }}
-      />
-
-      {/* 4. Fine Dot Grid Mesh in Lower Sections */}
-      <div 
-        className="tw:fixed tw:inset-0 tw:pointer-events-none tw:z-0 tw:opacity-20"
-        style={{
-          backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.18) 1px, transparent 1px)',
-          backgroundSize: '24px 24px',
-        }}
-      />
-
-      {/* 5. Subtle Tactile Micro-Noise Texture */}
-      <div 
-        className="tw:fixed tw:inset-0 tw:pointer-events-none tw:z-0 tw:opacity-[0.035] tw:mix-blend-overlay"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+          maskImage: 'radial-gradient(ellipse 90% 70% at 50% 0%, #000 50%, transparent 100%)',
+          WebkitMaskImage: 'radial-gradient(ellipse 90% 70% at 50% 0%, #000 50%, transparent 100%)',
         }}
       />
 
