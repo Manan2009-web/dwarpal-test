@@ -18,7 +18,6 @@ import {
   Building,
   Radio,
   FileCheck,
-  Flame,
   Globe,
   Layers,
   Search,
@@ -36,179 +35,148 @@ import {
   Terminal,
 } from 'lucide-react'
 
-// --- SAMPLE DATA ---
-const MODULES = [
+// --- SELECTED WORK (MODULES) ---
+const SELECTED_WORK = [
   {
-    id: 'student-pass',
-    category: 'STUDENT PORTAL',
+    id: 'dynamic-pass',
+    category: 'Templates',
     year: '2026',
-    title: 'Dynamic Rolling QR Gatepass',
+    title: 'Guidy',
+    subtitle: 'Dynamic QR Gatepass Studio',
     tagline: 'Cryptographic anti-screenshot rotating token technology',
     description:
-      'Generates a live, self-refreshing dynamic QR token with animated security watermarks. Static screenshots are rendered immediately invalid at gate terminals.',
-    gradient: 'from-blue-500/20 via-cyan-500/10 to-transparent',
-    accentColor: '#3b82f6',
-    badge: 'ANTI-FORGERY',
-    metrics: ['< 5s Token Refresh', 'Zero Screenshot Leaks', 'Instant Push Alerts'],
-    previewType: 'qr',
+      'A minimal, high-speed mobile gatepass system built for students and hostel residents. Features live time-synchronized dynamic QR codes with animated micro-watermarks that instantly invalidate screenshots.',
+    badge: 'Framer',
+    link: '/student/login',
+    type: 'pass',
   },
   {
-    id: 'guard-terminal',
-    category: 'CHECKPOINT OPS',
+    id: 'optical-terminal',
+    category: 'Templates',
     year: '2026',
-    title: 'Sub-Second Optical Terminal',
-    tagline: 'Offline-first camera scanner interface for security officers',
+    title: 'Feature',
+    subtitle: 'Optical Guard Terminal',
+    tagline: 'Sub-second optical camera scanning & vehicle plate logging',
     description:
-      'Equips campus gatekeepers with sub-second camera scanning, automatic vehicle number plate logging, emergency manual student roll lookups, and offline sync.',
-    gradient: 'from-emerald-500/20 via-teal-500/10 to-transparent',
-    accentColor: '#10b981',
-    badge: 'SUB-SECOND SYNC',
-    metrics: ['340ms Verification', 'Offline-First PWA', 'License Plate Log'],
-    previewType: 'terminal',
+      'A clean, dark-themed checkpoint interface for campus security officers. Equipped with offline-first PWA caching, camera scanner reticle, vehicle plate lookup, and emergency manual roll search.',
+    badge: 'Framer',
+    link: '/security/login',
+    type: 'terminal',
   },
   {
-    id: 'faculty-desk',
-    category: 'ACADEMIC HIERARCHY',
+    id: 'approval-desk',
+    category: 'Templates',
     year: '2026',
-    title: 'Multi-Tier Approval Matrix',
-    tagline: 'Streamlined leave governance for Faculty, HODs & Wardens',
+    title: 'Refined',
+    subtitle: 'Faculty Leave Matrix',
+    tagline: 'Multi-tier hierarchy with instant parent SMS dispatch',
     description:
-      'Hierarchical approval workflows routed by student year, branch, and hostel block. Includes one-tap bulk approvals, proxy delegation, and automated parent notifications.',
-    gradient: 'from-purple-500/20 via-indigo-500/10 to-transparent',
-    accentColor: '#8b5cf6',
-    badge: 'AUTOMATED ROUTING',
-    metrics: ['1-Tap Review Desk', 'Parent SMS Sync', 'Customizable Rules'],
-    previewType: 'faculty',
+      'A streamlined governance dashboard for Faculty Advisors, HODs, Wardens, and Directors. 1-tap review queues, attendance context overlays, and automated parent communication.',
+    badge: 'Framer',
+    link: '/faculty/login',
+    type: 'hierarchy',
   },
   {
-    id: 'master-telemetry',
-    category: 'CAMPUS COMMAND',
+    id: 'telemetry-hub',
+    category: 'Templates',
     year: '2026',
-    title: 'Executive Telemetry & Audit Hub',
-    tagline: 'Real-time headcounts, curfew tracking and compliance logs',
+    title: 'Enroll',
+    subtitle: 'Campus Command & Telemetry',
+    tagline: 'Real-time population census, curfew tracking & audit logs',
     description:
-      'High-level visibility for Principals, Chairmen, and Security Chiefs. Track live in-campus vs out-of-campus headcounts, overdue return alerts, and export audit sheets.',
-    gradient: 'from-amber-500/20 via-orange-500/10 to-transparent',
-    accentColor: '#f59e0b',
-    badge: 'EXECUTIVE INTELLIGENCE',
-    metrics: ['Live Population Census', 'Overstay Radar', '1-Click Audit Export'],
-    previewType: 'analytics',
+      'Executive dashboard delivering live in-campus vs outpass headcounts, curfew violation radars, and one-click PDF/Excel compliance audit log exports for leadership.',
+    badge: 'Framer',
+    link: '/access-portal',
+    type: 'telemetry',
   },
 ]
 
+// --- FAQS ---
 const FAQS = [
   {
-    num: '01',
+    index: '(1)',
     q: 'How does the dynamic rotating QR token prevent pass sharing or screenshots?',
-    a: 'DwarPal gatepasses embed a time-synchronized cryptographic seed that continuously re-hashes the QR code every few seconds alongside an animated micro-watermark. When a student shows a static screenshot or recorded video, the gatekeeper terminal instantly detects the expired signature and sounds an alert.',
+    a: 'DwarPal gatepasses use a time-synchronized cryptographic hash that updates every few seconds with an animated security watermark. A static screenshot or screen recording will fail signature verification immediately at the gate checkpoint scanner.',
   },
   {
-    num: '02',
-    q: 'What happens if campus Wi-Fi or cellular networks fail at the gate checkpoint?',
-    a: 'The DwarPal Gate Terminal is built as an offline-first Progressive Web Application with local cryptographically-verifiable token caching. It continues scanning, verifying valid student passes, and logging timestamps locally without interruption, auto-syncing the audit trail to the cloud once connectivity resumes.',
+    index: '(2)',
+    q: 'What happens if the campus Wi-Fi or cellular network goes offline at the gate?',
+    a: 'The gate terminal functions as an offline-first Progressive Web Application with local cryptographically-verifiable token caching. It verifies passes offline with sub-second speed and automatically syncs timestamps to the cloud once connectivity resumes.',
   },
   {
-    num: '03',
-    q: 'Can parents receive automated alerts when a student exits or enters campus?',
-    a: 'Yes. As soon as the optical terminal registers an exit or entry scan, DwarPal’s event engine dispatches automated push notifications, SMS alerts, and email notifications to registered parent contact numbers with precise timestamps.',
+    index: '(3)',
+    q: 'Can parents receive automated notifications when a student exits or enters?',
+    a: 'Yes. As soon as the security officer scans the pass at any gate checkpoint, DwarPal’s event engine dispatches automated push notifications and carrier SMS alerts to registered parent mobile numbers.',
   },
   {
-    num: '04',
-    q: 'How are faculty advisors, HODs, and hostel wardens notified of leave requests?',
-    a: 'When a student requests a day pass or night outpass, it routes automatically to the assigned Class Coordinator or Hostel Warden based on the institution’s configured approval policy. Faculty receive instant push & web notifications and can approve in 1-tap with full academic attendance context.',
-  },
-  {
-    num: '05',
-    q: 'How fast can an institution or residential community deploy DwarPal?',
-    a: 'A campus can be fully configured in less than 24 hours. You can bulk-import students and faculty via Excel/CSV or enable instant self-service enrollment at the dedicated registration portal (/student/register).',
-  },
-  {
-    num: '06',
-    q: 'Is DwarPal compatible with existing vehicle boom barriers and biometric gates?',
-    a: 'Yes. DwarPal offers REST and Webhook APIs for integrating with automated RFID boom barriers, speed gates, turnstiles, and existing campus ERP databases.',
+    index: '(4)',
+    q: 'How long does it take to deploy DwarPal in a university or gated society?',
+    a: 'Deployment is fast and frictionless. You can bulk-import students, faculty, and security personnel via Excel/CSV or enable self-service onboarding at the student registration portal in under 24 hours.',
   },
 ]
 
+// --- TESTIMONIALS ---
 const TESTIMONIALS = [
   {
-    quote:
-      'DwarPal eliminated our paper entry registers and weekend gate bottlenecks completely. We processed over 4,200 hostel students during Diwali leave in record time without a single discrepancy.',
-    author: 'Col. Rajesh Sharma (Retd.)',
-    role: 'Chief Security Officer, Apex Institute of Technology',
-    tag: 'Campus Security',
-    initials: 'RS',
+    name: 'Emily T.',
+    handle: '@kuipermarc',
+    role: 'Chief Security Officer',
+    text: '“DwarPal its speed and reliability knows no bounds! The optical scanner terminal handled over 4,200 student festival exits with zero gate congestion and flawless audit accuracy.”',
   },
   {
-    quote:
-      'The multi-tier approval hierarchy is brilliant. Faculty advisors get leave requests categorized by urgency, and parents receive instant automated SMS updates when students check out.',
-    author: 'Dr. Sunita Deshmukh',
-    role: 'Dean of Student Affairs, MET University',
-    tag: 'Academic Administration',
-    initials: 'SD',
+    name: 'Chris L.',
+    handle: '@chris_campus',
+    role: 'Dean of Student Affairs',
+    text: '“Working with DwarPal was a breeze. Faculty advisors review leave requests in one tap, and parents love receiving instant verified checkout alerts on their phones.”',
   },
   {
-    quote:
-      'The dynamic QR code is a lifesaver. No more physical passes to get signed by three different professors. I can apply on my phone in 30 seconds and check out smoothly at the main gate.',
-    author: 'Ananya Verma',
-    role: 'Student Council President & 4th Year Engg.',
-    tag: 'Student Experience',
-    initials: 'AV',
+    name: 'Sophie M.',
+    handle: '@sophiem_warden',
+    role: 'Senior Hostel Warden',
+    text: '“It transformed our night curfew and leave logging completely. The real-time headcount telemetry gives our team total visibility and peace of mind every single night.”',
   },
   {
-    quote:
-      'Having offline scanner capability at the remote back-gate where cellular reception is spotty made DwarPal the only system that actually worked flawlessly under real conditions.',
-    author: 'Vikramjit Singh',
-    role: 'Facility & Operations Director, Global City Housing',
-    tag: 'Operations',
-    initials: 'VS',
+    name: 'David K.',
+    handle: '@david_techlead',
+    role: 'Director of Campus Infrastructure',
+    text: '“DwarPal its design work is always fresh and innovative. The offline-first architecture ensured 100% uptime even when severe weather knocked out our campus optical fiber.”',
   },
 ]
 
-const INSIGHTS = [
+// --- LATEST UPDATES ---
+const UPDATES = [
   {
-    category: 'SECURITY PROTOCOL',
-    date: 'Aug 2026',
-    readTime: '4 min read',
-    title: 'Zero-Trust Gatekeeping: How Dynamic Cryptographic Tokens Defeat Pass Forgery',
-    description:
-      'Why traditional static QR codes fail at campus gates and how rotating time-bound micro-watermarks restore institutional integrity.',
+    author: 'Mira Caldwell',
+    date: 'Jul 3, 2026',
+    title: 'How to build a zero-trust campus gatekeeping protocol',
+    excerpt: 'Why static QR passes fail in real campus conditions and how rotating cryptographic seeds restore total access security.',
   },
   {
-    category: 'INFRASTRUCTURE',
-    date: 'Aug 2026',
-    readTime: '3 min read',
-    title: 'Designing Offline-First Scanner PWAs for 100% Gate Uptime',
-    description:
-      'Architecting local key validation and conflict-free replicated data types for high-traffic checkpoints during network blackouts.',
-  },
-  {
-    category: 'CAMPUS AUTOMATION',
-    date: 'Jul 2026',
-    readTime: '5 min read',
-    title: 'Eliminating the Paper Trail: How 1-Tap Faculty Leave Approvals Save 300+ Hours',
-    description:
-      'A case study on streamlining approval hierarchies, reducing hostel administration overhead, and building parent trust.',
+    author: 'Celeste Holloway',
+    date: 'Jun 1, 2026',
+    title: 'Designing offline-first terminal scanners for 100% gate uptime',
+    excerpt: 'Architecting local cryptographic verification and conflict-free replicated data sync for high-traffic checkpoints.',
   },
 ]
 
 export default function DisplayLandingPage() {
   const navigate = useNavigate()
   const [openFaq, setOpenFaq] = useState(0)
-  const [activeTab, setActiveTab] = useState('student') // 'student', 'guard', 'parent'
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [logoClicks, setLogoClicks] = useState(0)
 
-  // Interactive sandbox state
+  // Interactive Live Demo Sandbox State
   const [dynamicCode, setDynamicCode] = useState('DP-9482-X9')
   const [qrTimer, setQrTimer] = useState(15)
   const [isVerifying, setIsVerifying] = useState(false)
   const [scanResult, setScanResult] = useState(null)
+  const [activeSandboxTab, setActiveSandboxTab] = useState('student') // 'student', 'terminal', 'alerts'
   const [alertLogs, setAlertLogs] = useState([
-    { id: 1, time: '18:42:10', text: 'Exit pass #DP-8921 scanned at North Gate terminal', status: 'VERIFIED' },
-    { id: 2, time: '18:42:11', text: 'Automated SMS dispatched to parent contact (+91 98*** **412)', status: 'SENT' },
+    { id: 1, time: '19:14:02', text: 'Exit pass #DP-8921 scanned at North Gate terminal', status: 'VERIFIED' },
+    { id: 2, time: '19:14:03', text: 'Automated SMS dispatched to parent contact (+91 98*** **412)', status: 'DISPATCHED' },
   ])
 
-  // Rolling dynamic token simulation
+  // Rolling dynamic token countdown
   useEffect(() => {
     const interval = setInterval(() => {
       setQrTimer((prev) => {
@@ -234,7 +202,7 @@ export default function DisplayLandingPage() {
         passId: dynamicCode,
         destination: 'City Center (Library Study)',
         validUntil: 'Today, 21:30',
-        vehicle: 'MH-12-DE-4419 (Two Wheeler)',
+        vehicle: 'MH-12-DE-4419',
         timestamp: now,
       }
       setScanResult(newScan)
@@ -242,7 +210,7 @@ export default function DisplayLandingPage() {
         {
           id: Date.now(),
           time: now,
-          text: `Pass #${dynamicCode} scanned for Aarav Patel (CS-2023-042)`,
+          text: `Pass #${dynamicCode} verified for Aarav Patel (CS-2023-042)`,
           status: 'VERIFIED',
         },
         {
@@ -251,9 +219,9 @@ export default function DisplayLandingPage() {
           text: `Parent SMS & Push alert dispatched for Aarav Patel`,
           status: 'DISPATCHED',
         },
-        ...prev.slice(0, 4),
+        ...prev.slice(0, 3),
       ])
-    }, 450)
+    }, 380)
   }
 
   const handleLogoClick = () => {
@@ -267,132 +235,143 @@ export default function DisplayLandingPage() {
   }
 
   return (
-    <div className="tw:min-h-screen tw:w-full tw:bg-[#09090b] tw:text-zinc-100 tw:font-sans tw:selection:bg-blue-600 tw:selection:text-white tw:relative tw:overflow-x-hidden">
-      {/* Background Subtle Ambient Glows */}
-      <div className="tw:fixed tw:top-[-10%] tw:left-1/2 tw:-translate-x-1/2 tw:w-[90vw] tw:max-w-[1100px] tw:h-[500px] tw:bg-gradient-to-b tw:from-blue-600/[0.08] tw:via-indigo-600/[0.04] tw:to-transparent tw:rounded-full tw:blur-[140px] tw:pointer-events-none tw:z-0" />
-      <div className="tw:fixed tw:bottom-[-20%] tw:right-[-10%] tw:w-[60vw] tw:max-w-[800px] tw:h-[450px] tw:bg-gradient-to-tl tw:from-emerald-600/[0.05] tw:to-transparent tw:rounded-full tw:blur-[160px] tw:pointer-events-none tw:z-0" />
-
+    <div
+      className="tw:min-h-screen tw:w-full tw:text-[#ffffff] tw:selection:bg-[#2b7fff] tw:selection:text-white"
+      style={{
+        backgroundColor: '#000000',
+        fontFamily: '"Geist", "Inter Display", "Mona Sans Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      }}
+    >
       {/* ======================================================== */}
-      {/* 1. FLOATING PILL NAVBAR (Display Framer Style)           */}
+      {/* FLOATING CORNER BADGE ("Use for free" Display Style)     */}
       {/* ======================================================== */}
-      <div className="tw:fixed tw:top-5 tw:inset-x-0 tw:z-50 tw:flex tw:justify-center tw:px-4 tw:pointer-events-none">
-        <nav className="tw:w-full tw:max-w-4xl tw:bg-zinc-950/80 tw:backdrop-blur-xl tw:border tw:border-zinc-800/80 tw:shadow-[0_20px_50px_rgba(0,0,0,0.6)] tw:rounded-full tw:px-4 tw:py-2 tw:flex tw:items-center tw:justify-between tw:pointer-events-auto tw:transition-all">
-          {/* Logo */}
-          <div
-            onClick={handleLogoClick}
-            className="tw:flex tw:items-center tw:gap-2.5 tw:cursor-pointer tw:select-none tw:pl-2"
-          >
-            <div className="tw:w-7 tw:h-7 tw:rounded-full tw:bg-gradient-to-tr tw:from-blue-600 tw:to-cyan-400 tw:flex tw:items-center tw:justify-center tw:shadow-md">
-              <Shield className="tw:w-4 tw:h-4 tw:text-white" />
-            </div>
-            <div className="tw:flex tw:flex-col">
-              <span className="tw:text-sm tw:font-bold tw:tracking-wider tw:text-white tw:leading-none">
-                DwarPal
-              </span>
-              <span className="tw:text-[9px] tw:font-mono tw:text-zinc-400 tw:tracking-widest tw:uppercase">
-                Security v2.4
-              </span>
-            </div>
-          </div>
-
-          {/* Desktop Navigation Links */}
-          <div className="tw:hidden tw:md:tw:flex tw:items-center tw:gap-6 tw:text-xs tw:font-medium tw:text-zinc-300">
-            <a href="#modules" className="hover:tw:text-white tw:transition-colors">
-              Modules
-            </a>
-            <a href="#sandbox" className="hover:tw:text-white tw:transition-colors">
-              Live Demo
-            </a>
-            <a href="#metrics" className="hover:tw:text-white tw:transition-colors">
-              Architecture
-            </a>
-            <a href="#testimonials" className="hover:tw:text-white tw:transition-colors">
-              Testimonials
-            </a>
-            <a href="#faq" className="hover:tw:text-white tw:transition-colors">
-              FAQ
-            </a>
-          </div>
-
-          {/* Action CTAs */}
-          <div className="tw:flex tw:items-center tw:gap-2">
-            {/* Quick Switch to Classic Dotted */}
-            <Link
-              to="/"
-              className="tw:hidden tw:sm:tw:flex tw:items-center tw:gap-1.5 tw:text-[11px] tw:font-mono tw:text-zinc-400 hover:tw:text-zinc-200 tw:bg-zinc-900/90 hover:tw:bg-zinc-800 tw:border tw:border-zinc-800 tw:px-3 tw:py-1.5 tw:rounded-full tw:transition-all"
-              title="Switch to original Dotted Canvas Landing"
-            >
-              <span className="tw:w-1.5 tw:h-1.5 tw:rounded-full tw:bg-blue-400" />
-              <span>Dotted Mode</span>
-            </Link>
-
-            {/* Launch App Button */}
-            <Link
-              to="/access-portal"
-              className="tw:flex tw:items-center tw:gap-1.5 tw:text-xs tw:font-semibold tw:bg-white hover:tw:bg-zinc-200 tw:text-zinc-950 tw:px-4 tw:py-1.5 tw:rounded-full tw:shadow-md hover:tw:shadow-white/10 tw:transition-all tw:cursor-pointer"
-            >
-              <span>Access Portal</span>
-              <ArrowRight className="tw:w-3.5 tw:h-3.5" />
-            </Link>
-
-            {/* Mobile Hamburger */}
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="tw:flex tw:md:tw:hidden tw:p-1.5 tw:text-zinc-400 hover:tw:text-white tw:rounded-lg"
-            >
-              {mobileMenuOpen ? <X className="tw:w-5 tw:h-5" /> : <Menu className="tw:w-5 tw:h-5" />}
-            </button>
-          </div>
-        </nav>
+      <div className="tw:fixed tw:bottom-5 tw:right-5 tw:z-50 tw:pointer-events-auto">
+        <Link
+          to="/"
+          className="tw:flex tw:items-center tw:gap-2 tw:px-4 tw:py-2 tw:rounded-full tw:text-xs tw:font-medium tw:transition-all tw:shadow-2xl"
+          style={{
+            backgroundColor: '#1c1c1f',
+            border: '1px solid rgba(255, 255, 255, 0.12)',
+            color: '#ffffff',
+          }}
+          title="Switch to original interactive Dotted Canvas Landing"
+        >
+          <span className="tw:w-2 tw:h-2 tw:rounded-full tw:bg-[#2b7fff] tw:animate-pulse" />
+          <span>Dotted Mode</span>
+        </Link>
       </div>
 
-      {/* Mobile Drawer */}
+      {/* ======================================================== */}
+      {/* 1. HEADER (Exact Display Framer Navbar)                  */}
+      {/* ======================================================== */}
+      <header className="tw:w-full tw:max-w-5xl tw:mx-auto tw:px-6 tw:py-8 tw:flex tw:items-center tw:justify-between tw:relative tw:z-40">
+        
+        {/* Brand / Logo */}
+        <div
+          onClick={handleLogoClick}
+          className="tw:flex tw:items-center tw:gap-2 tw:cursor-pointer tw:select-none"
+        >
+          <span className="tw:text-lg tw:font-bold tw:tracking-tight tw:text-[#ffffff]">
+            DwarPal
+          </span>
+        </div>
+
+        {/* Center Desktop Links */}
+        <nav className="tw:hidden tw:md:tw:flex tw:items-center tw:gap-8 tw:text-[13px] tw:font-medium tw:text-[#9a9aa1]">
+          <a href="#work" className="hover:tw:text-[#ffffff] tw:transition-colors">
+            Work
+          </a>
+          <a href="#demo" className="hover:tw:text-[#ffffff] tw:transition-colors">
+            Live Demo
+          </a>
+          <a href="#about" className="hover:tw:text-[#ffffff] tw:transition-colors">
+            About
+          </a>
+          <a href="#updates" className="hover:tw:text-[#ffffff] tw:transition-colors">
+            Blog
+          </a>
+          <a href="#faq" className="hover:tw:text-[#ffffff] tw:transition-colors">
+            FAQ
+          </a>
+          <a href="#contact" className="hover:tw:text-[#ffffff] tw:transition-colors">
+            Contact
+          </a>
+        </nav>
+
+        {/* Right CTA Button */}
+        <div className="tw:flex tw:items-center tw:gap-3">
+          <Link
+            to="/access-portal"
+            className="tw:px-4 tw:py-2 tw:rounded-full tw:text-xs tw:font-semibold tw:transition-all hover:tw:opacity-90"
+            style={{
+              backgroundColor: '#ffffff',
+              color: '#000000',
+            }}
+          >
+            Access Portal
+          </Link>
+
+          {/* Mobile menu trigger */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="tw:flex tw:md:tw:hidden tw:p-2 tw:text-[#9a9aa1] hover:tw:text-[#ffffff]"
+          >
+            {mobileMenuOpen ? <X className="tw:w-5 tw:h-5" /> : <Menu className="tw:w-5 tw:h-5" />}
+          </button>
+        </div>
+      </header>
+
+      {/* Mobile Drawer Sheet */}
       <AnimatePresence>
         {mobileMenuOpen && (
           <motion.div
-            initial={{ opacity: 0, y: -20 }}
+            initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="tw:fixed tw:top-20 tw:inset-x-4 tw:z-40 tw:bg-zinc-900/95 tw:backdrop-blur-2xl tw:border tw:border-zinc-800 tw:rounded-3xl tw:p-6 tw:shadow-2xl tw:flex tw:flex-col tw:gap-4 tw:md:tw:hidden"
+            exit={{ opacity: 0, y: -10 }}
+            className="tw:fixed tw:inset-x-4 tw:top-20 tw:z-50 tw:p-6 tw:rounded-2xl tw:flex tw:flex-col tw:gap-4 tw:md:tw:hidden"
+            style={{
+              backgroundColor: '#141417',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+            }}
           >
             <a
-              href="#modules"
+              href="#work"
               onClick={() => setMobileMenuOpen(false)}
-              className="tw:text-sm tw:font-medium tw:text-zinc-200 tw:py-2 tw:border-b tw:border-zinc-800/60"
+              className="tw:text-sm tw:font-medium tw:text-[#ffffff] tw:py-2"
             >
-              Modules & Features
+              Work
             </a>
             <a
-              href="#sandbox"
+              href="#demo"
               onClick={() => setMobileMenuOpen(false)}
-              className="tw:text-sm tw:font-medium tw:text-zinc-200 tw:py-2 tw:border-b tw:border-zinc-800/60"
+              className="tw:text-sm tw:font-medium tw:text-[#ffffff] tw:py-2"
             >
-              Interactive Sandbox Demo
-            </a>
-            <a
-              href="#metrics"
-              onClick={() => setMobileMenuOpen(false)}
-              className="tw:text-sm tw:font-medium tw:text-zinc-200 tw:py-2 tw:border-b tw:border-zinc-800/60"
-            >
-              System Architecture
+              Live Demo
             </a>
             <a
               href="#faq"
               onClick={() => setMobileMenuOpen(false)}
-              className="tw:text-sm tw:font-medium tw:text-zinc-200 tw:py-2 tw:border-b tw:border-zinc-800/60"
+              className="tw:text-sm tw:font-medium tw:text-[#ffffff] tw:py-2"
             >
-              Frequently Asked Questions
+              FAQ
+            </a>
+            <a
+              href="#contact"
+              onClick={() => setMobileMenuOpen(false)}
+              className="tw:text-sm tw:font-medium tw:text-[#ffffff] tw:py-2"
+            >
+              Contact
             </a>
             <div className="tw:pt-2 tw:flex tw:flex-col tw:gap-2">
               <Link
                 to="/access-portal"
-                className="tw:w-full tw:text-center tw:py-3 tw:bg-blue-600 tw:text-white tw:font-semibold tw:rounded-xl tw:text-sm"
+                className="tw:w-full tw:text-center tw:py-2.5 tw:rounded-full tw:bg-white tw:text-black tw:text-xs tw:font-semibold"
               >
-                Launch Access Portal
+                Access Portal
               </Link>
               <Link
                 to="/"
-                className="tw:w-full tw:text-center tw:py-2.5 tw:bg-zinc-800 tw:text-zinc-300 tw:font-medium tw:rounded-xl tw:text-xs"
+                className="tw:w-full tw:text-center tw:py-2.5 tw:rounded-full tw:bg-[#1c1c1f] tw:text-[#9a9aa1] tw:text-xs"
               >
                 Switch to Dotted Canvas View
               </Link>
@@ -401,570 +380,489 @@ export default function DisplayLandingPage() {
         )}
       </AnimatePresence>
 
-      {/* ======================================================== */}
-      {/* 2. HERO SECTION (Clean, Minimalist, High-Impact)         */}
-      {/* ======================================================== */}
-      <section className="tw:relative tw:pt-36 tw:pb-20 tw:px-6 tw:max-w-6xl tw:mx-auto tw:flex tw:flex-col tw:items-center tw:text-center tw:z-10">
+      <main className="tw:w-full tw:max-w-5xl tw:mx-auto tw:px-6 tw:space-y-24 tw:md:tw:space-y-32 tw:pb-24">
         
-        {/* Status Pill Badge */}
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="tw:inline-flex tw:items-center tw:gap-2.5 tw:px-4 tw:py-1.5 tw:rounded-full tw:bg-zinc-900/90 tw:border tw:border-zinc-800/90 tw:shadow-inner tw:mb-8"
-        >
-          <span className="tw:relative tw:flex tw:h-2 tw:w-2">
-            <span className="tw:animate-ping tw:absolute tw:inline-flex tw:h-full tw:w-full tw:rounded-full tw:bg-emerald-400 tw:opacity-75"></span>
-            <span className="tw:relative tw:inline-flex tw:rounded-full tw:h-2 tw:w-2 tw:bg-emerald-500"></span>
-          </span>
-          <span className="tw:text-[11px] tw:font-mono tw:tracking-widest tw:text-zinc-300 tw:uppercase">
-            2026 ZERO-TRUST ACCESS PROTOCOL
-          </span>
-        </motion.div>
-
-        {/* Hero Title */}
-        <motion.h1
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.1 }}
-          className="tw:text-4xl tw:sm:tw:text-6xl tw:md:tw:text-7xl tw:font-bold tw:tracking-tight tw:text-white tw:max-w-4xl tw:leading-[1.1]"
-        >
-          The Intelligent Gatekeeper for Modern Institutions.
-        </motion.h1>
-
-        {/* Hero Subtitle */}
-        <motion.p
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
-          className="tw:mt-6 tw:text-base tw:sm:tw:text-lg tw:md:tw:text-xl tw:text-zinc-400 tw:max-w-2xl tw:leading-relaxed tw:font-normal"
-        >
-          Replace fragile paper registers and static passes with cryptographically signed rotating QR tokens, sub-second optical terminals, and multi-tier leave approval intelligence.
-        </motion.p>
-
-        {/* Hero CTAs */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.3 }}
-          className="tw:mt-10 tw:flex tw:flex-wrap tw:items-center tw:justify-center tw:gap-4"
-        >
-          <Link
-            to="/access-portal"
-            className="tw:px-8 tw:py-3.5 tw:rounded-full tw:bg-white hover:tw:bg-zinc-200 tw:text-zinc-950 tw:font-semibold tw:text-sm tw:shadow-lg tw:shadow-white/10 tw:transition-all tw:flex tw:items-center tw:gap-2 tw:group"
-          >
-            <span>Launch Access Workspace</span>
-            <ArrowRight className="tw:w-4 tw:h-4 group-hover:tw:translate-x-1 tw:transition-transform" />
-          </Link>
-
-          <a
-            href="#sandbox"
-            className="tw:px-7 tw:py-3.5 tw:rounded-full tw:bg-zinc-900/90 hover:tw:bg-zinc-800 tw:text-zinc-200 tw:border tw:border-zinc-800 tw:font-medium tw:text-sm tw:transition-all tw:flex tw:items-center tw:gap-2"
-          >
-            <Sparkles className="tw:w-4 tw:h-4 tw:text-blue-400" />
-            <span>Interactive Simulator</span>
-          </a>
-
-          <Link
-            to="/student/register"
-            className="tw:px-6 tw:py-3.5 tw:rounded-full tw:bg-zinc-950 tw:text-zinc-400 hover:tw:text-white tw:border tw:border-zinc-800/80 tw:font-mono tw:text-xs tw:tracking-wider tw:transition-all"
-          >
-            STUDENT ENROLLMENT →
-          </Link>
-        </motion.div>
-
         {/* ======================================================== */}
-        {/* 3. HERO QUICK-CARDS (Display Framer 3-Column Style)     */}
+        {/* 2. HERO SECTION (Exact Display Framer Layout)            */}
         {/* ======================================================== */}
-        <div className="tw:mt-16 tw:w-full tw:grid tw:grid-cols-1 tw:md:tw:grid-cols-3 tw:gap-4 tw:text-left">
+        <section className="tw:pt-12 tw:md:tw:pt-20">
           
-          <div className="tw:p-6 tw:rounded-2xl tw:bg-zinc-900/40 tw:border tw:border-zinc-800/70 tw:backdrop-blur-sm hover:tw:border-zinc-700/80 tw:transition-all tw:group">
-            <div className="tw:w-9 tw:h-9 tw:rounded-xl tw:bg-blue-500/10 tw:border tw:border-blue-500/20 tw:flex tw:items-center tw:justify-center tw:text-blue-400 tw:mb-4">
-              <QrCode className="tw:w-5 tw:h-5" />
-            </div>
-            <h3 className="tw:text-base tw:font-semibold tw:text-white group-hover:tw:text-blue-300 tw:transition-colors">
-              Dynamic QR Passes
-            </h3>
-            <p className="tw:mt-2 tw:text-xs tw:text-zinc-400 tw:leading-relaxed">
-              Cryptographic rolling tokens refreshing every few seconds with dynamic watermarks. Completely eliminates pass forgery and screenshot reuse.
-            </p>
+          {/* Eyebrow Pill Badge */}
+          <div className="tw:inline-flex tw:items-center tw:gap-2 tw:px-3 tw:py-1 tw:rounded-full tw:mb-6"
+            style={{
+              backgroundColor: '#141417',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              color: '#9a9aa1',
+              fontSize: '12px',
+            }}
+          >
+            <span className="tw:w-1.5 tw:h-1.5 tw:rounded-full tw:bg-emerald-400 tw:animate-pulse" />
+            <span>Open for campuses</span>
           </div>
 
-          <div className="tw:p-6 tw:rounded-2xl tw:bg-zinc-900/40 tw:border tw:border-zinc-800/70 tw:backdrop-blur-sm hover:tw:border-zinc-700/80 tw:transition-all tw:group">
-            <div className="tw:w-9 tw:h-9 tw:rounded-xl tw:bg-emerald-500/10 tw:border tw:border-emerald-500/20 tw:flex tw:items-center tw:justify-center tw:text-emerald-400 tw:mb-4">
-              <Zap className="tw:w-5 tw:h-5" />
-            </div>
-            <h3 className="tw:text-base tw:font-semibold tw:text-white group-hover:tw:text-emerald-300 tw:transition-colors">
-              Sub-Second Terminal
-            </h3>
-            <p className="tw:mt-2 tw:text-xs tw:text-zinc-400 tw:leading-relaxed">
-              Offline-first optical scanner for gate officers with vehicle registration verification, camera feeds, and automated cloud sync.
-            </p>
-          </div>
+          {/* Big Hero Title */}
+          <h1 className="tw:text-4xl tw:sm:tw:text-6xl tw:md:tw:text-7xl tw:font-bold tw:tracking-tight tw:text-[#ffffff] tw:leading-[1.08] tw:max-w-3xl">
+            Digital Gatekeeper
+          </h1>
 
-          <div className="tw:p-6 tw:rounded-2xl tw:bg-zinc-900/40 tw:border tw:border-zinc-800/70 tw:backdrop-blur-sm hover:tw:border-zinc-700/80 tw:transition-all tw:group">
-            <div className="tw:w-9 tw:h-9 tw:rounded-xl tw:bg-purple-500/10 tw:border tw:border-purple-500/20 tw:flex tw:items-center tw:justify-center tw:text-purple-400 tw:mb-4">
-              <Layers className="tw:w-5 tw:h-5" />
-            </div>
-            <h3 className="tw:text-base tw:font-semibold tw:text-white group-hover:tw:text-purple-300 tw:transition-colors">
-              Multi-Tier Approvals
-            </h3>
-            <p className="tw:mt-2 tw:text-xs tw:text-zinc-400 tw:leading-relaxed">
-              Automated hierarchical workflow routing requests from Faculty Advisors to HODs and Wardens, with instant parent SMS updates.
-            </p>
-          </div>
-
-        </div>
-      </section>
-
-      {/* ======================================================== */}
-      {/* 4. SELECTED MODULES SHOWCASE (Display Bento Grid)        */}
-      {/* ======================================================== */}
-      <section id="modules" className="tw:py-20 tw:px-6 tw:max-w-6xl tw:mx-auto tw:relative tw:z-10">
-        
-        {/* Section Header */}
-        <div className="tw:flex tw:flex-col tw:md:tw:flex-row tw:md:tw:items-end tw:justify-between tw:mb-12 tw:gap-4">
-          <div>
-            <div className="tw:text-xs tw:font-mono tw:tracking-widest tw:text-blue-400 tw:uppercase tw:mb-2">
-              CORE SYSTEM ARCHITECTURE
-            </div>
-            <h2 className="tw:text-3xl tw:sm:tw:text-4xl tw:font-bold tw:tracking-tight tw:text-white">
-              Selected Modules
-            </h2>
-          </div>
-          <p className="tw:text-xs tw:text-zinc-400 tw:max-w-md">
-            Purpose-built interfaces tailored for students, checkpoint security officers, academic deans, and institutional leadership.
+          {/* Hero Subheadline */}
+          <p className="tw:mt-6 tw:text-base tw:sm:tw:text-lg tw:md:tw:text-xl tw:text-[#9a9aa1] tw:max-w-xl tw:leading-relaxed">
+            An intelligent digital security and campus access management platform making institutions safe.
           </p>
-        </div>
 
-        {/* Modules Grid */}
-        <div className="tw:grid tw:grid-cols-1 tw:md:tw:grid-cols-2 tw:gap-8">
-          {MODULES.map((mod, idx) => (
-            <motion.div
-              key={mod.id}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: idx * 0.1 }}
-              className="tw:group tw:rounded-3xl tw:bg-zinc-950 tw:border tw:border-zinc-800/80 hover:tw:border-zinc-700 tw:overflow-hidden tw:flex tw:flex-col tw:transition-all tw:shadow-xl hover:tw:shadow-2xl"
-            >
-              {/* Card Preview Window */}
-              <div className={`tw:h-64 tw:sm:tw:h-72 tw:w-full tw:bg-gradient-to-br ${mod.gradient} tw:border-b tw:border-zinc-800/60 tw:p-6 tw:relative tw:flex tw:items-center tw:justify-center tw:overflow-hidden`}>
-                
-                {/* Background Ambient Grid */}
-                <div className="tw:absolute tw:inset-0 tw:bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:16px_16px] tw:opacity-30" />
-
-                {/* Badge */}
-                <div className="tw:absolute tw:top-4 tw:left-4 tw:px-3 tw:py-1 tw:rounded-full tw:bg-zinc-900/90 tw:border tw:border-zinc-700/60 tw:text-[10px] tw:font-mono tw:tracking-wider tw:text-zinc-300 tw:z-10">
-                  {mod.category} · {mod.year}
-                </div>
-
-                {/* Module Mockup Displays */}
-                {mod.previewType === 'qr' && (
-                  <div className="tw:w-64 tw:bg-zinc-900/90 tw:backdrop-blur-md tw:border tw:border-blue-500/30 tw:rounded-2xl tw:p-4 tw:shadow-2xl tw:relative tw:z-10 tw:transform group-hover:tw:scale-105 tw:transition-transform">
-                    <div className="tw:flex tw:items-center tw:justify-between tw:mb-3">
-                      <span className="tw:text-[10px] tw:font-mono tw:text-blue-400 tw:font-bold">ACTIVE GATEPASS</span>
-                      <span className="tw:px-2 tw:py-0.5 tw:rounded-full tw:bg-emerald-500/20 tw:text-emerald-400 tw:text-[9px] tw:font-mono">VALID</span>
-                    </div>
-                    <div className="tw:bg-white tw:p-3 tw:rounded-xl tw:flex tw:flex-col tw:items-center tw:justify-center">
-                      <div className="tw:w-28 tw:h-28 tw:bg-zinc-950 tw:rounded-lg tw:flex tw:items-center tw:justify-center tw:relative tw:overflow-hidden">
-                        <QrCode className="tw:w-20 tw:h-20 tw:text-white" />
-                        <div className="tw:absolute tw:inset-x-0 tw:h-1 tw:bg-blue-400 tw:shadow-[0_0_8px_#38bdf8] tw:animate-pulse" />
-                      </div>
-                      <span className="tw:text-[10px] tw:font-mono tw:text-zinc-800 tw:font-bold tw:mt-2">
-                        {dynamicCode}
-                      </span>
-                    </div>
-                    <div className="tw:mt-2.5 tw:flex tw:justify-between tw:text-[10px] tw:text-zinc-400 tw:font-mono">
-                      <span>Syncing in {qrTimer}s</span>
-                      <span className="tw:text-blue-400">Hostel Outpass</span>
-                    </div>
-                  </div>
-                )}
-
-                {mod.previewType === 'terminal' && (
-                  <div className="tw:w-72 tw:bg-zinc-900/90 tw:backdrop-blur-md tw:border tw:border-emerald-500/30 tw:rounded-2xl tw:p-4 tw:shadow-2xl tw:relative tw:z-10 tw:transform group-hover:tw:scale-105 tw:transition-transform">
-                    <div className="tw:flex tw:items-center tw:justify-between tw:mb-2">
-                      <div className="tw:flex tw:items-center tw:gap-1.5">
-                        <span className="tw:w-2 tw:h-2 tw:rounded-full tw:bg-emerald-400 tw:animate-pulse" />
-                        <span className="tw:text-[10px] tw:font-mono tw:text-zinc-300">OPTICAL SCANNER READY</span>
-                      </div>
-                      <span className="tw:text-[9px] tw:font-mono tw:text-zinc-500">GATE-01</span>
-                    </div>
-                    <div className="tw:h-28 tw:rounded-xl tw:bg-black/60 tw:border tw:border-zinc-800 tw:relative tw:flex tw:items-center tw:justify-center">
-                      <div className="tw:w-20 tw:h-20 tw:border-2 tw:border-emerald-400/50 tw:border-dashed tw:rounded-lg tw:flex tw:items-center tw:justify-center">
-                        <CheckCircle2 className="tw:w-8 tw:h-8 tw:text-emerald-400" />
-                      </div>
-                      <div className="tw:absolute tw:bottom-2 tw:inset-x-2 tw:bg-emerald-950/80 tw:border tw:border-emerald-500/40 tw:rounded-md tw:p-1 tw:text-center">
-                        <span className="tw:text-[10px] tw:font-mono tw:text-emerald-300 tw:font-bold">VERIFIED: DISHA NAIR (PASS #8192)</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {mod.previewType === 'faculty' && (
-                  <div className="tw:w-72 tw:bg-zinc-900/90 tw:backdrop-blur-md tw:border tw:border-purple-500/30 tw:rounded-2xl tw:p-4 tw:shadow-2xl tw:relative tw:z-10 tw:transform group-hover:tw:scale-105 tw:transition-transform">
-                    <div className="tw:flex tw:items-center tw:justify-between tw:mb-2.5">
-                      <span className="tw:text-[10px] tw:font-mono tw:text-purple-300 tw:font-bold">LEAVE APPROVAL QUEUE</span>
-                      <span className="tw:text-[9px] tw:bg-purple-500/20 tw:text-purple-300 tw:px-2 tw:py-0.5 tw:rounded-full">1 PENDING</span>
-                    </div>
-                    <div className="tw:bg-zinc-950 tw:border tw:border-zinc-800 tw:rounded-xl tw:p-2.5 tw:text-left">
-                      <div className="tw:flex tw:justify-between tw:items-start">
-                        <div>
-                          <div className="tw:text-xs tw:font-semibold tw:text-white">Rohan Kulkarni</div>
-                          <div className="tw:text-[10px] tw:text-zinc-400">ECE - Sem 6 · Outpass</div>
-                        </div>
-                        <span className="tw:text-[9px] tw:bg-amber-500/20 tw:text-amber-300 tw:px-1.5 tw:py-0.5 tw:rounded">Urgent</span>
-                      </div>
-                      <div className="tw:mt-3 tw:flex tw:gap-2">
-                        <button className="tw:flex-1 tw:py-1 tw:bg-emerald-600 hover:tw:bg-emerald-500 tw:text-white tw:text-[10px] tw:font-bold tw:rounded-md tw:transition-colors">
-                          Approve
-                        </button>
-                        <button className="tw:px-3 tw:py-1 tw:bg-zinc-800 tw:text-zinc-300 tw:text-[10px] tw:rounded-md">
-                          Details
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {mod.previewType === 'analytics' && (
-                  <div className="tw:w-72 tw:bg-zinc-900/90 tw:backdrop-blur-md tw:border tw:border-amber-500/30 tw:rounded-2xl tw:p-4 tw:shadow-2xl tw:relative tw:z-10 tw:transform group-hover:tw:scale-105 tw:transition-transform">
-                    <div className="tw:flex tw:items-center tw:justify-between tw:mb-2">
-                      <span className="tw:text-[10px] tw:font-mono tw:text-amber-400 tw:font-bold">CAMPUS POPULATION</span>
-                      <span className="tw:text-[9px] tw:text-emerald-400">● LIVE</span>
-                    </div>
-                    <div className="tw:grid tw:grid-cols-2 tw:gap-2 tw:mt-2">
-                      <div className="tw:bg-zinc-950 tw:p-2.5 tw:rounded-xl tw:border tw:border-zinc-800">
-                        <div className="tw:text-[10px] tw:text-zinc-400">Inside Campus</div>
-                        <div className="tw:text-lg tw:font-bold tw:text-white tw:mt-0.5">3,412</div>
-                      </div>
-                      <div className="tw:bg-zinc-950 tw:p-2.5 tw:rounded-xl tw:border tw:border-zinc-800">
-                        <div className="tw:text-[10px] tw:text-zinc-400">On Outpass</div>
-                        <div className="tw:text-lg tw:font-bold tw:text-amber-400 tw:mt-0.5">284</div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-              </div>
-
-              {/* Card Content Body */}
-              <div className="tw:p-8 tw:flex tw:flex-col tw:justify-between tw:flex-grow">
-                <div>
-                  <div className="tw:flex tw:items-center tw:justify-between tw:mb-3">
-                    <span className="tw:text-xs tw:font-mono tw:text-zinc-500 tw:uppercase tw:tracking-wider">
-                      {mod.tagline}
-                    </span>
-                    <span className="tw:text-[10px] tw:font-mono tw:px-2.5 tw:py-0.5 tw:rounded-full tw:bg-zinc-900 tw:border tw:border-zinc-800 tw:text-zinc-300">
-                      {mod.badge}
-                    </span>
-                  </div>
-                  <h3 className="tw:text-2xl tw:font-bold tw:text-white group-hover:tw:text-blue-300 tw:transition-colors">
-                    {mod.title}
-                  </h3>
-                  <p className="tw:mt-3 tw:text-sm tw:text-zinc-400 tw:leading-relaxed">
-                    {mod.description}
-                  </p>
-                </div>
-
-                {/* Metrics Pill Row */}
-                <div className="tw:mt-6 tw:pt-6 tw:border-t tw:border-zinc-800/80 tw:flex tw:flex-wrap tw:gap-2">
-                  {mod.metrics.map((metric, mIdx) => (
-                    <span
-                      key={mIdx}
-                      className="tw:text-[11px] tw:font-mono tw:text-zinc-300 tw:bg-zinc-900/80 tw:border tw:border-zinc-800 tw:px-3 tw:py-1 tw:rounded-md"
-                    >
-                      {metric}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      </section>
-
-      {/* ======================================================== */}
-      {/* 5. INTERACTIVE LIVE DEMO SANDBOX                         */}
-      {/* ======================================================== */}
-      <section id="sandbox" className="tw:py-20 tw:px-6 tw:max-w-6xl tw:mx-auto tw:relative tw:z-10">
-        <div className="tw:rounded-3xl tw:bg-gradient-to-b tw:from-zinc-900/90 tw:to-zinc-950/90 tw:border tw:border-zinc-800 tw:p-8 tw:sm:tw:p-12 tw:shadow-2xl">
-          
-          {/* Header */}
-          <div className="tw:text-center tw:max-w-2xl tw:mx-auto tw:mb-10">
-            <div className="tw:inline-flex tw:items-center tw:gap-2 tw:px-3 tw:py-1 tw:rounded-full tw:bg-blue-500/10 tw:border tw:border-blue-500/20 tw:text-blue-400 tw:text-xs tw:font-mono tw:mb-4">
-              <Sparkles className="tw:w-3.5 tw:h-3.5" />
-              <span>TEST THE ENGINE LIVE</span>
-            </div>
-            <h2 className="tw:text-3xl tw:sm:tw:text-4xl tw:font-bold tw:tracking-tight tw:text-white">
-              Experience the DwarPal Verification Flow
-            </h2>
-            <p className="tw:mt-3 tw:text-sm tw:text-zinc-400">
-              Switch roles between a student generating a dynamic pass, a guard at the terminal, and an instant parent alert dispatcher.
-            </p>
-          </div>
-
-          {/* Interactive Role Switcher Tabs */}
-          <div className="tw:flex tw:justify-center tw:mb-8">
-            <div className="tw:inline-flex tw:p-1.5 tw:rounded-2xl tw:bg-zinc-950 tw:border tw:border-zinc-800">
-              <button
-                onClick={() => setActiveTab('student')}
-                className={`tw:px-5 tw:py-2 tw:rounded-xl tw:text-xs tw:font-semibold tw:transition-all ${
-                  activeTab === 'student'
-                    ? 'tw:bg-blue-600 tw:text-white tw:shadow-md'
-                    : 'tw:text-zinc-400 hover:tw:text-white'
-                }`}
-              >
-                1. Student Pass Generation
-              </button>
-              <button
-                onClick={() => setActiveTab('guard')}
-                className={`tw:px-5 tw:py-2 tw:rounded-xl tw:text-xs tw:font-semibold tw:transition-all ${
-                  activeTab === 'guard'
-                    ? 'tw:bg-emerald-600 tw:text-white tw:shadow-md'
-                    : 'tw:text-zinc-400 hover:tw:text-white'
-                }`}
-              >
-                2. Gate Terminal Scan
-              </button>
-              <button
-                onClick={() => setActiveTab('parent')}
-                className={`tw:px-5 tw:py-2 tw:rounded-xl tw:text-xs tw:font-semibold tw:transition-all ${
-                  activeTab === 'parent'
-                    ? 'tw:bg-purple-600 tw:text-white tw:shadow-md'
-                    : 'tw:text-zinc-400 hover:tw:text-white'
-                }`}
-              >
-                3. Parent Real-Time Sync
-              </button>
-            </div>
-          </div>
-
-          {/* Tab Content Display */}
-          <div className="tw:bg-zinc-950/90 tw:border tw:border-zinc-800/80 tw:rounded-2xl tw:p-6 tw:sm:tw:p-8">
+          {/* 3 Horizontal Hero Bento Cards (Websites, Apps, Design systems style) */}
+          <div className="tw:mt-12 tw:grid tw:grid-cols-1 tw:md:tw:grid-cols-3 tw:gap-4">
             
-            {activeTab === 'student' && (
-              <div className="tw:grid tw:grid-cols-1 tw:md:tw:grid-cols-2 tw:gap-8 tw:items-center">
-                <div>
-                  <span className="tw:text-xs tw:font-mono tw:text-blue-400 tw:uppercase tw:tracking-widest">
-                    STEP 1 : SMARTPHONE VIEW
-                  </span>
-                  <h3 className="tw:text-2xl tw:font-bold tw:text-white tw:mt-1">
-                    Rolling Cryptographic Dynamic QR
-                  </h3>
-                  <p className="tw:text-xs tw:text-zinc-400 tw:mt-3 tw:leading-relaxed">
-                    Notice how the pass token updates continuously. Even if someone takes a screenshot, the optical terminal will reject it the moment the seed timestamp expires.
-                  </p>
-                  
-                  <div className="tw:mt-6 tw:space-y-3">
-                    <div className="tw:flex tw:items-center tw:gap-3 tw:text-xs tw:text-zinc-300">
-                      <Check className="tw:w-4 tw:h-4 tw:text-emerald-400" />
-                      <span>Zero-pass leakage with dynamic time-stamped hash</span>
-                    </div>
-                    <div className="tw:flex tw:items-center tw:gap-3 tw:text-xs tw:text-zinc-300">
-                      <Check className="tw:w-4 tw:h-4 tw:text-emerald-400" />
-                      <span>Includes student photo ID, branch, and approved curfew hours</span>
-                    </div>
-                    <div className="tw:flex tw:items-center tw:gap-3 tw:text-xs tw:text-zinc-300">
-                      <Check className="tw:w-4 tw:h-4 tw:text-emerald-400" />
-                      <span>Works seamlessly offline on cached Progressive Web App</span>
-                    </div>
-                  </div>
+            {/* Card 1: Websites / Gatepasses */}
+            <div
+              className="tw:p-6 tw:rounded-2xl tw:flex tw:flex-col tw:justify-between tw:min-h-[160px] tw:transition-all hover:tw:bg-[#1c1c1f]"
+              style={{
+                backgroundColor: '#141417',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+              }}
+            >
+              <div>
+                <h3 className="tw:text-lg tw:font-bold tw:text-[#ffffff]">
+                  Gatepasses
+                </h3>
+                <p className="tw:mt-2 tw:text-[13px] tw:text-[#9a9aa1] tw:leading-relaxed">
+                  Responsive dynamic passes and instant QR approvals for students and residents.
+                </p>
+              </div>
+            </div>
 
-                  <div className="tw:mt-8 tw:flex tw:gap-3">
-                    <button
-                      onClick={() => {
-                        const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase()
-                        setDynamicCode(`DP-${Math.floor(1000 + Math.random() * 9000)}-${randomSuffix}`)
-                        setQrTimer(15)
+            {/* Card 2: Apps / Terminals */}
+            <div
+              className="tw:p-6 tw:rounded-2xl tw:flex tw:flex-col tw:justify-between tw:min-h-[160px] tw:transition-all hover:tw:bg-[#1c1c1f]"
+              style={{
+                backgroundColor: '#141417',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+              }}
+            >
+              <div>
+                <h3 className="tw:text-lg tw:font-bold tw:text-[#ffffff]">
+                  Terminals
+                </h3>
+                <p className="tw:mt-2 tw:text-[13px] tw:text-[#9a9aa1] tw:leading-relaxed">
+                  Sub-second camera scanning and vehicle plate lookup for security officers.
+                </p>
+              </div>
+            </div>
+
+            {/* Card 3: Design systems / Governance */}
+            <div
+              className="tw:p-6 tw:rounded-2xl tw:flex tw:flex-col tw:justify-between tw:min-h-[160px] tw:transition-all hover:tw:bg-[#1c1c1f]"
+              style={{
+                backgroundColor: '#141417',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+              }}
+            >
+              <div>
+                <h3 className="tw:text-lg tw:font-bold tw:text-[#ffffff]">
+                  Governance
+                </h3>
+                <p className="tw:mt-2 tw:text-[13px] tw:text-[#9a9aa1] tw:leading-relaxed">
+                  Building robust and flexible multi-tier leave approval systems for easy scalability.
+                </p>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        {/* ======================================================== */}
+        {/* 3. SELECTED WORK SECTION (Exact Display Framer Layout)   */}
+        {/* ======================================================== */}
+        <section id="work">
+          
+          {/* Section Header */}
+          <div className="tw:mb-8">
+            <span className="tw:text-[13px] tw:font-medium tw:text-[#9a9aa1] tw:tracking-[0.02em]">
+              Let me show you
+            </span>
+            <h2 className="tw:text-3xl tw:sm:tw:text-4xl tw:font-bold tw:tracking-tight tw:text-[#ffffff] tw:mt-1">
+              Selected work
+            </h2>
+          </div>
+
+          {/* Cards Grid */}
+          <div className="tw:space-y-8">
+            {SELECTED_WORK.map((work, idx) => (
+              <div
+                key={work.id}
+                className="tw:rounded-3xl tw:overflow-hidden tw:transition-all"
+                style={{
+                  backgroundColor: '#141417',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                }}
+              >
+                {/* Visual Preview Container */}
+                <div
+                  className="tw:w-full tw:h-72 tw:sm:tw:h-96 tw:p-6 tw:sm:tw:p-8 tw:flex tw:items-center tw:justify-center tw:relative tw:overflow-hidden"
+                  style={{
+                    backgroundColor: '#0d0d10',
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                  }}
+                >
+                  {/* Subtle Grid Lines */}
+                  <div className="tw:absolute tw:inset-0 tw:bg-[radial-gradient(#1c1c1f_1px,transparent_1px)] [background-size:20px_20px] tw:opacity-40" />
+
+                  {/* Card Content Visuals */}
+                  {work.type === 'pass' && (
+                    <div
+                      className="tw:w-72 tw:rounded-2xl tw:p-5 tw:shadow-2xl tw:relative tw:z-10"
+                      style={{
+                        backgroundColor: '#141417',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
                       }}
-                      className="tw:px-5 tw:py-2.5 tw:bg-blue-600 hover:tw:bg-blue-500 tw:text-white tw:text-xs tw:font-semibold tw:rounded-xl tw:flex tw:items-center tw:gap-2 tw:transition-colors"
                     >
-                      <RefreshCw className="tw:w-3.5 tw:h-3.5" />
-                      <span>Force Cycle Token Seed</span>
-                    </button>
-                    <button
-                      onClick={() => setActiveTab('guard')}
-                      className="tw:px-5 tw:py-2.5 tw:bg-zinc-800 hover:tw:bg-zinc-700 tw:text-zinc-200 tw:text-xs tw:font-semibold tw:rounded-xl tw:transition-colors"
+                      <div className="tw:flex tw:justify-between tw:items-center tw:border-b tw:border-zinc-800 tw:pb-3 tw:mb-3">
+                        <span className="tw:text-xs tw:font-bold tw:text-white">DwarPal Digital Pass</span>
+                        <span className="tw:text-[10px] tw:text-emerald-400 tw:font-mono">VALID</span>
+                      </div>
+                      <div className="tw:bg-white tw:p-4 tw:rounded-xl tw:flex tw:flex-col tw:items-center tw:justify-center">
+                        <QrCode className="tw:w-28 tw:h-28 tw:text-black" />
+                        <span className="tw:text-[11px] tw:font-mono tw:font-bold tw:text-black tw:mt-2">
+                          {dynamicCode}
+                        </span>
+                      </div>
+                      <div className="tw:mt-3 tw:flex tw:justify-between tw:text-[11px] tw:text-[#9a9aa1] tw:font-mono">
+                        <span>Hash refresh: {qrTimer}s</span>
+                        <span className="tw:text-[#2b7fff]">Day Outpass</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {work.type === 'terminal' && (
+                    <div
+                      className="tw:w-80 tw:rounded-2xl tw:p-5 tw:shadow-2xl tw:relative tw:z-10"
+                      style={{
+                        backgroundColor: '#141417',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                      }}
                     >
-                      Simulate Gate Scan →
-                    </button>
-                  </div>
+                      <div className="tw:flex tw:justify-between tw:items-center tw:border-b tw:border-zinc-800 tw:pb-2.5 tw:mb-3 tw:text-[11px] tw:font-mono">
+                        <span className="tw:text-emerald-400">CHECKPOINT: NORTH GATE-01</span>
+                        <span className="tw:text-zinc-400">ONLINE</span>
+                      </div>
+                      <div className="tw:h-28 tw:rounded-xl tw:bg-black tw:border tw:border-zinc-800 tw:flex tw:flex-col tw:items-center tw:justify-center tw:p-3">
+                        <CheckCircle2 className="tw:w-8 tw:h-8 tw:text-emerald-400 tw:mb-1.5" />
+                        <span className="tw:text-xs tw:font-bold tw:text-emerald-300">PASS VERIFIED (340ms)</span>
+                        <span className="tw:text-[10px] tw:text-zinc-400 tw:mt-0.5">Vehicle: MH-12-DE-4419</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {work.type === 'hierarchy' && (
+                    <div
+                      className="tw:w-80 tw:rounded-2xl tw:p-5 tw:shadow-2xl tw:relative tw:z-10"
+                      style={{
+                        backgroundColor: '#141417',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                      }}
+                    >
+                      <div className="tw:flex tw:justify-between tw:items-center tw:mb-3">
+                        <span className="tw:text-xs tw:font-bold tw:text-white">Leave Requests Queue</span>
+                        <span className="tw:text-[10px] tw:bg-purple-950 tw:text-purple-300 tw:px-2 tw:py-0.5 tw:rounded-full">
+                          1 PENDING
+                        </span>
+                      </div>
+                      <div className="tw:p-3 tw:rounded-xl tw:bg-black tw:border tw:border-zinc-800">
+                        <div className="tw:text-xs tw:font-semibold tw:text-white">Rohan Kulkarni</div>
+                        <div className="tw:text-[11px] tw:text-[#9a9aa1]">ECE Sem-6 · Family Emergency</div>
+                        <div className="tw:mt-2.5 tw:flex tw:gap-2">
+                          <button className="tw:flex-1 tw:py-1 tw:bg-emerald-600 tw:text-white tw:text-[11px] tw:font-semibold tw:rounded-md">
+                            Approve & Notify Parent
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {work.type === 'telemetry' && (
+                    <div
+                      className="tw:w-80 tw:rounded-2xl tw:p-5 tw:shadow-2xl tw:relative tw:z-10"
+                      style={{
+                        backgroundColor: '#141417',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                      }}
+                    >
+                      <div className="tw:flex tw:justify-between tw:items-center tw:mb-3">
+                        <span className="tw:text-xs tw:font-bold tw:text-white">Live Campus Telemetry</span>
+                        <span className="tw:text-[10px] tw:text-emerald-400">● LIVE SENSORS</span>
+                      </div>
+                      <div className="tw:grid tw:grid-cols-2 tw:gap-2">
+                        <div className="tw:p-3 tw:rounded-xl tw:bg-black tw:border tw:border-zinc-800">
+                          <div className="tw:text-[10px] tw:text-[#9a9aa1]">Inside Campus</div>
+                          <div className="tw:text-lg tw:font-bold tw:text-white tw:mt-0.5">3,412</div>
+                        </div>
+                        <div className="tw:p-3 tw:rounded-xl tw:bg-black tw:border tw:border-zinc-800">
+                          <div className="tw:text-[10px] tw:text-[#9a9aa1]">Active Outpass</div>
+                          <div className="tw:text-lg tw:font-bold tw:text-amber-400 tw:mt-0.5">284</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* Digital Card Preview */}
-                <div className="tw:flex tw:justify-center">
-                  <div className="tw:w-full tw:max-w-xs tw:bg-gradient-to-b tw:from-zinc-900 tw:to-zinc-950 tw:border tw:border-blue-500/40 tw:rounded-2xl tw:p-5 tw:shadow-2xl tw:relative tw:overflow-hidden">
-                    <div className="tw:flex tw:justify-between tw:items-center tw:border-b tw:border-zinc-800 tw:pb-3 tw:mb-4">
-                      <div>
-                        <div className="tw:text-xs tw:font-bold tw:text-white">Apex University Campus</div>
-                        <div className="tw:text-[10px] tw:font-mono tw:text-blue-400">OFFICIAL GATEPASS</div>
-                      </div>
-                      <span className="tw:w-2.5 tw:h-2.5 tw:rounded-full tw:bg-emerald-400 tw:animate-ping" />
+                {/* Card Meta & Details */}
+                <div className="tw:p-6 tw:sm:tw:p-8 tw:flex tw:flex-col tw:sm:tw:flex-row tw:sm:tw:items-center tw:justify-between tw:gap-6">
+                  <div>
+                    <div className="tw:flex tw:items-center tw:gap-2 tw:text-xs tw:text-[#9a9aa1]">
+                      <span>{work.category}</span>
+                      <span>·</span>
+                      <span>{work.year}</span>
                     </div>
-
-                    <div className="tw:flex tw:items-center tw:gap-3 tw:mb-4">
-                      <div className="tw:w-12 tw:h-12 tw:rounded-xl tw:bg-blue-600/20 tw:border tw:border-blue-400/30 tw:flex tw:items-center tw:justify-center tw:text-blue-300 tw:font-bold">
-                        AP
-                      </div>
-                      <div>
-                        <div className="tw:text-sm tw:font-bold tw:text-white">Aarav Patel</div>
-                        <div className="tw:text-[10px] tw:font-mono tw:text-zinc-400">ID: CS-2023-042 · Hostel Block C</div>
-                      </div>
-                    </div>
-
-                    <div className="tw:bg-white tw:p-4 tw:rounded-xl tw:flex tw:flex-col tw:items-center tw:justify-center tw:shadow-inner">
-                      <div className="tw:w-36 tw:h-36 tw:bg-zinc-950 tw:rounded-lg tw:flex tw:items-center tw:justify-center tw:relative">
-                        <QrCode className="tw:w-28 tw:h-28 tw:text-white" />
-                      </div>
-                      <div className="tw:mt-2 tw:text-xs tw:font-mono tw:font-bold tw:text-zinc-900">
-                        {dynamicCode}
-                      </div>
-                    </div>
-
-                    <div className="tw:mt-4 tw:bg-zinc-900/90 tw:rounded-lg tw:p-2.5 tw:border tw:border-zinc-800 tw:flex tw:justify-between tw:items-center tw:text-[10px] tw:font-mono">
-                      <span className="tw:text-zinc-400">Token Hash Refresh:</span>
-                      <span className="tw:text-blue-400 tw:font-bold">{qrTimer}s remaining</span>
-                    </div>
+                    <h3 className="tw:text-2xl tw:font-bold tw:text-[#ffffff] tw:mt-1">
+                      {work.title}
+                    </h3>
+                    <p className="tw:text-[13px] tw:text-[#9a9aa1] tw:mt-1">
+                      {work.subtitle} — {work.tagline}
+                    </p>
                   </div>
+
+                  <Link
+                    to={work.link}
+                    className="tw:inline-flex tw:items-center tw:justify-center tw:px-5 tw:py-2.5 tw:rounded-full tw:text-xs tw:font-semibold tw:transition-all hover:tw:bg-[#2b7fff] hover:tw:text-white"
+                    style={{
+                      backgroundColor: '#1c1c1f',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      color: '#ffffff',
+                    }}
+                  >
+                    See case
+                  </Link>
                 </div>
               </div>
-            )}
+            ))}
+          </div>
+        </section>
 
-            {activeTab === 'guard' && (
-              <div className="tw:grid tw:grid-cols-1 tw:md:tw:grid-cols-2 tw:gap-8 tw:items-center">
-                <div>
-                  <span className="tw:text-xs tw:font-mono tw:text-emerald-400 tw:uppercase tw:tracking-widest">
-                    STEP 2 : CHECKPOINT TERMINAL
-                  </span>
-                  <h3 className="tw:text-2xl tw:font-bold tw:text-white tw:mt-1">
-                    Optical Scanner Verification
-                  </h3>
-                  <p className="tw:text-xs tw:text-zinc-400 tw:mt-3 tw:leading-relaxed">
-                    Test the gatekeeper camera scanner. Click <strong>"Simulate Scan"</strong> to trigger sub-second validation, vehicle number verification, and automated audit logging.
-                  </p>
+        {/* ======================================================== */}
+        {/* 4. LIVE INTERACTIVE DEMO SANDBOX                         */}
+        {/* ======================================================== */}
+        <section id="demo" className="tw:scroll-mt-20">
+          <div
+            className="tw:rounded-3xl tw:p-6 tw:sm:tw:p-10"
+            style={{
+              backgroundColor: '#141417',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+            }}
+          >
+            <div className="tw:text-center tw:max-w-xl tw:mx-auto tw:mb-8">
+              <span className="tw:text-[13px] tw:font-medium tw:text-[#9a9aa1]">
+                Interactive Simulator
+              </span>
+              <h2 className="tw:text-2xl tw:sm:tw:text-3xl tw:font-bold tw:tracking-tight tw:text-[#ffffff] tw:mt-1">
+                Test the DwarPal Engine Live
+              </h2>
+              <p className="tw:text-xs tw:text-[#9a9aa1] tw:mt-2">
+                Click below to simulate dynamic token generation, checkpoint optical verification, and automated notification alerts.
+              </p>
+            </div>
 
-                  <div className="tw:mt-6 tw:p-4 tw:rounded-xl tw:bg-zinc-900/60 tw:border tw:border-zinc-800">
-                    <div className="tw:text-xs tw:font-mono tw:text-zinc-400 tw:mb-2">CURRENT CHECKPOINT STATUS:</div>
-                    <div className="tw:flex tw:items-center tw:justify-between tw:text-xs">
-                      <span className="tw:text-zinc-300">Terminal Mode:</span>
-                      <span className="tw:text-emerald-400 tw:font-mono tw:font-bold">OPTICAL FAST-SCAN</span>
-                    </div>
-                    <div className="tw:flex tw:items-center tw:justify-between tw:text-xs tw:mt-1.5">
-                      <span className="tw:text-zinc-300">Avg Scan Latency:</span>
-                      <span className="tw:text-emerald-400 tw:font-mono">340 ms</span>
+            {/* Sandbox Tabs */}
+            <div className="tw:flex tw:justify-center tw:mb-8">
+              <div
+                className="tw:inline-flex tw:p-1 tw:rounded-full"
+                style={{
+                  backgroundColor: '#0d0d10',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                }}
+              >
+                <button
+                  onClick={() => setActiveSandboxTab('student')}
+                  className={`tw:px-4 tw:py-1.5 tw:rounded-full tw:text-xs tw:font-medium tw:transition-all ${
+                    activeSandboxTab === 'student'
+                      ? 'tw:bg-[#ffffff] tw:text-[#000000]'
+                      : 'tw:text-[#9a9aa1] hover:tw:text-white'
+                  }`}
+                >
+                  1. Dynamic Pass
+                </button>
+                <button
+                  onClick={() => setActiveSandboxTab('terminal')}
+                  className={`tw:px-4 tw:py-1.5 tw:rounded-full tw:text-xs tw:font-medium tw:transition-all ${
+                    activeSandboxTab === 'terminal'
+                      ? 'tw:bg-[#ffffff] tw:text-[#000000]'
+                      : 'tw:text-[#9a9aa1] hover:tw:text-white'
+                  }`}
+                >
+                  2. Optical Terminal
+                </button>
+                <button
+                  onClick={() => setActiveSandboxTab('alerts')}
+                  className={`tw:px-4 tw:py-1.5 tw:rounded-full tw:text-xs tw:font-medium tw:transition-all ${
+                    activeSandboxTab === 'alerts'
+                      ? 'tw:bg-[#ffffff] tw:text-[#000000]'
+                      : 'tw:text-[#9a9aa1] hover:tw:text-white'
+                  }`}
+                >
+                  3. Event Dispatch
+                </button>
+              </div>
+            </div>
+
+            {/* Sandbox Content Container */}
+            <div
+              className="tw:p-6 tw:rounded-2xl"
+              style={{
+                backgroundColor: '#0d0d10',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+              }}
+            >
+              {activeSandboxTab === 'student' && (
+                <div className="tw:grid tw:grid-cols-1 tw:md:tw:grid-cols-2 tw:gap-8 tw:items-center">
+                  <div>
+                    <h3 className="tw:text-lg tw:font-bold tw:text-white">
+                      Time-Synchronized Dynamic QR
+                    </h3>
+                    <p className="tw:text-xs tw:text-[#9a9aa1] tw:mt-2 tw:leading-relaxed">
+                      Every pass token is mathematically generated with a time-bound cryptographic seed. If a student screenshots the pass, the token signature will expire in seconds and will be rejected at the gate.
+                    </p>
+                    <div className="tw:mt-6 tw:flex tw:gap-3">
+                      <button
+                        onClick={() => {
+                          const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase()
+                          setDynamicCode(`DP-${Math.floor(1000 + Math.random() * 9000)}-${randomSuffix}`)
+                          setQrTimer(15)
+                        }}
+                        className="tw:px-4 tw:py-2 tw:rounded-full tw:bg-[#1c1c1f] tw:text-white tw:border tw:border-white/10 tw:text-xs tw:font-medium hover:tw:bg-[#2b7fff] tw:transition-colors tw:flex tw:items-center tw:gap-2"
+                      >
+                        <RefreshCw className="tw:w-3.5 tw:h-3.5" />
+                        <span>Regenerate Seed Hash</span>
+                      </button>
+                      <button
+                        onClick={() => setActiveSandboxTab('terminal')}
+                        className="tw:px-4 tw:py-2 tw:rounded-full tw:bg-white tw:text-black tw:text-xs tw:font-semibold hover:tw:bg-zinc-200 tw:transition-colors"
+                      >
+                        Next: Simulate Gate Scan →
+                      </button>
                     </div>
                   </div>
 
-                  <div className="tw:mt-8 tw:flex tw:gap-3">
-                    <button
-                      onClick={handleSimulateScan}
-                      disabled={isVerifying}
-                      className="tw:px-6 tw:py-3 tw:bg-emerald-600 hover:tw:bg-emerald-500 tw:text-white tw:text-xs tw:font-semibold tw:rounded-xl tw:flex tw:items-center tw:gap-2 tw:transition-colors tw:shadow-lg disabled:tw:opacity-60"
+                  <div className="tw:flex tw:justify-center">
+                    <div
+                      className="tw:w-64 tw:p-4 tw:rounded-2xl tw:shadow-xl"
+                      style={{
+                        backgroundColor: '#141417',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                      }}
                     >
-                      {isVerifying ? (
-                        <>
-                          <RefreshCw className="tw:w-4 tw:h-4 tw:animate-spin" />
-                          <span>Scanning Token...</span>
-                        </>
+                      <div className="tw:flex tw:justify-between tw:items-center tw:text-[11px] tw:font-mono tw:mb-3">
+                        <span className="tw:text-white">Aarav Patel (CS-042)</span>
+                        <span className="tw:text-emerald-400">ACTIVE</span>
+                      </div>
+                      <div className="tw:bg-white tw:p-4 tw:rounded-xl tw:flex tw:flex-col tw:items-center tw:justify-center">
+                        <QrCode className="tw:w-28 tw:h-28 tw:text-black" />
+                        <span className="tw:text-xs tw:font-mono tw:font-bold tw:text-black tw:mt-2">
+                          {dynamicCode}
+                        </span>
+                      </div>
+                      <div className="tw:mt-3 tw:text-[10px] tw:font-mono tw:text-center tw:text-[#9a9aa1]">
+                        Seed cycles in <span className="tw:text-[#2b7fff] tw:font-bold">{qrTimer}s</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeSandboxTab === 'terminal' && (
+                <div className="tw:grid tw:grid-cols-1 tw:md:tw:grid-cols-2 tw:gap-8 tw:items-center">
+                  <div>
+                    <h3 className="tw:text-lg tw:font-bold tw:text-white">
+                      Sub-Second Optical Terminal
+                    </h3>
+                    <p className="tw:text-xs tw:text-[#9a9aa1] tw:mt-2 tw:leading-relaxed">
+                      Click <strong>"Trigger Optical Scan"</strong> to simulate high-throughput gatekeeper camera verification with instant vehicle lookup and audit timestamping.
+                    </p>
+                    <div className="tw:mt-6">
+                      <button
+                        onClick={handleSimulateScan}
+                        disabled={isVerifying}
+                        className="tw:px-5 tw:py-2.5 tw:rounded-full tw:bg-white tw:text-black tw:text-xs tw:font-semibold hover:tw:bg-zinc-200 tw:transition-colors tw:flex tw:items-center tw:gap-2 disabled:tw:opacity-60"
+                      >
+                        {isVerifying ? (
+                          <>
+                            <RefreshCw className="tw:w-3.5 tw:h-3.5 tw:animate-spin" />
+                            <span>Verifying Cryptographic Seed...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Eye className="tw:w-3.5 tw:h-3.5" />
+                            <span>Trigger Optical Scan (Pass #{dynamicCode})</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="tw:flex tw:justify-center">
+                    <div
+                      className="tw:w-72 tw:p-4 tw:rounded-2xl tw:font-mono tw:text-xs"
+                      style={{
+                        backgroundColor: '#141417',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                      }}
+                    >
+                      <div className="tw:flex tw:justify-between tw:items-center tw:border-b tw:border-zinc-800 tw:pb-2 tw:mb-3 tw:text-[10px]">
+                        <span className="tw:text-emerald-400">TERMINAL: GATE-01</span>
+                        <span className="tw:text-[#9a9aa1]">READY</span>
+                      </div>
+                      {scanResult ? (
+                        <div className="tw:space-y-1.5 tw:p-3 tw:bg-emerald-950/40 tw:border tw:border-emerald-500/40 tw:rounded-xl">
+                          <div className="tw:text-emerald-400 tw:font-bold">✓ PASS VERIFIED (340ms)</div>
+                          <div className="tw:text-[11px] tw:text-white">Student: {scanResult.student}</div>
+                          <div className="tw:text-[11px] tw:text-zinc-300">Pass: {scanResult.passId}</div>
+                          <div className="tw:text-[11px] tw:text-zinc-300">Vehicle: {scanResult.vehicle}</div>
+                          <div className="tw:text-[10px] tw:text-zinc-400">Time: {scanResult.timestamp}</div>
+                        </div>
                       ) : (
-                        <>
-                          <Eye className="tw:w-4 tw:h-4" />
-                          <span>Simulate Camera Scan (Pass #{dynamicCode})</span>
-                        </>
+                        <div className="tw:h-28 tw:border tw:border-dashed tw:border-zinc-800 tw:rounded-xl tw:flex tw:flex-col tw:items-center tw:justify-center tw:text-zinc-500 tw:text-center tw:p-3">
+                          <span>Camera Stream Ready</span>
+                          <span className="tw:text-[10px] tw:text-zinc-600 tw:mt-1">Click button to scan</span>
+                        </div>
                       )}
-                    </button>
+                    </div>
                   </div>
                 </div>
+              )}
 
-                {/* Terminal Screen Simulation */}
-                <div className="tw:flex tw:justify-center">
-                  <div className="tw:w-full tw:max-w-sm tw:bg-black tw:border tw:border-emerald-500/40 tw:rounded-2xl tw:p-5 tw:shadow-2xl tw:font-mono">
-                    <div className="tw:flex tw:justify-between tw:items-center tw:border-b tw:border-zinc-800 tw:pb-2.5 tw:mb-3 tw:text-[10px]">
-                      <span className="tw:text-emerald-400">TERMINAL: GATE-01-NORTH</span>
-                      <span className="tw:text-zinc-400">OFFLINE READY</span>
-                    </div>
-
-                    {scanResult ? (
-                      <div className="tw:bg-emerald-950/40 tw:border tw:border-emerald-500/50 tw:rounded-xl tw:p-4 tw:space-y-2">
-                        <div className="tw:flex tw:items-center tw:gap-2 tw:text-emerald-400 tw:text-xs tw:font-bold">
-                          <CheckCircle2 className="tw:w-4 tw:h-4" />
-                          <span>PASS VERIFIED · EXIT APPROVED</span>
-                        </div>
-                        <div className="tw:text-[11px] tw:text-white tw:pt-2 tw:border-t tw:border-emerald-500/20">
-                          <div><strong>Student:</strong> {scanResult.student}</div>
-                          <div className="tw:mt-1"><strong>Pass Token:</strong> {scanResult.passId}</div>
-                          <div className="tw:mt-1"><strong>Vehicle:</strong> {scanResult.vehicle}</div>
-                          <div className="tw:mt-1"><strong>Curfew:</strong> {scanResult.validUntil}</div>
-                          <div className="tw:mt-1"><strong>Timestamp:</strong> {scanResult.timestamp}</div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="tw:h-48 tw:border tw:border-dashed tw:border-zinc-800 tw:rounded-xl tw:flex tw:flex-col tw:items-center tw:justify-center tw:text-zinc-500 tw:text-center tw:p-4">
-                        <QrCode className="tw:w-12 tw:h-12 tw:text-zinc-600 tw:mb-2" />
-                        <span className="tw:text-[11px]">Point camera at dynamic QR</span>
-                        <span className="tw:text-[9px] tw:text-zinc-600 tw:mt-1">Click "Simulate Camera Scan" to test</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'parent' && (
-              <div className="tw:grid tw:grid-cols-1 tw:md:tw:grid-cols-2 tw:gap-8 tw:items-center">
-                <div>
-                  <span className="tw:text-xs tw:font-mono tw:text-purple-400 tw:uppercase tw:tracking-widest">
-                    STEP 3 : AUTOMATED NOTIFICATION LAYER
-                  </span>
-                  <h3 className="tw:text-2xl tw:font-bold tw:text-white tw:mt-1">
-                    Instant Parent & Warden Sync
-                  </h3>
-                  <p className="tw:text-xs tw:text-zinc-400 tw:mt-3 tw:leading-relaxed">
-                    The instant an optical gate scan is verified, webhooks and push dispatchers send real-time SMS and WhatsApp notifications to registered parent contacts and hostel wardens.
-                  </p>
-
-                  <div className="tw:mt-6 tw:space-y-2">
-                    <div className="tw:p-3 tw:bg-zinc-900 tw:border tw:border-zinc-800 tw:rounded-xl tw:flex tw:items-center tw:justify-between tw:text-xs">
-                      <span className="tw:text-zinc-300">Push Delivery Speed:</span>
-                      <span className="tw:text-purple-400 tw:font-mono">&lt; 850 ms</span>
-                    </div>
-                    <div className="tw:p-3 tw:bg-zinc-900 tw:border tw:border-zinc-800 tw:rounded-xl tw:flex tw:items-center tw:justify-between tw:text-xs">
-                      <span className="tw:text-zinc-300">Carrier SMS Failover:</span>
-                      <span className="tw:text-emerald-400 tw:font-mono">ENABLED</span>
+              {activeSandboxTab === 'alerts' && (
+                <div className="tw:grid tw:grid-cols-1 tw:md:tw:grid-cols-2 tw:gap-8 tw:items-center">
+                  <div>
+                    <h3 className="tw:text-lg tw:font-bold tw:text-white">
+                      Instant Parent & Warden Dispatch
+                    </h3>
+                    <p className="tw:text-xs tw:text-[#9a9aa1] tw:mt-2 tw:leading-relaxed">
+                      Every verified checkout triggers instant webhook notifications to registered parents and hostel wardens in under 850ms with zero manual effort.
+                    </p>
+                    <div className="tw:mt-6">
+                      <Link
+                        to="/access-portal"
+                        className="tw:px-5 tw:py-2.5 tw:rounded-full tw:bg-white tw:text-black tw:text-xs tw:font-semibold hover:tw:bg-zinc-200 tw:transition-colors tw:inline-block"
+                      >
+                        Deploy DwarPal in Your Campus →
+                      </Link>
                     </div>
                   </div>
 
-                  <div className="tw:mt-8">
-                    <Link
-                      to="/access-portal"
-                      className="tw:inline-flex tw:items-center tw:gap-2 tw:px-6 tw:py-3 tw:bg-white tw:text-zinc-950 tw:font-semibold tw:text-xs tw:rounded-xl hover:tw:bg-zinc-200 tw:transition-colors"
-                    >
-                      <span>Deploy DwarPal in Your Institution</span>
-                      <ArrowRight className="tw:w-3.5 tw:h-3.5" />
-                    </Link>
-                  </div>
-                </div>
-
-                {/* Notification Feed Mockup */}
-                <div>
-                  <div className="tw:bg-zinc-900/90 tw:border tw:border-purple-500/30 tw:rounded-2xl tw:p-5 tw:shadow-2xl">
-                    <div className="tw:flex tw:items-center tw:gap-2 tw:mb-4">
-                      <Bell className="tw:w-4 tw:h-4 tw:text-purple-400" />
-                      <span className="tw:text-xs tw:font-mono tw:font-bold tw:text-white">LIVE EVENT DISPATCH LOG</span>
-                    </div>
-                    <div className="tw:space-y-2.5">
+                  <div>
+                    <div className="tw:space-y-2">
                       {alertLogs.map((log) => (
                         <div
                           key={log.id}
-                          className="tw:p-3 tw:bg-zinc-950 tw:border tw:border-zinc-800/80 tw:rounded-xl tw:text-[11px] tw:flex tw:items-start tw:justify-between tw:gap-3"
+                          className="tw:p-3 tw:rounded-xl tw:text-[11px] tw:flex tw:items-start tw:justify-between tw:gap-2"
+                          style={{
+                            backgroundColor: '#141417',
+                            border: '1px solid rgba(255, 255, 255, 0.08)',
+                          }}
                         >
                           <div>
-                            <div className="tw:text-zinc-300">{log.text}</div>
-                            <div className="tw:text-[9px] tw:font-mono tw:text-zinc-500 tw:mt-0.5">{log.time}</div>
+                            <div className="tw:text-white">{log.text}</div>
+                            <div className="tw:text-[9px] tw:text-[#9a9aa1] tw:font-mono tw:mt-0.5">{log.time}</div>
                           </div>
-                          <span className="tw:px-2 tw:py-0.5 tw:rounded tw:bg-purple-900/40 tw:border tw:border-purple-500/30 tw:text-purple-300 tw:text-[9px] tw:font-mono">
+                          <span className="tw:text-[9px] tw:font-mono tw:text-emerald-400 tw:bg-emerald-950/60 tw:px-2 tw:py-0.5 tw:rounded">
                             {log.status}
                           </span>
                         </div>
@@ -972,394 +870,308 @@ export default function DisplayLandingPage() {
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
-
-          </div>
-
-        </div>
-      </section>
-
-      {/* ======================================================== */}
-      {/* 6. METRICS & ZERO-TRUST COMPARISON                       */}
-      {/* ======================================================== */}
-      <section id="metrics" className="tw:py-20 tw:px-6 tw:max-w-6xl tw:mx-auto tw:relative tw:z-10">
-        
-        {/* Metric Numbers */}
-        <div className="tw:grid tw:grid-cols-2 tw:md:tw:grid-cols-4 tw:gap-4 tw:mb-16">
-          <div className="tw:p-6 tw:rounded-2xl tw:bg-zinc-950 tw:border tw:border-zinc-800/80 tw:text-center">
-            <div className="tw:text-3xl tw:sm:tw:text-4xl tw:font-bold tw:text-white">99.99%</div>
-            <div className="tw:text-xs tw:font-mono tw:text-zinc-400 tw:mt-1">GATE SCANNER UPTIME</div>
-          </div>
-          <div className="tw:p-6 tw:rounded-2xl tw:bg-zinc-950 tw:border tw:border-zinc-800/80 tw:text-center">
-            <div className="tw:text-3xl tw:sm:tw:text-4xl tw:font-bold tw:text-blue-400">&lt; 400ms</div>
-            <div className="tw:text-xs tw:font-mono tw:text-zinc-400 tw:mt-1">OPTICAL VERIFICATION</div>
-          </div>
-          <div className="tw:p-6 tw:rounded-2xl tw:bg-zinc-950 tw:border tw:border-zinc-800/80 tw:text-center">
-            <div className="tw:text-3xl tw:sm:tw:text-4xl tw:font-bold tw:text-emerald-400">100%</div>
-            <div className="tw:text-xs tw:font-mono tw:text-zinc-400 tw:mt-1">OFFLINE CAPABILITY</div>
-          </div>
-          <div className="tw:p-6 tw:rounded-2xl tw:bg-zinc-950 tw:border tw:border-zinc-800/80 tw:text-center">
-            <div className="tw:text-3xl tw:sm:tw:text-4xl tw:font-bold tw:text-purple-400">0</div>
-            <div className="tw:text-xs tw:font-mono tw:text-zinc-400 tw:mt-1">PASS FORGERY INCIDENTS</div>
-          </div>
-        </div>
-
-        {/* Security Comparison Table */}
-        <div className="tw:rounded-3xl tw:bg-zinc-950 tw:border tw:border-zinc-800/80 tw:overflow-hidden tw:shadow-xl">
-          <div className="tw:p-6 tw:sm:tw:p-8 tw:border-b tw:border-zinc-800/80">
-            <div className="tw:text-xs tw:font-mono tw:tracking-widest tw:text-blue-400 tw:uppercase">
-              TECHNICAL COMPARISON
+              )}
             </div>
-            <h3 className="tw:text-2xl tw:font-bold tw:text-white tw:mt-1">
-              Traditional Methods vs. DwarPal Zero-Trust Gatekeeper
-            </h3>
+          </div>
+        </section>
+
+        {/* ======================================================== */}
+        {/* 5. FAQ SECTION (Exact Display Framer Layout & Numbers)   */}
+        {/* ======================================================== */}
+        <section id="faq">
+          <div className="tw:mb-8">
+            <span className="tw:text-[13px] tw:font-medium tw:text-[#9a9aa1] tw:tracking-[0.02em]">
+              FAQ
+            </span>
+            <h2 className="tw:text-3xl tw:sm:tw:text-4xl tw:font-bold tw:tracking-tight tw:text-[#ffffff] tw:mt-1">
+              Most asked questions
+            </h2>
           </div>
 
-          <div className="tw:overflow-x-auto">
-            <table className="tw:w-full tw:text-left tw:border-collapse tw:text-xs tw:sm:tw:text-sm">
-              <thead>
-                <tr className="tw:border-b tw:border-zinc-800 tw:bg-zinc-900/40 tw:font-mono tw:text-zinc-400">
-                  <th className="tw:p-4 tw:sm:tw:p-6">CAPABILITY</th>
-                  <th className="tw:p-4 tw:sm:tw:p-6 tw:text-zinc-500">PAPER REGISTERS</th>
-                  <th className="tw:p-4 tw:sm:tw:p-6 tw:text-zinc-500">STATIC QR APPS</th>
-                  <th className="tw:p-4 tw:sm:tw:p-6 tw:text-blue-400 tw:font-bold">DWARPAL GATEKEEPER</th>
-                </tr>
-              </thead>
-              <tbody className="tw:divide-y tw:divide-zinc-800/60 tw:text-zinc-300">
-                <tr>
-                  <td className="tw:p-4 tw:sm:tw:p-6 tw:font-medium tw:text-white">Screenshot / Forgery Protection</td>
-                  <td className="tw:p-4 tw:sm:tw:p-6 tw:text-red-400">None (Fake sign)</td>
-                  <td className="tw:p-4 tw:sm:tw:p-6 tw:text-red-400">Vulnerable to sharing</td>
-                  <td className="tw:p-4 tw:sm:tw:p-6 tw:text-emerald-400 tw:font-semibold">Cryptographic Rotating Hash</td>
-                </tr>
-                <tr>
-                  <td className="tw:p-4 tw:sm:tw:p-6 tw:font-medium tw:text-white">Offline Gate Operation</td>
-                  <td className="tw:p-4 tw:sm:tw:p-6 tw:text-emerald-400">Manual Paper</td>
-                  <td className="tw:p-4 tw:sm:tw:p-6 tw:text-red-400">Fails on no network</td>
-                  <td className="tw:p-4 tw:sm:tw:p-6 tw:text-emerald-400 tw:font-semibold">100% Offline-First PWA Cache</td>
-                </tr>
-                <tr>
-                  <td className="tw:p-4 tw:sm:tw:p-6 tw:font-medium tw:text-white">Real-Time Parent SMS Sync</td>
-                  <td className="tw:p-4 tw:sm:tw:p-6 tw:text-red-400">None</td>
-                  <td className="tw:p-4 tw:sm:tw:p-6 tw:text-zinc-400">Manual Broadcast</td>
-                  <td className="tw:p-4 tw:sm:tw:p-6 tw:text-emerald-400 tw:font-semibold">Sub-Second Automated Dispatch</td>
-                </tr>
-                <tr>
-                  <td className="tw:p-4 tw:sm:tw:p-6 tw:font-medium tw:text-white">Executive Headcount Telemetry</td>
-                  <td className="tw:p-4 tw:sm:tw:p-6 tw:text-red-400">Hours to tally registers</td>
-                  <td className="tw:p-4 tw:sm:tw:p-6 tw:text-zinc-400">Static Reports</td>
-                  <td className="tw:p-4 tw:sm:tw:p-6 tw:text-emerald-400 tw:font-semibold">Live Real-Time Radar Dashboard</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
+          <div className="tw:space-y-3">
+            {FAQS.map((faq, idx) => {
+              const isOpen = openFaq === idx
+              return (
+                <div
+                  key={idx}
+                  className="tw:rounded-2xl tw:overflow-hidden tw:transition-all"
+                  style={{
+                    backgroundColor: '#141417',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                  }}
+                >
+                  <button
+                    onClick={() => setOpenFaq(isOpen ? -1 : idx)}
+                    className="tw:w-full tw:p-6 tw:text-left tw:flex tw:items-center tw:justify-between tw:gap-4 hover:tw:bg-[#1c1c1f] tw:transition-colors"
+                  >
+                    <div className="tw:flex tw:items-center tw:gap-4">
+                      <span className="tw:text-sm tw:font-medium tw:text-[#9a9aa1]">
+                        {faq.index}
+                      </span>
+                      <span className="tw:text-base tw:font-semibold tw:text-[#ffffff]">
+                        {faq.q}
+                      </span>
+                    </div>
+                    <ChevronDown
+                      className={`tw:w-4 tw:h-4 tw:text-[#9a9aa1] tw:transition-transform tw:duration-300 ${
+                        isOpen ? 'tw:rotate-180 tw:text-[#ffffff]' : ''
+                      }`}
+                    />
+                  </button>
 
-      {/* ======================================================== */}
-      {/* 7. TESTIMONIALS ("A few words" Display Framer Style)     */}
-      {/* ======================================================== */}
-      <section id="testimonials" className="tw:py-20 tw:px-6 tw:max-w-6xl tw:mx-auto tw:relative tw:z-10">
-        
-        <div className="tw:text-center tw:mb-12">
-          <div className="tw:text-xs tw:font-mono tw:tracking-widest tw:text-blue-400 tw:uppercase tw:mb-2">
-            INSTITUTIONAL TRUST
-          </div>
-          <h2 className="tw:text-3xl tw:sm:tw:text-4xl tw:font-bold tw:tracking-tight tw:text-white">
-            A few words from campus leaders
-          </h2>
-        </div>
-
-        <div className="tw:grid tw:grid-cols-1 tw:md:tw:grid-cols-2 tw:gap-6">
-          {TESTIMONIALS.map((t, idx) => (
-            <motion.div
-              key={idx}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.4, delay: idx * 0.1 }}
-              className="tw:p-8 tw:rounded-3xl tw:bg-zinc-950 tw:border tw:border-zinc-800/80 hover:tw:border-zinc-700 tw:flex tw:flex-col tw:justify-between tw:transition-all"
-            >
-              <p className="tw:text-sm tw:sm:tw:text-base tw:text-zinc-300 tw:leading-relaxed tw:italic">
-                "{t.quote}"
-              </p>
-
-              <div className="tw:mt-6 tw:pt-6 tw:border-t tw:border-zinc-900 tw:flex tw:items-center tw:justify-between">
-                <div className="tw:flex tw:items-center tw:gap-3">
-                  <div className="tw:w-10 tw:h-10 tw:rounded-full tw:bg-zinc-800 tw:border tw:border-zinc-700 tw:flex tw:items-center tw:justify-center tw:text-xs tw:font-bold tw:text-white">
-                    {t.initials}
-                  </div>
-                  <div>
-                    <div className="tw:text-sm tw:font-semibold tw:text-white">{t.author}</div>
-                    <div className="tw:text-xs tw:text-zinc-400">{t.role}</div>
-                  </div>
+                  <AnimatePresence initial={false}>
+                    {isOpen && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.25 }}
+                        className="tw:overflow-hidden"
+                      >
+                        <div
+                          className="tw:px-6 tw:pb-6 tw:pt-2 tw:text-[13px] tw:text-[#9a9aa1] tw:leading-relaxed"
+                          style={{
+                            borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+                          }}
+                        >
+                          {faq.a}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
-                <span className="tw:text-[10px] tw:font-mono tw:text-zinc-400 tw:bg-zinc-900 tw:px-2.5 tw:py-1 tw:rounded-md tw:border tw:border-zinc-800">
-                  {t.tag}
-                </span>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      </section>
-
-      {/* ======================================================== */}
-      {/* 8. MOST ASKED QUESTIONS (Display Numbered Accordion)     */}
-      {/* ======================================================== */}
-      <section id="faq" className="tw:py-20 tw:px-6 tw:max-w-4xl tw:mx-auto tw:relative tw:z-10">
-        
-        <div className="tw:text-center tw:mb-12">
-          <div className="tw:text-xs tw:font-mono tw:tracking-widest tw:text-blue-400 tw:uppercase tw:mb-2">
-            FAQ
+              )
+            })}
           </div>
-          <h2 className="tw:text-3xl tw:sm:tw:text-4xl tw:font-bold tw:tracking-tight tw:text-white">
-            Most asked questions
-          </h2>
-        </div>
+        </section>
 
-        <div className="tw:space-y-4">
-          {FAQS.map((faq, idx) => {
-            const isOpen = openFaq === idx
-            return (
+        {/* ======================================================== */}
+        {/* 6. TESTIMONIALS SECTION (Exact Display Framer Layout)    */}
+        {/* ======================================================== */}
+        <section>
+          <div className="tw:mb-8">
+            <span className="tw:text-[13px] tw:font-medium tw:text-[#9a9aa1] tw:tracking-[0.02em]">
+              Testimonials
+            </span>
+            <h2 className="tw:text-3xl tw:sm:tw:text-4xl tw:font-bold tw:tracking-tight tw:text-[#ffffff] tw:mt-1">
+              A few words
+            </h2>
+          </div>
+
+          <div className="tw:grid tw:grid-cols-1 tw:md:tw:grid-cols-2 tw:gap-4">
+            {TESTIMONIALS.map((t, idx) => (
               <div
                 key={idx}
-                className="tw:rounded-2xl tw:bg-zinc-950 tw:border tw:border-zinc-800/80 tw:overflow-hidden tw:transition-all"
+                className="tw:p-6 tw:sm:tw:p-8 tw:rounded-2xl tw:flex tw:flex-col tw:justify-between tw:transition-all"
+                style={{
+                  backgroundColor: '#141417',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                }}
               >
-                <button
-                  onClick={() => setOpenFaq(isOpen ? -1 : idx)}
-                  className="tw:w-full tw:p-6 tw:text-left tw:flex tw:items-center tw:justify-between tw:gap-4 tw:hover:bg-zinc-900/40 tw:transition-colors"
-                >
-                  <div className="tw:flex tw:items-center tw:gap-4">
-                    <span className="tw:text-xs tw:font-mono tw:text-zinc-500">
-                      ({faq.num})
-                    </span>
-                    <span className="tw:text-sm tw:sm:tw:text-base tw:font-semibold tw:text-white">
-                      {faq.q}
-                    </span>
-                  </div>
-                  <ChevronDown
-                    className={`tw:w-4 tw:h-4 tw:text-zinc-400 tw:transition-transform tw:duration-300 tw:flex-shrink-0 ${
-                      isOpen ? 'tw:rotate-180 tw:text-blue-400' : ''
-                    }`}
-                  />
-                </button>
-
-                <AnimatePresence initial={false}>
-                  {isOpen && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.3 }}
-                      className="tw:overflow-hidden"
-                    >
-                      <div className="tw:px-6 tw:pb-6 tw:pt-1 tw:text-xs tw:sm:tw:text-sm tw:text-zinc-400 tw:leading-relaxed tw:border-t tw:border-zinc-900">
-                        {faq.a}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            )
-          })}
-        </div>
-      </section>
-
-      {/* ======================================================== */}
-      {/* 9. SECURITY INSIGHTS & UPDATES ("Updates")               */}
-      {/* ======================================================== */}
-      <section className="tw:py-20 tw:px-6 tw:max-w-6xl tw:mx-auto tw:relative tw:z-10">
-        <div className="tw:flex tw:items-end tw:justify-between tw:mb-12">
-          <div>
-            <div className="tw:text-xs tw:font-mono tw:tracking-widest tw:text-blue-400 tw:uppercase tw:mb-2">
-              LATEST INSIGHTS
-            </div>
-            <h2 className="tw:text-3xl tw:sm:tw:text-4xl tw:font-bold tw:tracking-tight tw:text-white">
-              Security & Infrastructure Updates
-            </h2>
-          </div>
-        </div>
-
-        <div className="tw:grid tw:grid-cols-1 tw:md:tw:grid-cols-3 tw:gap-6">
-          {INSIGHTS.map((article, idx) => (
-            <div
-              key={idx}
-              className="tw:p-6 tw:rounded-3xl tw:bg-zinc-950 tw:border tw:border-zinc-800/80 hover:tw:border-zinc-700 tw:flex tw:flex-col tw:justify-between tw:transition-all tw:group"
-            >
-              <div>
-                <div className="tw:flex tw:items-center tw:justify-between tw:text-[10px] tw:font-mono tw:text-zinc-500 tw:mb-4">
-                  <span className="tw:text-blue-400">{article.category}</span>
-                  <span>{article.date} · {article.readTime}</span>
-                </div>
-                <h3 className="tw:text-base tw:font-bold tw:text-white group-hover:tw:text-blue-300 tw:transition-colors tw:leading-snug">
-                  {article.title}
-                </h3>
-                <p className="tw:mt-3 tw:text-xs tw:text-zinc-400 tw:leading-relaxed">
-                  {article.description}
+                <p className="tw:text-[14px] tw:text-[#9a9aa1] tw:leading-relaxed">
+                  {t.text}
                 </p>
+
+                <div className="tw:mt-6 tw:pt-6 tw:flex tw:items-center tw:justify-between"
+                  style={{
+                    borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+                  }}
+                >
+                  <div>
+                    <div className="tw:text-sm tw:font-bold tw:text-[#ffffff]">
+                      {t.name}
+                    </div>
+                    <div className="tw:text-xs tw:text-[#9a9aa1]">
+                      {t.role}
+                    </div>
+                  </div>
+                  <span className="tw:text-xs tw:text-[#9a9aa1]">
+                    {t.handle}
+                  </span>
+                </div>
               </div>
+            ))}
+          </div>
+        </section>
 
-              <div className="tw:mt-6 tw:pt-4 tw:border-t tw:border-zinc-900 tw:flex tw:items-center tw:gap-1.5 tw:text-xs tw:font-medium tw:text-zinc-300 group-hover:tw:text-white">
-                <span>Read paper</span>
-                <ChevronRight className="tw:w-3.5 tw:h-3.5 group-hover:tw:translate-x-1 tw:transition-transform" />
+        {/* ======================================================== */}
+        {/* 7. UPDATES / BLOG (Exact Display Framer Layout)          */}
+        {/* ======================================================== */}
+        <section id="updates">
+          <div className="tw:flex tw:items-end tw:justify-between tw:mb-8">
+            <div>
+              <span className="tw:text-[13px] tw:font-medium tw:text-[#9a9aa1] tw:tracking-[0.02em]">
+                Latest
+              </span>
+              <h2 className="tw:text-3xl tw:sm:tw:text-4xl tw:font-bold tw:tracking-tight tw:text-[#ffffff] tw:mt-1">
+                Updates
+              </h2>
+            </div>
+            <a href="#updates" className="tw:text-xs tw:font-medium tw:text-[#9a9aa1] hover:tw:text-white">
+              See all
+            </a>
+          </div>
+
+          <div className="tw:grid tw:grid-cols-1 tw:md:tw:grid-cols-2 tw:gap-4">
+            {UPDATES.map((article, idx) => (
+              <div
+                key={idx}
+                className="tw:p-6 tw:sm:tw:p-8 tw:rounded-2xl tw:flex tw:flex-col tw:justify-between tw:transition-all hover:tw:bg-[#1c1c1f]"
+                style={{
+                  backgroundColor: '#141417',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                }}
+              >
+                <div>
+                  <div className="tw:text-xs tw:text-[#9a9aa1] tw:mb-3">
+                    {article.author} · {article.date}
+                  </div>
+                  <h3 className="tw:text-lg tw:font-bold tw:text-[#ffffff] tw:leading-snug">
+                    {article.title}
+                  </h3>
+                  <p className="tw:text-[13px] tw:text-[#9a9aa1] tw:mt-2 tw:leading-relaxed">
+                    {article.excerpt}
+                  </p>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-      </section>
+            ))}
+          </div>
+        </section>
 
-      {/* ======================================================== */}
-      {/* 10. GIANT HIGH-IMPACT CTA BANNER                         */}
-      {/* ======================================================== */}
-      <section className="tw:py-20 tw:px-6 tw:max-w-6xl tw:mx-auto tw:relative tw:z-10">
-        <div className="tw:rounded-[36px] tw:bg-gradient-to-b tw:from-zinc-900 tw:to-zinc-950 tw:border tw:border-zinc-800 tw:p-8 tw:sm:tw:p-16 tw:text-center tw:relative tw:overflow-hidden tw:shadow-2xl">
-          
-          {/* Subtle Accent Flare */}
-          <div className="tw:absolute tw:top-[-50%] tw:left-1/2 tw:-translate-x-1/2 tw:w-[500px] tw:h-[300px] tw:bg-blue-600/10 tw:rounded-full tw:blur-[120px] tw:pointer-events-none" />
-
-          <div className="tw:relative tw:z-10 tw:max-w-3xl tw:mx-auto">
-            <div className="tw:inline-flex tw:items-center tw:gap-2 tw:px-3.5 tw:py-1 tw:rounded-full tw:bg-zinc-800 tw:border tw:border-zinc-700 tw:text-zinc-300 tw:text-xs tw:font-mono tw:mb-6">
-              <span>LET'S CONNECT</span>
-            </div>
-            
-            <h2 className="tw:text-3xl tw:sm:tw:text-5xl tw:font-bold tw:tracking-tight tw:text-white">
-              Ready to secure your institution with DwarPal?
+        {/* ======================================================== */}
+        {/* 8. CTA SECTION (Exact Display Framer Layout)             */}
+        {/* ======================================================== */}
+        <section id="contact" className="tw:pt-8">
+          <div
+            className="tw:p-8 tw:sm:tw:p-14 tw:rounded-3xl tw:text-center"
+            style={{
+              backgroundColor: '#141417',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+            }}
+          >
+            <span className="tw:text-[13px] tw:font-medium tw:text-[#9a9aa1] tw:tracking-[0.02em]">
+              let's connect
+            </span>
+            <h2 className="tw:text-3xl tw:sm:tw:text-5xl tw:font-bold tw:tracking-tight tw:text-[#ffffff] tw:mt-2 tw:max-w-xl tw:mx-auto tw:leading-tight">
+              Ready to create something awesome together?
             </h2>
-            
-            <p className="tw:mt-4 tw:text-sm tw:sm:tw:text-base tw:text-zinc-400 tw:max-w-xl tw:mx-auto">
-              Join leading universities, colleges, and gated communities upgrading to zero-trust gatekeeping. Set up in under 24 hours.
+            <p className="tw:text-sm tw:text-[#9a9aa1] tw:mt-4 tw:max-w-md tw:mx-auto">
+              Upgrade your university, college, or gated community to zero-trust gatekeeping with DwarPal.
             </p>
-
-            <div className="tw:mt-8 tw:flex tw:flex-wrap tw:items-center tw:justify-center tw:gap-4">
+            <div className="tw:mt-8 tw:flex tw:flex-wrap tw:items-center tw:justify-center tw:gap-3">
               <Link
                 to="/access-portal"
-                className="tw:px-8 tw:py-4 tw:rounded-full tw:bg-white hover:tw:bg-zinc-200 tw:text-zinc-950 tw:font-bold tw:text-sm tw:shadow-xl tw:transition-all"
+                className="tw:px-6 tw:py-3 tw:rounded-full tw:text-xs tw:font-semibold tw:transition-all hover:tw:opacity-90"
+                style={{
+                  backgroundColor: '#ffffff',
+                  color: '#000000',
+                }}
               >
-                Access Portal Now →
+                Access Portal Now
               </Link>
               <Link
                 to="/student/register"
-                className="tw:px-6 tw:py-4 tw:rounded-full tw:bg-zinc-900 hover:tw:bg-zinc-800 tw:text-zinc-200 tw:border tw:border-zinc-700 tw:font-medium tw:text-sm tw:transition-all"
+                className="tw:px-6 tw:py-3 tw:rounded-full tw:text-xs tw:font-medium tw:transition-all hover:tw:bg-[#2b7fff] hover:tw:text-white"
+                style={{
+                  backgroundColor: '#1c1c1f',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  color: '#ffffff',
+                }}
               >
-                Student Self-Enrollment
+                Student Registration
               </Link>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+
+      </main>
 
       {/* ======================================================== */}
-      {/* 11. FOOTER (Display Framer Multi-Column Style)           */}
+      {/* 9. FOOTER (Exact Display Framer Layout)                  */}
       {/* ======================================================== */}
-      <footer className="tw:border-t tw:border-zinc-900 tw:bg-zinc-950 tw:py-16 tw:px-6 tw:relative tw:z-10">
-        <div className="tw:max-w-6xl tw:mx-auto tw:grid tw:grid-cols-1 tw:md:tw:grid-cols-5 tw:gap-10 tw:mb-12">
+      <footer
+        className="tw:w-full tw:py-16 tw:px-6"
+        style={{
+          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+          backgroundColor: '#000000',
+        }}
+      >
+        <div className="tw:w-full tw:max-w-5xl tw:mx-auto">
           
-          {/* Col 1 & 2: Brand */}
-          <div className="tw:md:tw:col-span-2">
-            <div className="tw:flex tw:items-center tw:gap-2.5 tw:mb-4">
-              <div className="tw:w-7 tw:h-7 tw:rounded-full tw:bg-blue-600 tw:flex tw:items-center tw:justify-center">
-                <Shield className="tw:w-4 tw:h-4 tw:text-white" />
+          <div className="tw:grid tw:grid-cols-2 tw:md:tw:grid-cols-4 tw:gap-8 tw:mb-12">
+            
+            {/* Brand column */}
+            <div className="tw:col-span-2">
+              <span className="tw:text-base tw:font-bold tw:text-white">
+                DwarPal
+              </span>
+              <p className="tw:text-xs tw:text-[#9a9aa1] tw:mt-2 tw:max-w-sm tw:leading-relaxed">
+                A modern security & access intelligence platform for campuses and gated communities.
+              </p>
+            </div>
+
+            {/* Pages Column */}
+            <div>
+              <div className="tw:text-xs tw:font-bold tw:text-white tw:mb-3">
+                Pages
               </div>
-              <span className="tw:text-base tw:font-bold tw:text-white">DwarPal</span>
+              <ul className="tw:space-y-2 tw:text-xs tw:text-[#9a9aa1]">
+                <li>
+                  <a href="#work" className="hover:tw:text-white tw:transition-colors">Work</a>
+                </li>
+                <li>
+                  <a href="#about" className="hover:tw:text-white tw:transition-colors">About</a>
+                </li>
+                <li>
+                  <a href="#updates" className="hover:tw:text-white tw:transition-colors">Blog</a>
+                </li>
+                <li>
+                  <a href="#contact" className="hover:tw:text-white tw:transition-colors">Contact</a>
+                </li>
+                <li>
+                  <Link to="/" className="hover:tw:text-white tw:transition-colors">Dotted Mode</Link>
+                </li>
+              </ul>
             </div>
-            <p className="tw:text-xs tw:text-zinc-400 tw:leading-relaxed tw:max-w-sm">
-              Next-generation institutional access control and gate security system. Zero-trust dynamic passes, sub-second terminal verification, and live campus telemetry.
-            </p>
-            <div className="tw:mt-6 tw:flex tw:items-center tw:gap-2 tw:text-xs tw:font-mono tw:text-emerald-400">
-              <span className="tw:w-2 tw:h-2 tw:rounded-full tw:bg-emerald-500 tw:animate-pulse" />
-              <span>All Systems Operational (v2.4.0)</span>
+
+            {/* Socials Column */}
+            <div>
+              <div className="tw:text-xs tw:font-bold tw:text-white tw:mb-3">
+                Socials
+              </div>
+              <ul className="tw:space-y-2 tw:text-xs tw:text-[#9a9aa1]">
+                <li>
+                  <a href="https://twitter.com" target="_blank" rel="noreferrer" className="hover:tw:text-white tw:transition-colors">Twitter (X)</a>
+                </li>
+                <li>
+                  <a href="https://instagram.com" target="_blank" rel="noreferrer" className="hover:tw:text-white tw:transition-colors">Instagram</a>
+                </li>
+                <li>
+                  <a href="https://dribbble.com" target="_blank" rel="noreferrer" className="hover:tw:text-white tw:transition-colors">Dribbble</a>
+                </li>
+                <li>
+                  <a href="https://linkedin.com" target="_blank" rel="noreferrer" className="hover:tw:text-white tw:transition-colors">LinkedIn</a>
+                </li>
+              </ul>
+            </div>
+
+          </div>
+
+          {/* Bottom Bar */}
+          <div
+            className="tw:pt-8 tw:flex tw:flex-col tw:sm:tw:flex-row tw:items-center tw:justify-between tw:gap-4 tw:text-xs tw:text-[#9a9aa1]"
+            style={{
+              borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+            }}
+          >
+            <div>
+              Get template · Built for DwarPal · All templates
+            </div>
+            <div>
+              © DwarPal. All rights reserved.
             </div>
           </div>
 
-          {/* Col 3: Portals */}
-          <div>
-            <div className="tw:text-xs tw:font-mono tw:tracking-wider tw:text-zinc-400 tw:uppercase tw:mb-4">
-              PORTALS
-            </div>
-            <ul className="tw:space-y-2.5 tw:text-xs tw:text-zinc-400">
-              <li>
-                <Link to="/student/login" className="hover:tw:text-white tw:transition-colors">
-                  Student Portal
-                </Link>
-              </li>
-              <li>
-                <Link to="/faculty/login" className="hover:tw:text-white tw:transition-colors">
-                  Faculty Leave Desk
-                </Link>
-              </li>
-              <li>
-                <Link to="/security/login" className="hover:tw:text-white tw:transition-colors">
-                  Gate Security Terminal
-                </Link>
-              </li>
-              <li>
-                <Link to="/student/register" className="hover:tw:text-white tw:transition-colors">
-                  Student Self-Registration
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          {/* Col 4: Views */}
-          <div>
-            <div className="tw:text-xs tw:font-mono tw:tracking-wider tw:text-zinc-400 tw:uppercase tw:mb-4">
-              EXPERIENCES
-            </div>
-            <ul className="tw:space-y-2.5 tw:text-xs tw:text-zinc-400">
-              <li>
-                <Link to="/" className="hover:tw:text-white tw:transition-colors tw:flex tw:items-center tw:gap-1.5">
-                  <span className="tw:w-1.5 tw:h-1.5 tw:rounded-full tw:bg-blue-400" />
-                  <span>Dotted Canvas Landing (Primary)</span>
-                </Link>
-              </li>
-              <li>
-                <Link to="/display" className="hover:tw:text-white tw:transition-colors tw:text-white">
-                  Display Showcase View
-                </Link>
-              </li>
-              <li>
-                <Link to="/bloom" className="hover:tw:text-white tw:transition-colors">
-                  Bloom Luxury Landing
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          {/* Col 5: Legal & Help */}
-          <div>
-            <div className="tw:text-xs tw:font-mono tw:tracking-wider tw:text-zinc-400 tw:uppercase tw:mb-4">
-              GOVERNANCE
-            </div>
-            <ul className="tw:space-y-2.5 tw:text-xs tw:text-zinc-400">
-              <li>
-                <Link to="/privacy-policy" className="hover:tw:text-white tw:transition-colors">
-                  Privacy Policy & Data Security
-                </Link>
-              </li>
-              <li>
-                <Link to="/support" className="hover:tw:text-white tw:transition-colors">
-                  Technical Support
-                </Link>
-              </li>
-              <li>
-                <span className="tw:text-zinc-400">
-                  contact@dwarpal.internal
-                </span>
-              </li>
-            </ul>
-          </div>
-
-        </div>
-
-        {/* Bottom Bar */}
-        <div className="tw:max-w-6xl tw:mx-auto tw:pt-8 tw:border-t tw:border-zinc-900 tw:flex tw:flex-col tw:sm:tw:flex-row tw:items-center tw:justify-between tw:gap-4 tw:text-[11px] tw:font-mono tw:text-zinc-400">
-          <div>© {new Date().getFullYear()} DwarPal Access Systems. All rights reserved.</div>
-          <div className="tw:flex tw:gap-6">
-            <Link to="/privacy-policy" className="hover:tw:text-white tw:transition-colors">PRIVACY</Link>
-            <Link to="/support" className="hover:tw:text-white tw:transition-colors">SECURITY AUDIT</Link>
-            <Link to="/" className="hover:tw:text-white tw:transition-colors">DOTTED VIEW</Link>
-          </div>
         </div>
       </footer>
     </div>
