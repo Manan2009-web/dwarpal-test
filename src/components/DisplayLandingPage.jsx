@@ -240,7 +240,7 @@ export default function DisplayLandingPage() {
     <div
       className="tw:min-h-screen tw:w-full tw:text-[#ffffff] tw:selection:bg-[#2b7fff] tw:selection:text-white tw:relative tw:overflow-x-hidden"
       style={{
-        backgroundColor: '#09090b',
+        backgroundColor: '#07070a',
         fontFamily: '"Geist", "Inter Display", "Mona Sans Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       }}
     >
@@ -248,57 +248,57 @@ export default function DisplayLandingPage() {
       {/* BACKGROUND: GHOST FIBERS (React Bits) + AMBIENT GRID    */}
       {/* ======================================================== */}
       
-      {/* 1. GhostFibers WebGL Fiber Simulation */}
-      <div className="tw:fixed tw:inset-0 tw:pointer-events-none tw:z-0 tw:w-full tw:h-full tw:overflow-hidden tw:opacity-90">
+      {/* 1. GhostFibers WebGL Fiber Simulation (Full visibility behind transparent glass) */}
+      <div className="tw:fixed tw:inset-0 tw:pointer-events-none tw:z-0 tw:w-full tw:h-full tw:overflow-hidden">
         <Suspense fallback={null}>
           <GhostFibers
-            lineColor="#140E35"
-            glowColor="#3437A0"
-            speed={0.2}
+            lineColor="#191040"
+            glowColor="#3d40ba"
+            speed={0.22}
             scale={2}
             rotation={0}
             rotationSpeed={0.25}
-            layers={4}
-            waveAmplitude={0.015}
+            layers={5}
+            waveAmplitude={0.016}
             waveFrequency={3}
-            waveSpeed={0.15}
+            waveSpeed={0.16}
             layerSpeed={0.08}
-            twist={0.1}
+            twist={0.11}
             twistFrequency={5}
             twistSpeed={1.2}
             lineFrequency={5}
             lineSpacing={2}
             lineSharpness={16}
             glowFalloff={10}
-            glowIntensity={1.6}
-            brightness={2}
-            blueBoost={1.25}
-            vignette={0.8}
-            grain={0.05}
+            glowIntensity={1.75}
+            brightness={2.1}
+            blueBoost={1.3}
+            vignette={0.65}
+            grain={0.04}
             dpr={1}
           />
         </Suspense>
       </div>
 
-      {/* 2. Top Center Subtle Ambient Vignette & Contrast Overlay */}
+      {/* 2. Transparent Soft Contrast Overlay */}
       <div 
         className="tw:fixed tw:inset-0 tw:pointer-events-none tw:z-0"
         style={{
-          background: 'radial-gradient(ellipse 85% 60% at 50% 10%, rgba(9, 9, 11, 0.2) 0%, rgba(9, 9, 11, 0.75) 100%)',
+          background: 'radial-gradient(ellipse 90% 70% at 50% 15%, rgba(7, 7, 10, 0.1) 0%, rgba(7, 7, 10, 0.5) 100%)',
         }}
       />
 
       {/* 3. Subtle Technical Grid Pattern Overlay with Radial Mask */}
       <div 
-        className="tw:fixed tw:inset-0 tw:pointer-events-none tw:z-0 tw:opacity-40"
+        className="tw:fixed tw:inset-0 tw:pointer-events-none tw:z-0 tw:opacity-35"
         style={{
           backgroundImage: `
-            linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-            linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px)
+            linear-gradient(to right, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(255, 255, 255, 0.06) 1px, transparent 1px)
           `,
           backgroundSize: '48px 48px',
-          maskImage: 'radial-gradient(ellipse 90% 70% at 50% 0%, #000 50%, transparent 100%)',
-          WebkitMaskImage: 'radial-gradient(ellipse 90% 70% at 50% 0%, #000 50%, transparent 100%)',
+          maskImage: 'radial-gradient(ellipse 90% 70% at 50% 0%, #000 45%, transparent 100%)',
+          WebkitMaskImage: 'radial-gradient(ellipse 90% 70% at 50% 0%, #000 45%, transparent 100%)',
         }}
       />
 
@@ -308,10 +308,10 @@ export default function DisplayLandingPage() {
       <div className="tw:fixed tw:bottom-5 tw:right-5 tw:z-50 tw:pointer-events-auto">
         <Link
           to="/"
-          className="tw:flex tw:items-center tw:gap-2 tw:px-4 tw:py-2 tw:rounded-full tw:text-xs tw:font-medium tw:transition-all tw:shadow-2xl hover:tw:scale-105"
+          className="tw:flex tw:items-center tw:gap-2 tw:px-4 tw:py-2 tw:rounded-full tw:text-xs tw:font-medium tw:transition-all tw:shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] hover:tw:scale-105 tw:backdrop-blur-xl"
           style={{
-            backgroundColor: '#1c1c1f',
-            border: '1px solid rgba(255, 255, 255, 0.15)',
+            backgroundColor: 'rgba(25, 25, 35, 0.55)',
+            border: '1px solid rgba(255, 255, 255, 0.18)',
             color: '#ffffff',
           }}
           title="Switch to original interactive Dotted Canvas Landing"
@@ -339,8 +339,14 @@ export default function DisplayLandingPage() {
           </span>
         </div>
 
-        {/* Center Desktop Links */}
-        <nav className="tw:hidden tw:md:tw:flex tw:items-center tw:gap-8 tw:text-[13px] tw:font-medium tw:text-[#9a9aa1]">
+        {/* Center Desktop Links in Frosted Capsule */}
+        <nav 
+          className="tw:hidden tw:md:tw:flex tw:items-center tw:gap-8 tw:px-6 tw:py-2.5 tw:rounded-full tw:text-[13px] tw:font-medium tw:text-[#9a9aa1] tw:backdrop-blur-xl tw:shadow-[0_4px_24px_0_rgba(0,0,0,0.25)]"
+          style={{
+            backgroundColor: 'rgba(20, 20, 30, 0.45)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+          }}
+        >
           <a href="#work" className="hover:tw:text-[#ffffff] tw:transition-colors">
             Work
           </a>
@@ -365,7 +371,7 @@ export default function DisplayLandingPage() {
         <div className="tw:flex tw:items-center tw:gap-3">
           <Link
             to="/access-portal"
-            className="tw:px-4 tw:py-2 tw:rounded-full tw:text-xs tw:font-semibold tw:transition-all hover:tw:opacity-90 tw:shadow-lg"
+            className="tw:px-5 tw:py-2 tw:rounded-full tw:text-xs tw:font-semibold tw:transition-all hover:tw:opacity-90 tw:shadow-[0_4px_20px_0_rgba(255,255,255,0.2)]"
             style={{
               backgroundColor: '#ffffff',
               color: '#000000',
@@ -391,10 +397,10 @@ export default function DisplayLandingPage() {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="tw:fixed tw:inset-x-4 tw:top-20 tw:z-50 tw:p-6 tw:rounded-2xl tw:flex tw:flex-col tw:gap-4 tw:md:tw:hidden tw:backdrop-blur-xl"
+            className="tw:fixed tw:inset-x-4 tw:top-20 tw:z-50 tw:p-6 tw:rounded-2xl tw:flex tw:flex-col tw:gap-4 tw:md:tw:hidden tw:backdrop-blur-2xl tw:shadow-2xl"
             style={{
-              backgroundColor: 'rgba(20, 20, 23, 0.95)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
+              backgroundColor: 'rgba(15, 15, 22, 0.75)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
             }}
           >
             <a
@@ -434,7 +440,7 @@ export default function DisplayLandingPage() {
               </Link>
               <Link
                 to="/"
-                className="tw:w-full tw:text-center tw:py-2.5 tw:rounded-full tw:bg-[#1c1c1f] tw:text-[#9a9aa1] tw:text-xs"
+                className="tw:w-full tw:text-center tw:py-2.5 tw:rounded-full tw:bg-white/10 tw:text-[#9a9aa1] tw:text-xs"
               >
                 Switch to Dotted Canvas View
               </Link>
@@ -451,10 +457,10 @@ export default function DisplayLandingPage() {
         <section className="tw:pt-12 tw:md:tw:pt-20">
           
           {/* Eyebrow Pill Badge */}
-          <div className="tw:inline-flex tw:items-center tw:gap-2 tw:px-3 tw:py-1 tw:rounded-full tw:mb-6 tw:backdrop-blur-md"
+          <div className="tw:inline-flex tw:items-center tw:gap-2 tw:px-3.5 tw:py-1.5 tw:rounded-full tw:mb-6 tw:backdrop-blur-xl tw:shadow-md"
             style={{
-              backgroundColor: 'rgba(20, 20, 23, 0.8)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
+              backgroundColor: 'rgba(255, 255, 255, 0.06)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
               color: '#9a9aa1',
               fontSize: '12px',
             }}
@@ -473,15 +479,15 @@ export default function DisplayLandingPage() {
             An intelligent digital security and campus access management platform making institutions safe.
           </p>
 
-          {/* 3 Horizontal Hero Bento Cards (Websites, Apps, Design systems style) */}
+          {/* 3 Horizontal Hero Bento Cards (Glassmorphic Transparent Surfaces) */}
           <div className="tw:mt-12 tw:grid tw:grid-cols-1 tw:md:tw:grid-cols-3 tw:gap-4">
             
             {/* Card 1: Websites / Gatepasses */}
             <div
-              className="tw:p-6 tw:rounded-2xl tw:flex tw:flex-col tw:justify-between tw:min-h-[160px] tw:transition-all hover:tw:bg-[#1c1c1f] tw:backdrop-blur-md tw:shadow-lg"
+              className="tw:p-6 tw:rounded-2xl tw:flex tw:flex-col tw:justify-between tw:min-h-[160px] tw:transition-all hover:tw:bg-white/[0.08] hover:tw:border-white/20 tw:backdrop-blur-2xl tw:shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]"
               style={{
-                backgroundColor: 'rgba(20, 20, 23, 0.75)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
+                backgroundColor: 'rgba(18, 18, 26, 0.42)',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
               }}
             >
               <div>
@@ -496,10 +502,10 @@ export default function DisplayLandingPage() {
 
             {/* Card 2: Apps / Terminals */}
             <div
-              className="tw:p-6 tw:rounded-2xl tw:flex tw:flex-col tw:justify-between tw:min-h-[160px] tw:transition-all hover:tw:bg-[#1c1c1f] tw:backdrop-blur-md tw:shadow-lg"
+              className="tw:p-6 tw:rounded-2xl tw:flex tw:flex-col tw:justify-between tw:min-h-[160px] tw:transition-all hover:tw:bg-white/[0.08] hover:tw:border-white/20 tw:backdrop-blur-2xl tw:shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]"
               style={{
-                backgroundColor: 'rgba(20, 20, 23, 0.75)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
+                backgroundColor: 'rgba(18, 18, 26, 0.42)',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
               }}
             >
               <div>
@@ -514,10 +520,10 @@ export default function DisplayLandingPage() {
 
             {/* Card 3: Design systems / Governance */}
             <div
-              className="tw:p-6 tw:rounded-2xl tw:flex tw:flex-col tw:justify-between tw:min-h-[160px] tw:transition-all hover:tw:bg-[#1c1c1f] tw:backdrop-blur-md tw:shadow-lg"
+              className="tw:p-6 tw:rounded-2xl tw:flex tw:flex-col tw:justify-between tw:min-h-[160px] tw:transition-all hover:tw:bg-white/[0.08] hover:tw:border-white/20 tw:backdrop-blur-2xl tw:shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]"
               style={{
-                backgroundColor: 'rgba(20, 20, 23, 0.75)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
+                backgroundColor: 'rgba(18, 18, 26, 0.42)',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
               }}
             >
               <div>
@@ -534,7 +540,7 @@ export default function DisplayLandingPage() {
         </section>
 
         {/* ======================================================== */}
-        {/* 3. SELECTED WORK SECTION (Exact Display Framer Layout)   */}
+        {/* 3. SELECTED WORK SECTION (Transparent Glass Cards)       */}
         {/* ======================================================== */}
         <section id="work">
           
@@ -553,33 +559,33 @@ export default function DisplayLandingPage() {
             {SELECTED_WORK.map((work, idx) => (
               <div
                 key={work.id}
-                className="tw:rounded-3xl tw:overflow-hidden tw:transition-all tw:backdrop-blur-md tw:shadow-2xl"
+                className="tw:rounded-3xl tw:overflow-hidden tw:transition-all hover:tw:border-white/20 tw:backdrop-blur-2xl tw:shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]"
                 style={{
-                  backgroundColor: 'rgba(20, 20, 23, 0.85)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  backgroundColor: 'rgba(18, 18, 26, 0.45)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
                 }}
               >
-                {/* Visual Preview Container */}
+                {/* Visual Preview Container - Frosted Glass */}
                 <div
-                  className="tw:w-full tw:h-72 tw:sm:tw:h-96 tw:p-6 tw:sm:tw:p-8 tw:flex tw:items-center tw:justify-center tw:relative tw:overflow-hidden"
+                  className="tw:w-full tw:h-72 tw:sm:tw:h-96 tw:p-6 tw:sm:tw:p-8 tw:flex tw:items-center tw:justify-center tw:relative tw:overflow-hidden tw:backdrop-blur-md"
                   style={{
-                    backgroundColor: '#0c0c0f',
-                    borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                    backgroundColor: 'rgba(10, 10, 15, 0.3)',
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
                   }}
                 >
-                  {/* Subtle Grid Lines inside card */}
-                  <div className="tw:absolute tw:inset-0 tw:bg-[radial-gradient(#1c1c1f_1px,transparent_1px)] [background-size:20px_20px] tw:opacity-40" />
+                  {/* Subtle Grid Lines inside preview frame */}
+                  <div className="tw:absolute tw:inset-0 tw:bg-[radial-gradient(rgba(255,255,255,0.15)_1px,transparent_1px)] [background-size:20px_20px] tw:opacity-20" />
 
-                  {/* Card Content Visuals */}
+                  {/* Card Content Visuals - Glass Paneling */}
                   {work.type === 'pass' && (
                     <div
-                      className="tw:w-72 tw:rounded-2xl tw:p-5 tw:shadow-2xl tw:relative tw:z-10"
+                      className="tw:w-72 tw:rounded-2xl tw:p-5 tw:shadow-2xl tw:relative tw:z-10 tw:backdrop-blur-2xl"
                       style={{
-                        backgroundColor: '#141417',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        backgroundColor: 'rgba(25, 25, 35, 0.65)',
+                        border: '1px solid rgba(255, 255, 255, 0.18)',
                       }}
                     >
-                      <div className="tw:flex tw:justify-between tw:items-center tw:border-b tw:border-zinc-800 tw:pb-3 tw:mb-3">
+                      <div className="tw:flex tw:justify-between tw:items-center tw:border-b tw:border-white/10 tw:pb-3 tw:mb-3">
                         <span className="tw:text-xs tw:font-bold tw:text-white">DwarPal Digital Pass</span>
                         <span className="tw:text-[10px] tw:text-emerald-400 tw:font-mono">VALID</span>
                       </div>
@@ -598,17 +604,20 @@ export default function DisplayLandingPage() {
 
                   {work.type === 'terminal' && (
                     <div
-                      className="tw:w-80 tw:rounded-2xl tw:p-5 tw:shadow-2xl tw:relative tw:z-10"
+                      className="tw:w-80 tw:rounded-2xl tw:p-5 tw:shadow-2xl tw:relative tw:z-10 tw:backdrop-blur-2xl"
                       style={{
-                        backgroundColor: '#141417',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        backgroundColor: 'rgba(25, 25, 35, 0.65)',
+                        border: '1px solid rgba(255, 255, 255, 0.18)',
                       }}
                     >
-                      <div className="tw:flex tw:justify-between tw:items-center tw:border-b tw:border-zinc-800 tw:pb-2.5 tw:mb-3 tw:text-[11px] tw:font-mono">
+                      <div className="tw:flex tw:justify-between tw:items-center tw:border-b tw:border-white/10 tw:pb-2.5 tw:mb-3 tw:text-[11px] tw:font-mono">
                         <span className="tw:text-emerald-400">CHECKPOINT: NORTH GATE-01</span>
                         <span className="tw:text-zinc-400">ONLINE</span>
                       </div>
-                      <div className="tw:h-28 tw:rounded-xl tw:bg-black tw:border tw:border-zinc-800 tw:flex tw:flex-col tw:items-center tw:justify-center tw:p-3">
+                      <div 
+                        className="tw:h-28 tw:rounded-xl tw:border tw:border-white/10 tw:flex tw:flex-col tw:items-center tw:justify-center tw:p-3 tw:backdrop-blur-md"
+                        style={{ backgroundColor: 'rgba(0, 0, 0, 0.45)' }}
+                      >
                         <CheckCircle2 className="tw:w-8 tw:h-8 tw:text-emerald-400 tw:mb-1.5" />
                         <span className="tw:text-xs tw:font-bold tw:text-emerald-300">PASS VERIFIED (340ms)</span>
                         <span className="tw:text-[10px] tw:text-zinc-400 tw:mt-0.5">Vehicle: MH-12-DE-4419</span>
@@ -618,23 +627,26 @@ export default function DisplayLandingPage() {
 
                   {work.type === 'hierarchy' && (
                     <div
-                      className="tw:w-80 tw:rounded-2xl tw:p-5 tw:shadow-2xl tw:relative tw:z-10"
+                      className="tw:w-80 tw:rounded-2xl tw:p-5 tw:shadow-2xl tw:relative tw:z-10 tw:backdrop-blur-2xl"
                       style={{
-                        backgroundColor: '#141417',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        backgroundColor: 'rgba(25, 25, 35, 0.65)',
+                        border: '1px solid rgba(255, 255, 255, 0.18)',
                       }}
                     >
                       <div className="tw:flex tw:justify-between tw:items-center tw:mb-3">
                         <span className="tw:text-xs tw:font-bold tw:text-white">Leave Requests Queue</span>
-                        <span className="tw:text-[10px] tw:bg-purple-950 tw:text-purple-300 tw:px-2 tw:py-0.5 tw:rounded-full">
+                        <span className="tw:text-[10px] tw:bg-purple-950/80 tw:text-purple-300 tw:px-2 tw:py-0.5 tw:rounded-full tw:border tw:border-purple-500/30">
                           1 PENDING
                         </span>
                       </div>
-                      <div className="tw:p-3 tw:rounded-xl tw:bg-black tw:border tw:border-zinc-800">
+                      <div 
+                        className="tw:p-3 tw:rounded-xl tw:border tw:border-white/10 tw:backdrop-blur-md"
+                        style={{ backgroundColor: 'rgba(0, 0, 0, 0.45)' }}
+                      >
                         <div className="tw:text-xs tw:font-semibold tw:text-white">Rohan Kulkarni</div>
                         <div className="tw:text-[11px] tw:text-[#9a9aa1]">ECE Sem-6 · Family Emergency</div>
                         <div className="tw:mt-2.5 tw:flex tw:gap-2">
-                          <button className="tw:flex-1 tw:py-1 tw:bg-emerald-600 tw:text-white tw:text-[11px] tw:font-semibold tw:rounded-md">
+                          <button className="tw:flex-1 tw:py-1 tw:bg-emerald-600/90 hover:tw:bg-emerald-600 tw:text-white tw:text-[11px] tw:font-semibold tw:rounded-md tw:shadow-sm">
                             Approve & Notify Parent
                           </button>
                         </div>
@@ -644,10 +656,10 @@ export default function DisplayLandingPage() {
 
                   {work.type === 'telemetry' && (
                     <div
-                      className="tw:w-80 tw:rounded-2xl tw:p-5 tw:shadow-2xl tw:relative tw:z-10"
+                      className="tw:w-80 tw:rounded-2xl tw:p-5 tw:shadow-2xl tw:relative tw:z-10 tw:backdrop-blur-2xl"
                       style={{
-                        backgroundColor: '#141417',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        backgroundColor: 'rgba(25, 25, 35, 0.65)',
+                        border: '1px solid rgba(255, 255, 255, 0.18)',
                       }}
                     >
                       <div className="tw:flex tw:justify-between tw:items-center tw:mb-3">
@@ -655,11 +667,17 @@ export default function DisplayLandingPage() {
                         <span className="tw:text-[10px] tw:text-emerald-400">● LIVE SENSORS</span>
                       </div>
                       <div className="tw:grid tw:grid-cols-2 tw:gap-2">
-                        <div className="tw:p-3 tw:rounded-xl tw:bg-black tw:border tw:border-zinc-800">
+                        <div 
+                          className="tw:p-3 tw:rounded-xl tw:border tw:border-white/10 tw:backdrop-blur-md"
+                          style={{ backgroundColor: 'rgba(0, 0, 0, 0.45)' }}
+                        >
                           <div className="tw:text-[10px] tw:text-[#9a9aa1]">Inside Campus</div>
                           <div className="tw:text-lg tw:font-bold tw:text-white tw:mt-0.5">3,412</div>
                         </div>
-                        <div className="tw:p-3 tw:rounded-xl tw:bg-black tw:border tw:border-zinc-800">
+                        <div 
+                          className="tw:p-3 tw:rounded-xl tw:border tw:border-white/10 tw:backdrop-blur-md"
+                          style={{ backgroundColor: 'rgba(0, 0, 0, 0.45)' }}
+                        >
                           <div className="tw:text-[10px] tw:text-[#9a9aa1]">Active Outpass</div>
                           <div className="tw:text-lg tw:font-bold tw:text-amber-400 tw:mt-0.5">284</div>
                         </div>
@@ -686,10 +704,10 @@ export default function DisplayLandingPage() {
 
                   <Link
                     to={work.link}
-                    className="tw:inline-flex tw:items-center tw:justify-center tw:px-5 tw:py-2.5 tw:rounded-full tw:text-xs tw:font-semibold tw:transition-all hover:tw:bg-[#2b7fff] hover:tw:text-white"
+                    className="tw:inline-flex tw:items-center tw:justify-center tw:px-5 tw:py-2.5 tw:rounded-full tw:text-xs tw:font-semibold tw:transition-all hover:tw:bg-[#2b7fff] hover:tw:text-white tw:backdrop-blur-xl"
                     style={{
-                      backgroundColor: '#1c1c1f',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
                       color: '#ffffff',
                     }}
                   >
@@ -702,14 +720,14 @@ export default function DisplayLandingPage() {
         </section>
 
         {/* ======================================================== */}
-        {/* 4. LIVE INTERACTIVE DEMO SANDBOX                         */}
+        {/* 4. LIVE INTERACTIVE DEMO SANDBOX (Transparent Glass)     */}
         {/* ======================================================== */}
         <section id="demo" className="tw:scroll-mt-20">
           <div
-            className="tw:rounded-3xl tw:p-6 tw:sm:tw:p-10 tw:backdrop-blur-md tw:shadow-2xl"
+            className="tw:rounded-3xl tw:p-6 tw:sm:tw:p-10 tw:backdrop-blur-2xl tw:shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]"
             style={{
-              backgroundColor: 'rgba(20, 20, 23, 0.85)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
+              backgroundColor: 'rgba(18, 18, 26, 0.45)',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
             }}
           >
             <div className="tw:text-center tw:max-w-xl tw:mx-auto tw:mb-8">
@@ -727,17 +745,17 @@ export default function DisplayLandingPage() {
             {/* Sandbox Tabs */}
             <div className="tw:flex tw:justify-center tw:mb-8">
               <div
-                className="tw:inline-flex tw:p-1 tw:rounded-full"
+                className="tw:inline-flex tw:p-1.5 tw:rounded-full tw:backdrop-blur-xl"
                 style={{
-                  backgroundColor: '#0d0d10',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  backgroundColor: 'rgba(0, 0, 0, 0.35)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
                 }}
               >
                 <button
                   onClick={() => setActiveSandboxTab('student')}
                   className={`tw:px-4 tw:py-1.5 tw:rounded-full tw:text-xs tw:font-medium tw:transition-all ${
                     activeSandboxTab === 'student'
-                      ? 'tw:bg-[#ffffff] tw:text-[#000000]'
+                      ? 'tw:bg-[#ffffff] tw:text-[#000000] tw:shadow-md'
                       : 'tw:text-[#9a9aa1] hover:tw:text-white'
                   }`}
                 >
@@ -747,7 +765,7 @@ export default function DisplayLandingPage() {
                   onClick={() => setActiveSandboxTab('terminal')}
                   className={`tw:px-4 tw:py-1.5 tw:rounded-full tw:text-xs tw:font-medium tw:transition-all ${
                     activeSandboxTab === 'terminal'
-                      ? 'tw:bg-[#ffffff] tw:text-[#000000]'
+                      ? 'tw:bg-[#ffffff] tw:text-[#000000] tw:shadow-md'
                       : 'tw:text-[#9a9aa1] hover:tw:text-white'
                   }`}
                 >
@@ -757,7 +775,7 @@ export default function DisplayLandingPage() {
                   onClick={() => setActiveSandboxTab('alerts')}
                   className={`tw:px-4 tw:py-1.5 tw:rounded-full tw:text-xs tw:font-medium tw:transition-all ${
                     activeSandboxTab === 'alerts'
-                      ? 'tw:bg-[#ffffff] tw:text-[#000000]'
+                      ? 'tw:bg-[#ffffff] tw:text-[#000000] tw:shadow-md'
                       : 'tw:text-[#9a9aa1] hover:tw:text-white'
                   }`}
                 >
@@ -768,10 +786,10 @@ export default function DisplayLandingPage() {
 
             {/* Sandbox Content Container */}
             <div
-              className="tw:p-6 tw:rounded-2xl"
+              className="tw:p-6 tw:rounded-2xl tw:backdrop-blur-xl"
               style={{
-                backgroundColor: '#0c0c0f',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
+                backgroundColor: 'rgba(10, 10, 16, 0.35)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
               }}
             >
               {activeSandboxTab === 'student' && (
@@ -790,14 +808,14 @@ export default function DisplayLandingPage() {
                           setDynamicCode(`DP-${Math.floor(1000 + Math.random() * 9000)}-${randomSuffix}`)
                           setQrTimer(15)
                         }}
-                        className="tw:px-4 tw:py-2 tw:rounded-full tw:bg-[#1c1c1f] tw:text-white tw:border tw:border-white/10 tw:text-xs tw:font-medium hover:tw:bg-[#2b7fff] tw:transition-colors tw:flex tw:items-center tw:gap-2"
+                        className="tw:px-4 tw:py-2 tw:rounded-full tw:bg-white/10 tw:text-white tw:border tw:border-white/15 tw:text-xs tw:font-medium hover:tw:bg-[#2b7fff] tw:transition-colors tw:flex tw:items-center tw:gap-2 tw:backdrop-blur-xl"
                       >
                         <RefreshCw className="tw:w-3.5 tw:h-3.5" />
                         <span>Regenerate Seed Hash</span>
                       </button>
                       <button
                         onClick={() => setActiveSandboxTab('terminal')}
-                        className="tw:px-4 tw:py-2 tw:rounded-full tw:bg-white tw:text-black tw:text-xs tw:font-semibold hover:tw:bg-zinc-200 tw:transition-colors"
+                        className="tw:px-4 tw:py-2 tw:rounded-full tw:bg-white tw:text-black tw:text-xs tw:font-semibold hover:tw:bg-zinc-200 tw:transition-colors tw:shadow-md"
                       >
                         Next: Simulate Gate Scan →
                       </button>
@@ -806,10 +824,10 @@ export default function DisplayLandingPage() {
 
                   <div className="tw:flex tw:justify-center">
                     <div
-                      className="tw:w-64 tw:p-4 tw:rounded-2xl tw:shadow-xl"
+                      className="tw:w-64 tw:p-4 tw:rounded-2xl tw:shadow-2xl tw:backdrop-blur-2xl"
                       style={{
-                        backgroundColor: '#141417',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        backgroundColor: 'rgba(25, 25, 35, 0.65)',
+                        border: '1px solid rgba(255, 255, 255, 0.18)',
                       }}
                     >
                       <div className="tw:flex tw:justify-between tw:items-center tw:text-[11px] tw:font-mono tw:mb-3">
@@ -843,7 +861,7 @@ export default function DisplayLandingPage() {
                       <button
                         onClick={handleSimulateScan}
                         disabled={isVerifying}
-                        className="tw:px-5 tw:py-2.5 tw:rounded-full tw:bg-white tw:text-black tw:text-xs tw:font-semibold hover:tw:bg-zinc-200 tw:transition-colors tw:flex tw:items-center tw:gap-2 disabled:tw:opacity-60"
+                        className="tw:px-5 tw:py-2.5 tw:rounded-full tw:bg-white tw:text-black tw:text-xs tw:font-semibold hover:tw:bg-zinc-200 tw:transition-colors tw:flex tw:items-center tw:gap-2 disabled:tw:opacity-60 tw:shadow-md"
                       >
                         {isVerifying ? (
                           <>
@@ -862,18 +880,18 @@ export default function DisplayLandingPage() {
 
                   <div className="tw:flex tw:justify-center">
                     <div
-                      className="tw:w-72 tw:p-4 tw:rounded-2xl tw:font-mono tw:text-xs"
+                      className="tw:w-72 tw:p-4 tw:rounded-2xl tw:font-mono tw:text-xs tw:backdrop-blur-2xl tw:shadow-2xl"
                       style={{
-                        backgroundColor: '#141417',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        backgroundColor: 'rgba(25, 25, 35, 0.65)',
+                        border: '1px solid rgba(255, 255, 255, 0.18)',
                       }}
                     >
-                      <div className="tw:flex tw:justify-between tw:items-center tw:border-b tw:border-zinc-800 tw:pb-2 tw:mb-3 tw:text-[10px]">
+                      <div className="tw:flex tw:justify-between tw:items-center tw:border-b tw:border-white/10 tw:pb-2 tw:mb-3 tw:text-[10px]">
                         <span className="tw:text-emerald-400">TERMINAL: GATE-01</span>
                         <span className="tw:text-[#9a9aa1]">READY</span>
                       </div>
                       {scanResult ? (
-                        <div className="tw:space-y-1.5 tw:p-3 tw:bg-emerald-950/40 tw:border tw:border-emerald-500/40 tw:rounded-xl">
+                        <div className="tw:space-y-1.5 tw:p-3 tw:bg-emerald-950/50 tw:border tw:border-emerald-500/40 tw:rounded-xl tw:backdrop-blur-md">
                           <div className="tw:text-emerald-400 tw:font-bold">✓ PASS VERIFIED (340ms)</div>
                           <div className="tw:text-[11px] tw:text-white">Student: {scanResult.student}</div>
                           <div className="tw:text-[11px] tw:text-zinc-300">Pass: {scanResult.passId}</div>
@@ -881,9 +899,12 @@ export default function DisplayLandingPage() {
                           <div className="tw:text-[10px] tw:text-zinc-400">Time: {scanResult.timestamp}</div>
                         </div>
                       ) : (
-                        <div className="tw:h-28 tw:border tw:border-dashed tw:border-zinc-800 tw:rounded-xl tw:flex tw:flex-col tw:items-center tw:justify-center tw:text-zinc-500 tw:text-center tw:p-3">
+                        <div 
+                          className="tw:h-28 tw:border tw:border-dashed tw:border-white/15 tw:rounded-xl tw:flex tw:flex-col tw:items-center tw:justify-center tw:text-zinc-400 tw:text-center tw:p-3"
+                          style={{ backgroundColor: 'rgba(0, 0, 0, 0.35)' }}
+                        >
                           <span>Camera Stream Ready</span>
-                          <span className="tw:text-[10px] tw:text-zinc-600 tw:mt-1">Click button to scan</span>
+                          <span className="tw:text-[10px] tw:text-zinc-500 tw:mt-1">Click button to scan</span>
                         </div>
                       )}
                     </div>
@@ -903,7 +924,7 @@ export default function DisplayLandingPage() {
                     <div className="tw:mt-6">
                       <Link
                         to="/access-portal"
-                        className="tw:px-5 tw:py-2.5 tw:rounded-full tw:bg-white tw:text-black tw:text-xs tw:font-semibold hover:tw:bg-zinc-200 tw:transition-colors tw:inline-block"
+                        className="tw:px-5 tw:py-2.5 tw:rounded-full tw:bg-white tw:text-black tw:text-xs tw:font-semibold hover:tw:bg-zinc-200 tw:transition-colors tw:inline-block tw:shadow-md"
                       >
                         Deploy DwarPal in Your Campus →
                       </Link>
@@ -915,17 +936,17 @@ export default function DisplayLandingPage() {
                       {alertLogs.map((log) => (
                         <div
                           key={log.id}
-                          className="tw:p-3 tw:rounded-xl tw:text-[11px] tw:flex tw:items-start tw:justify-between tw:gap-2"
+                          className="tw:p-3 tw:rounded-xl tw:text-[11px] tw:flex tw:items-start tw:justify-between tw:gap-2 tw:backdrop-blur-xl"
                           style={{
-                            backgroundColor: '#141417',
-                            border: '1px solid rgba(255, 255, 255, 0.08)',
+                            backgroundColor: 'rgba(25, 25, 35, 0.6)',
+                            border: '1px solid rgba(255, 255, 255, 0.12)',
                           }}
                         >
                           <div>
                             <div className="tw:text-white">{log.text}</div>
                             <div className="tw:text-[9px] tw:text-[#9a9aa1] tw:font-mono tw:mt-0.5">{log.time}</div>
                           </div>
-                          <span className="tw:text-[9px] tw:font-mono tw:text-emerald-400 tw:bg-emerald-950/60 tw:px-2 tw:py-0.5 tw:rounded">
+                          <span className="tw:text-[9px] tw:font-mono tw:text-emerald-400 tw:bg-emerald-950/70 tw:border tw:border-emerald-500/30 tw:px-2 tw:py-0.5 tw:rounded">
                             {log.status}
                           </span>
                         </div>
@@ -939,7 +960,7 @@ export default function DisplayLandingPage() {
         </section>
 
         {/* ======================================================== */}
-        {/* 5. FAQ SECTION (Exact Display Framer Layout & Numbers)   */}
+        {/* 5. FAQ SECTION (Transparent Glass Accordion)             */}
         {/* ======================================================== */}
         <section id="faq">
           <div className="tw:mb-8">
@@ -957,15 +978,15 @@ export default function DisplayLandingPage() {
               return (
                 <div
                   key={idx}
-                  className="tw:rounded-2xl tw:overflow-hidden tw:transition-all tw:backdrop-blur-md tw:shadow-lg"
+                  className="tw:rounded-2xl tw:overflow-hidden tw:transition-all hover:tw:border-white/20 tw:backdrop-blur-2xl tw:shadow-[0_4px_24px_0_rgba(0,0,0,0.25)]"
                   style={{
-                    backgroundColor: 'rgba(20, 20, 23, 0.85)',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    backgroundColor: 'rgba(18, 18, 26, 0.45)',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
                   }}
                 >
                   <button
                     onClick={() => setOpenFaq(isOpen ? -1 : idx)}
-                    className="tw:w-full tw:p-6 tw:text-left tw:flex tw:items-center tw:justify-between tw:gap-4 hover:tw:bg-[#1c1c1f] tw:transition-colors"
+                    className="tw:w-full tw:p-6 tw:text-left tw:flex tw:items-center tw:justify-between tw:gap-4 hover:tw:bg-white/[0.05] tw:transition-colors"
                   >
                     <div className="tw:flex tw:items-center tw:gap-4">
                       <span className="tw:text-sm tw:font-medium tw:text-[#9a9aa1]">
@@ -994,7 +1015,7 @@ export default function DisplayLandingPage() {
                         <div
                           className="tw:px-6 tw:pb-6 tw:pt-2 tw:text-[13px] tw:text-[#9a9aa1] tw:leading-relaxed"
                           style={{
-                            borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+                            borderTop: '1px solid rgba(255, 255, 255, 0.08)',
                           }}
                         >
                           {faq.a}
@@ -1009,7 +1030,7 @@ export default function DisplayLandingPage() {
         </section>
 
         {/* ======================================================== */}
-        {/* 6. TESTIMONIALS SECTION (Exact Display Framer Layout)    */}
+        {/* 6. TESTIMONIALS SECTION (Transparent Glass Cards)        */}
         {/* ======================================================== */}
         <section>
           <div className="tw:mb-8">
@@ -1025,10 +1046,10 @@ export default function DisplayLandingPage() {
             {TESTIMONIALS.map((t, idx) => (
               <div
                 key={idx}
-                className="tw:p-6 tw:sm:tw:p-8 tw:rounded-2xl tw:flex tw:flex-col tw:justify-between tw:transition-all tw:backdrop-blur-md tw:shadow-lg"
+                className="tw:p-6 tw:sm:tw:p-8 tw:rounded-2xl tw:flex tw:flex-col tw:justify-between tw:transition-all hover:tw:border-white/20 tw:backdrop-blur-2xl tw:shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]"
                 style={{
-                  backgroundColor: 'rgba(20, 20, 23, 0.85)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  backgroundColor: 'rgba(18, 18, 26, 0.45)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
                 }}
               >
                 <p className="tw:text-[14px] tw:text-[#9a9aa1] tw:leading-relaxed">
@@ -1037,7 +1058,7 @@ export default function DisplayLandingPage() {
 
                 <div className="tw:mt-6 tw:pt-6 tw:flex tw:items-center tw:justify-between"
                   style={{
-                    borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+                    borderTop: '1px solid rgba(255, 255, 255, 0.08)',
                   }}
                 >
                   <div>
@@ -1058,7 +1079,7 @@ export default function DisplayLandingPage() {
         </section>
 
         {/* ======================================================== */}
-        {/* 7. UPDATES / BLOG (Exact Display Framer Layout)          */}
+        {/* 7. UPDATES / BLOG (Transparent Glass Cards)              */}
         {/* ======================================================== */}
         <section id="updates">
           <div className="tw:flex tw:items-end tw:justify-between tw:mb-8">
@@ -1079,10 +1100,10 @@ export default function DisplayLandingPage() {
             {UPDATES.map((article, idx) => (
               <div
                 key={idx}
-                className="tw:p-6 tw:sm:tw:p-8 tw:rounded-2xl tw:flex tw:flex-col tw:justify-between tw:transition-all hover:tw:bg-[#1c1c1f] tw:backdrop-blur-md tw:shadow-lg"
+                className="tw:p-6 tw:sm:tw:p-8 tw:rounded-2xl tw:flex tw:flex-col tw:justify-between tw:transition-all hover:tw:bg-white/[0.08] hover:tw:border-white/20 tw:backdrop-blur-2xl tw:shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]"
                 style={{
-                  backgroundColor: 'rgba(20, 20, 23, 0.85)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  backgroundColor: 'rgba(18, 18, 26, 0.45)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
                 }}
               >
                 <div>
@@ -1102,14 +1123,14 @@ export default function DisplayLandingPage() {
         </section>
 
         {/* ======================================================== */}
-        {/* 8. CTA SECTION (Exact Display Framer Layout)             */}
+        {/* 8. CTA SECTION (Transparent Glass Banner)                */}
         {/* ======================================================== */}
         <section id="contact" className="tw:pt-8">
           <div
-            className="tw:p-8 tw:sm:tw:p-14 tw:rounded-3xl tw:text-center tw:backdrop-blur-md tw:shadow-2xl"
+            className="tw:p-8 tw:sm:tw:p-14 tw:rounded-3xl tw:text-center tw:backdrop-blur-2xl tw:shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]"
             style={{
-              backgroundColor: 'rgba(20, 20, 23, 0.85)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
+              backgroundColor: 'rgba(20, 20, 30, 0.5)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
             }}
           >
             <span className="tw:text-[13px] tw:font-medium tw:text-[#9a9aa1] tw:tracking-[0.02em]">
@@ -1134,10 +1155,10 @@ export default function DisplayLandingPage() {
               </Link>
               <Link
                 to="/student/register"
-                className="tw:px-6 tw:py-3 tw:rounded-full tw:text-xs tw:font-medium tw:transition-all hover:tw:bg-[#2b7fff] hover:tw:text-white"
+                className="tw:px-6 tw:py-3 tw:rounded-full tw:text-xs tw:font-medium tw:transition-all hover:tw:bg-[#2b7fff] hover:tw:text-white tw:backdrop-blur-xl"
                 style={{
-                  backgroundColor: '#1c1c1f',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                  border: '1px solid rgba(255, 255, 255, 0.18)',
                   color: '#ffffff',
                 }}
               >
@@ -1150,13 +1171,13 @@ export default function DisplayLandingPage() {
       </main>
 
       {/* ======================================================== */}
-      {/* 9. FOOTER (Exact Display Framer Layout)                  */}
+      {/* 9. FOOTER (Frosted Glass Panel)                          */}
       {/* ======================================================== */}
       <footer
-        className="tw:w-full tw:py-16 tw:px-6 tw:relative tw:z-10"
+        className="tw:w-full tw:py-16 tw:px-6 tw:relative tw:z-10 tw:backdrop-blur-2xl"
         style={{
-          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-          backgroundColor: 'rgba(9, 9, 11, 0.95)',
+          borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+          backgroundColor: 'rgba(7, 7, 10, 0.65)',
         }}
       >
         <div className="tw:w-full tw:max-w-5xl tw:mx-auto">
@@ -1224,7 +1245,7 @@ export default function DisplayLandingPage() {
           <div
             className="tw:pt-8 tw:flex tw:flex-col tw:sm:tw:flex-row tw:items-center tw:justify-between tw:gap-4 tw:text-xs tw:text-[#9a9aa1]"
             style={{
-              borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+              borderTop: '1px solid rgba(255, 255, 255, 0.08)',
             }}
           >
             <div>
