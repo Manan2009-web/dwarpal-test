@@ -236,22 +236,74 @@ export default function DisplayLandingPage() {
 
   return (
     <div
-      className="tw:min-h-screen tw:w-full tw:text-[#ffffff] tw:selection:bg-[#2b7fff] tw:selection:text-white"
+      className="tw:min-h-screen tw:w-full tw:text-[#ffffff] tw:selection:bg-[#2b7fff] tw:selection:text-white tw:relative tw:overflow-x-hidden"
       style={{
-        backgroundColor: '#000000',
+        backgroundColor: '#09090b',
         fontFamily: '"Geist", "Inter Display", "Mona Sans Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       }}
     >
+      {/* ======================================================== */}
+      {/* BACKGROUND ATMOSPHERE (Grid, Ambient Spotlight & Noise)  */}
+      {/* ======================================================== */}
+      
+      {/* 1. Deep Radial Ambient Gradient */}
+      <div 
+        className="tw:fixed tw:inset-0 tw:pointer-events-none tw:z-0"
+        style={{
+          background: 'radial-gradient(120% 120% at 50% 0%, #15151c 0%, #0c0c0f 40%, #09090b 100%)',
+        }}
+      />
+
+      {/* 2. Top Center Light Spotlight Flare */}
+      <div 
+        className="tw:fixed tw:top-[-20%] tw:left-1/2 tw:-translate-x-1/2 tw:w-[90vw] tw:max-w-[1000px] tw:h-[600px] tw:pointer-events-none tw:z-0"
+        style={{
+          background: 'radial-gradient(circle at 50% 20%, rgba(43, 127, 255, 0.18) 0%, rgba(99, 102, 241, 0.08) 35%, rgba(0, 0, 0, 0) 70%)',
+          filter: 'blur(100px)',
+        }}
+      />
+
+      {/* 3. Subtle Technical Grid Pattern Overlay with Radial Mask */}
+      <div 
+        className="tw:fixed tw:inset-0 tw:pointer-events-none tw:z-0 tw:opacity-60"
+        style={{
+          backgroundImage: `
+            linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px)
+          `,
+          backgroundSize: '48px 48px',
+          maskImage: 'radial-gradient(ellipse 90% 70% at 50% 0%, #000 60%, transparent 100%)',
+          WebkitMaskImage: 'radial-gradient(ellipse 90% 70% at 50% 0%, #000 60%, transparent 100%)',
+        }}
+      />
+
+      {/* 4. Fine Dot Grid Mesh in Lower Sections */}
+      <div 
+        className="tw:fixed tw:inset-0 tw:pointer-events-none tw:z-0 tw:opacity-20"
+        style={{
+          backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.18) 1px, transparent 1px)',
+          backgroundSize: '24px 24px',
+        }}
+      />
+
+      {/* 5. Subtle Tactile Micro-Noise Texture */}
+      <div 
+        className="tw:fixed tw:inset-0 tw:pointer-events-none tw:z-0 tw:opacity-[0.035] tw:mix-blend-overlay"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+        }}
+      />
+
       {/* ======================================================== */}
       {/* FLOATING CORNER BADGE ("Use for free" Display Style)     */}
       {/* ======================================================== */}
       <div className="tw:fixed tw:bottom-5 tw:right-5 tw:z-50 tw:pointer-events-auto">
         <Link
           to="/"
-          className="tw:flex tw:items-center tw:gap-2 tw:px-4 tw:py-2 tw:rounded-full tw:text-xs tw:font-medium tw:transition-all tw:shadow-2xl"
+          className="tw:flex tw:items-center tw:gap-2 tw:px-4 tw:py-2 tw:rounded-full tw:text-xs tw:font-medium tw:transition-all tw:shadow-2xl hover:tw:scale-105"
           style={{
             backgroundColor: '#1c1c1f',
-            border: '1px solid rgba(255, 255, 255, 0.12)',
+            border: '1px solid rgba(255, 255, 255, 0.15)',
             color: '#ffffff',
           }}
           title="Switch to original interactive Dotted Canvas Landing"
@@ -271,6 +323,9 @@ export default function DisplayLandingPage() {
           onClick={handleLogoClick}
           className="tw:flex tw:items-center tw:gap-2 tw:cursor-pointer tw:select-none"
         >
+          <div className="tw:w-6 tw:h-6 tw:rounded-md tw:bg-[#2b7fff] tw:flex tw:items-center tw:justify-center tw:shadow-md">
+            <Shield className="tw:w-3.5 tw:h-3.5 tw:text-white" />
+          </div>
           <span className="tw:text-lg tw:font-bold tw:tracking-tight tw:text-[#ffffff]">
             DwarPal
           </span>
@@ -302,7 +357,7 @@ export default function DisplayLandingPage() {
         <div className="tw:flex tw:items-center tw:gap-3">
           <Link
             to="/access-portal"
-            className="tw:px-4 tw:py-2 tw:rounded-full tw:text-xs tw:font-semibold tw:transition-all hover:tw:opacity-90"
+            className="tw:px-4 tw:py-2 tw:rounded-full tw:text-xs tw:font-semibold tw:transition-all hover:tw:opacity-90 tw:shadow-lg"
             style={{
               backgroundColor: '#ffffff',
               color: '#000000',
@@ -328,9 +383,9 @@ export default function DisplayLandingPage() {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="tw:fixed tw:inset-x-4 tw:top-20 tw:z-50 tw:p-6 tw:rounded-2xl tw:flex tw:flex-col tw:gap-4 tw:md:tw:hidden"
+            className="tw:fixed tw:inset-x-4 tw:top-20 tw:z-50 tw:p-6 tw:rounded-2xl tw:flex tw:flex-col tw:gap-4 tw:md:tw:hidden tw:backdrop-blur-xl"
             style={{
-              backgroundColor: '#141417',
+              backgroundColor: 'rgba(20, 20, 23, 0.95)',
               border: '1px solid rgba(255, 255, 255, 0.1)',
             }}
           >
@@ -380,7 +435,7 @@ export default function DisplayLandingPage() {
         )}
       </AnimatePresence>
 
-      <main className="tw:w-full tw:max-w-5xl tw:mx-auto tw:px-6 tw:space-y-24 tw:md:tw:space-y-32 tw:pb-24">
+      <main className="tw:w-full tw:max-w-5xl tw:mx-auto tw:px-6 tw:space-y-24 tw:md:tw:space-y-32 tw:pb-24 tw:relative tw:z-10">
         
         {/* ======================================================== */}
         {/* 2. HERO SECTION (Exact Display Framer Layout)            */}
@@ -388,10 +443,10 @@ export default function DisplayLandingPage() {
         <section className="tw:pt-12 tw:md:tw:pt-20">
           
           {/* Eyebrow Pill Badge */}
-          <div className="tw:inline-flex tw:items-center tw:gap-2 tw:px-3 tw:py-1 tw:rounded-full tw:mb-6"
+          <div className="tw:inline-flex tw:items-center tw:gap-2 tw:px-3 tw:py-1 tw:rounded-full tw:mb-6 tw:backdrop-blur-md"
             style={{
-              backgroundColor: '#141417',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
+              backgroundColor: 'rgba(20, 20, 23, 0.8)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
               color: '#9a9aa1',
               fontSize: '12px',
             }}
@@ -415,9 +470,9 @@ export default function DisplayLandingPage() {
             
             {/* Card 1: Websites / Gatepasses */}
             <div
-              className="tw:p-6 tw:rounded-2xl tw:flex tw:flex-col tw:justify-between tw:min-h-[160px] tw:transition-all hover:tw:bg-[#1c1c1f]"
+              className="tw:p-6 tw:rounded-2xl tw:flex tw:flex-col tw:justify-between tw:min-h-[160px] tw:transition-all hover:tw:bg-[#1c1c1f] tw:backdrop-blur-md tw:shadow-lg"
               style={{
-                backgroundColor: '#141417',
+                backgroundColor: 'rgba(20, 20, 23, 0.75)',
                 border: '1px solid rgba(255, 255, 255, 0.08)',
               }}
             >
@@ -433,9 +488,9 @@ export default function DisplayLandingPage() {
 
             {/* Card 2: Apps / Terminals */}
             <div
-              className="tw:p-6 tw:rounded-2xl tw:flex tw:flex-col tw:justify-between tw:min-h-[160px] tw:transition-all hover:tw:bg-[#1c1c1f]"
+              className="tw:p-6 tw:rounded-2xl tw:flex tw:flex-col tw:justify-between tw:min-h-[160px] tw:transition-all hover:tw:bg-[#1c1c1f] tw:backdrop-blur-md tw:shadow-lg"
               style={{
-                backgroundColor: '#141417',
+                backgroundColor: 'rgba(20, 20, 23, 0.75)',
                 border: '1px solid rgba(255, 255, 255, 0.08)',
               }}
             >
@@ -451,9 +506,9 @@ export default function DisplayLandingPage() {
 
             {/* Card 3: Design systems / Governance */}
             <div
-              className="tw:p-6 tw:rounded-2xl tw:flex tw:flex-col tw:justify-between tw:min-h-[160px] tw:transition-all hover:tw:bg-[#1c1c1f]"
+              className="tw:p-6 tw:rounded-2xl tw:flex tw:flex-col tw:justify-between tw:min-h-[160px] tw:transition-all hover:tw:bg-[#1c1c1f] tw:backdrop-blur-md tw:shadow-lg"
               style={{
-                backgroundColor: '#141417',
+                backgroundColor: 'rgba(20, 20, 23, 0.75)',
                 border: '1px solid rgba(255, 255, 255, 0.08)',
               }}
             >
@@ -490,9 +545,9 @@ export default function DisplayLandingPage() {
             {SELECTED_WORK.map((work, idx) => (
               <div
                 key={work.id}
-                className="tw:rounded-3xl tw:overflow-hidden tw:transition-all"
+                className="tw:rounded-3xl tw:overflow-hidden tw:transition-all tw:backdrop-blur-md tw:shadow-2xl"
                 style={{
-                  backgroundColor: '#141417',
+                  backgroundColor: 'rgba(20, 20, 23, 0.85)',
                   border: '1px solid rgba(255, 255, 255, 0.08)',
                 }}
               >
@@ -500,11 +555,11 @@ export default function DisplayLandingPage() {
                 <div
                   className="tw:w-full tw:h-72 tw:sm:tw:h-96 tw:p-6 tw:sm:tw:p-8 tw:flex tw:items-center tw:justify-center tw:relative tw:overflow-hidden"
                   style={{
-                    backgroundColor: '#0d0d10',
+                    backgroundColor: '#0c0c0f',
                     borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
                   }}
                 >
-                  {/* Subtle Grid Lines */}
+                  {/* Subtle Grid Lines inside card */}
                   <div className="tw:absolute tw:inset-0 tw:bg-[radial-gradient(#1c1c1f_1px,transparent_1px)] [background-size:20px_20px] tw:opacity-40" />
 
                   {/* Card Content Visuals */}
@@ -643,9 +698,9 @@ export default function DisplayLandingPage() {
         {/* ======================================================== */}
         <section id="demo" className="tw:scroll-mt-20">
           <div
-            className="tw:rounded-3xl tw:p-6 tw:sm:tw:p-10"
+            className="tw:rounded-3xl tw:p-6 tw:sm:tw:p-10 tw:backdrop-blur-md tw:shadow-2xl"
             style={{
-              backgroundColor: '#141417',
+              backgroundColor: 'rgba(20, 20, 23, 0.85)',
               border: '1px solid rgba(255, 255, 255, 0.08)',
             }}
           >
@@ -707,7 +762,7 @@ export default function DisplayLandingPage() {
             <div
               className="tw:p-6 tw:rounded-2xl"
               style={{
-                backgroundColor: '#0d0d10',
+                backgroundColor: '#0c0c0f',
                 border: '1px solid rgba(255, 255, 255, 0.08)',
               }}
             >
@@ -894,9 +949,9 @@ export default function DisplayLandingPage() {
               return (
                 <div
                   key={idx}
-                  className="tw:rounded-2xl tw:overflow-hidden tw:transition-all"
+                  className="tw:rounded-2xl tw:overflow-hidden tw:transition-all tw:backdrop-blur-md tw:shadow-lg"
                   style={{
-                    backgroundColor: '#141417',
+                    backgroundColor: 'rgba(20, 20, 23, 0.85)',
                     border: '1px solid rgba(255, 255, 255, 0.08)',
                   }}
                 >
@@ -962,9 +1017,9 @@ export default function DisplayLandingPage() {
             {TESTIMONIALS.map((t, idx) => (
               <div
                 key={idx}
-                className="tw:p-6 tw:sm:tw:p-8 tw:rounded-2xl tw:flex tw:flex-col tw:justify-between tw:transition-all"
+                className="tw:p-6 tw:sm:tw:p-8 tw:rounded-2xl tw:flex tw:flex-col tw:justify-between tw:transition-all tw:backdrop-blur-md tw:shadow-lg"
                 style={{
-                  backgroundColor: '#141417',
+                  backgroundColor: 'rgba(20, 20, 23, 0.85)',
                   border: '1px solid rgba(255, 255, 255, 0.08)',
                 }}
               >
@@ -1016,9 +1071,9 @@ export default function DisplayLandingPage() {
             {UPDATES.map((article, idx) => (
               <div
                 key={idx}
-                className="tw:p-6 tw:sm:tw:p-8 tw:rounded-2xl tw:flex tw:flex-col tw:justify-between tw:transition-all hover:tw:bg-[#1c1c1f]"
+                className="tw:p-6 tw:sm:tw:p-8 tw:rounded-2xl tw:flex tw:flex-col tw:justify-between tw:transition-all hover:tw:bg-[#1c1c1f] tw:backdrop-blur-md tw:shadow-lg"
                 style={{
-                  backgroundColor: '#141417',
+                  backgroundColor: 'rgba(20, 20, 23, 0.85)',
                   border: '1px solid rgba(255, 255, 255, 0.08)',
                 }}
               >
@@ -1043,9 +1098,9 @@ export default function DisplayLandingPage() {
         {/* ======================================================== */}
         <section id="contact" className="tw:pt-8">
           <div
-            className="tw:p-8 tw:sm:tw:p-14 tw:rounded-3xl tw:text-center"
+            className="tw:p-8 tw:sm:tw:p-14 tw:rounded-3xl tw:text-center tw:backdrop-blur-md tw:shadow-2xl"
             style={{
-              backgroundColor: '#141417',
+              backgroundColor: 'rgba(20, 20, 23, 0.85)',
               border: '1px solid rgba(255, 255, 255, 0.08)',
             }}
           >
@@ -1061,7 +1116,7 @@ export default function DisplayLandingPage() {
             <div className="tw:mt-8 tw:flex tw:flex-wrap tw:items-center tw:justify-center tw:gap-3">
               <Link
                 to="/access-portal"
-                className="tw:px-6 tw:py-3 tw:rounded-full tw:text-xs tw:font-semibold tw:transition-all hover:tw:opacity-90"
+                className="tw:px-6 tw:py-3 tw:rounded-full tw:text-xs tw:font-semibold tw:transition-all hover:tw:opacity-90 tw:shadow-xl"
                 style={{
                   backgroundColor: '#ffffff',
                   color: '#000000',
@@ -1090,10 +1145,10 @@ export default function DisplayLandingPage() {
       {/* 9. FOOTER (Exact Display Framer Layout)                  */}
       {/* ======================================================== */}
       <footer
-        className="tw:w-full tw:py-16 tw:px-6"
+        className="tw:w-full tw:py-16 tw:px-6 tw:relative tw:z-10"
         style={{
           borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-          backgroundColor: '#000000',
+          backgroundColor: 'rgba(9, 9, 11, 0.95)',
         }}
       >
         <div className="tw:w-full tw:max-w-5xl tw:mx-auto">
