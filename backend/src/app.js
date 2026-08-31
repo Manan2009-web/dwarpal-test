@@ -86,7 +86,16 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-portal-access-token'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'x-portal-access-token',
+    'x-master-key',
+    'x-csrf-token',
+    'Accept',
+    'Origin',
+    'X-Requested-With'
+  ],
   maxAge: 24 * 60 * 60,
   optionsSuccessStatus: 204
 };
