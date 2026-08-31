@@ -3,7 +3,7 @@ import { fetchPublicSiteConfig } from '../lib/dwarpalApi'
 import { DEPARTMENTS, PROGRAM_OPTIONS, SEMESTER_OPTIONS } from '../mockData'
 import { AlertTriangle, Info, BellRing, CheckCircle, ShieldAlert, X } from 'lucide-react'
 
-const DEFAULT_SITE_CONFIG = {
+export const DEFAULT_SITE_CONFIG = {
   cms: {
     hero: {
       headline: 'Autonomous Campus Gatepass & Security Infrastructure',

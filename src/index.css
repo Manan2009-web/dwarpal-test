@@ -14,38 +14,40 @@
   --font-sans: 'Segoe UI', 'Trebuchet MS', Helvetica, Arial, sans-serif;
 }
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
 
-html {
-  scroll-behavior: smooth;
-}
+  html {
+    scroll-behavior: smooth;
+  }
 
-body {
-  margin: 0;
-  font-family: var(--font-sans);
-}
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+  }
 
-a {
-  color: inherit;
-  text-decoration: none;
-}
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
 
-button {
-  background: transparent;
-  border: none;
-  color: inherit;
-  font-family: inherit;
-  cursor: pointer;
-}
+  button {
+    background: transparent;
+    border: none;
+    color: inherit;
+    font-family: inherit;
+    cursor: pointer;
+  }
 
-#root {
-  min-height: 100vh;
-  background: inherit;
-  color: inherit;
+  #root {
+    min-height: 100vh;
+    background: inherit;
+    color: inherit;
+  }
 }
 /* ===== APP BRAND CSS ===== */
 

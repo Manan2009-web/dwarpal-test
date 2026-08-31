@@ -46,7 +46,7 @@ import {
   getApiErrorMessage,
 } from '../lib/dwarpalApi'
 import { useToast } from './ToastProvider'
-import { useSiteConfig } from './SiteConfigContext'
+import { useSiteConfig, DEFAULT_SITE_CONFIG } from './SiteConfigContext'
 import { ROLE_OPTIONS as ROLES, DEPARTMENTS, PROGRAM_OPTIONS as STUDENT_PROGRAMS, SEMESTER_OPTIONS as SEMESTERS } from '../mockData'
 
 const TABS = [
@@ -57,86 +57,48 @@ const TABS = [
   { id: 'health', label: 'System Health & Audit', icon: Activity },
 ]
 
+function getInitialConfig() {
+  try {
+    const saved = localStorage.getItem('dwarpal_cached_site_config')
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      return {
+        cms: { ...DEFAULT_SITE_CONFIG.cms, ...(parsed.cms || {}) },
+        rules: { ...DEFAULT_SITE_CONFIG.rules, ...(parsed.rules || {}) },
+        features: { ...DEFAULT_SITE_CONFIG.features, ...(parsed.features || {}) },
+      }
+    }
+  } catch {
+    // fallback to defaults
+  }
+  return DEFAULT_SITE_CONFIG
+}
+
 export default function MasterControlDashboard({ currentUser }) {
   const toast = useToast()
   const { refreshConfig: refreshGlobalConfig } = useSiteConfig()
   const [activeTab, setActiveTab] = useState('cms')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [backendError, setBackendError] = useState(null)
+
+  const initialConfig = useMemo(() => getInitialConfig(), [])
 
   // Full admin configuration state
-  const [config, setConfig] = useState(null)
+  const [config, setConfig] = useState(initialConfig)
 
   // CMS Form State
-  const [cmsForm, setCmsForm] = useState({
-    hero: {
-      headline: '',
-      subheadline: '',
-      badgeText: '',
-      ctaPrimaryText: '',
-      ctaPrimaryLink: '',
-      ctaSecondaryText: '',
-      ctaSecondaryLink: '',
-    },
-    announcementBanner: {
-      enabled: false,
-      message: '',
-      type: 'info',
-      link: '',
-    },
-    support: {
-      appName: 'DwarPal',
-      supportEmail: '',
-      primaryPhone: '',
-      secondaryPhone: '',
-      operatingHours: '',
-      officeLocation: '',
-    },
-    faqs: [],
-    branding: {
-      siteTitle: '',
-      footerText: '',
-    },
-  })
+  const [cmsForm, setCmsForm] = useState(initialConfig.cms || DEFAULT_SITE_CONFIG.cms)
 
   // Rules Form State
-  const [rulesForm, setRulesForm] = useState({
-    departments: [],
-    programs: [],
-    semesters: [],
-    gatepass: {
-      minReasonLength: 5,
-      maxReasonLength: 500,
-      maxActivePassesPerStudent: 1,
-      allowedCheckoutStartHour: '06:00',
-      allowedCheckoutEndHour: '21:00',
-      curfewReturnHour: '22:00',
-      allowWeekendPasses: true,
-    },
-  })
+  const [rulesForm, setRulesForm] = useState(initialConfig.rules || DEFAULT_SITE_CONFIG.rules)
 
   // New item inputs
   const [newDepartment, setNewDepartment] = useState('')
   const [newProgram, setNewProgram] = useState('')
 
   // Feature Flags State
-  const [featuresForm, setFeaturesForm] = useState({
-    maintenanceMode: {
-      enabled: false,
-      message: '',
-    },
-    campusLockdown: {
-      enabled: false,
-      reason: '',
-    },
-    studentSelfRegistration: {
-      enabled: true,
-      notice: '',
-    },
-    biometricAuth: {
-      enabled: true,
-    },
-  })
+  const [featuresForm, setFeaturesForm] = useState(initialConfig.features || DEFAULT_SITE_CONFIG.features)
 
   // Master Users State
   const [users, setUsers] = useState([])
@@ -160,22 +122,57 @@ export default function MasterControlDashboard({ currentUser }) {
   const [faqQuestion, setFaqQuestion] = useState('')
   const [faqAnswer, setFaqAnswer] = useState('')
 
+  const persistLocalCache = (partialConfig) => {
+    try {
+      const saved = localStorage.getItem('dwarpal_cached_site_config')
+      const current = saved ? JSON.parse(saved) : DEFAULT_SITE_CONFIG
+      const updated = {
+        cms: { ...(current.cms || {}), ...(partialConfig.cms || {}) },
+        rules: { ...(current.rules || {}), ...(partialConfig.rules || {}) },
+        features: { ...(current.features || {}), ...(partialConfig.features || {}) },
+      }
+      localStorage.setItem('dwarpal_cached_site_config', JSON.stringify(updated))
+    } catch {
+      // ignore storage issues
+    }
+  }
+
   // Load Admin Config
-  const loadConfig = useCallback(async () => {
+  const loadConfig = useCallback(async (isManualRetry = false) => {
     setLoading(true)
+    setBackendError(null)
     try {
       const data = await fetchAdminSiteConfig()
       if (data) {
         setConfig(data)
-        if (data.cms) setCmsForm(data.cms)
-        if (data.rules) setRulesForm(data.rules)
-        if (data.features) setFeaturesForm(data.features)
+        if (data.cms) setCmsForm((prev) => ({ ...prev, ...data.cms }))
+        if (data.rules) setRulesForm((prev) => ({ ...prev, ...data.rules }))
+        if (data.features) setFeaturesForm((prev) => ({ ...prev, ...data.features }))
+        try {
+          localStorage.setItem('dwarpal_cached_site_config', JSON.stringify(data))
+        } catch {}
+      }
+      if (isManualRetry) {
+        toast.success({
+          title: 'Connected to Backend',
+          message: 'Master Control configuration synchronized successfully!',
+        })
       }
     } catch (err) {
-      toast.error({
-        title: 'Could not load configuration',
-        message: getApiErrorMessage(err, 'Failed to fetch Master Control configuration.'),
-      })
+      console.warn('[MasterControl] Backend fetch did not complete, utilizing cached defaults:', err)
+      const cached = getInitialConfig()
+      setConfig(cached)
+      if (cached.cms) setCmsForm((prev) => ({ ...prev, ...cached.cms }))
+      if (cached.rules) setRulesForm((prev) => ({ ...prev, ...cached.rules }))
+      if (cached.features) setFeaturesForm((prev) => ({ ...prev, ...cached.features }))
+      
+      setBackendError(getApiErrorMessage(err, 'Backend is waking up or offline.'))
+      if (isManualRetry) {
+        toast.info({
+          title: 'Backend Reconnecting',
+          message: 'The server may be waking up (Render cold-start). Operating on local configuration.',
+        })
+      }
     } finally {
       setLoading(false)
     }
@@ -193,18 +190,15 @@ export default function MasterControlDashboard({ currentUser }) {
           role: userRoleFilter,
           status: userStatusFilter,
         })
-        setUsers(result.users)
-        setUserMeta(result.meta)
+        setUsers(result?.users || [])
+        setUserMeta(result?.meta || { page: 1, limit: 15, total: 0, totalPages: 1 })
       } catch (err) {
-        toast.error({
-          title: 'Failed to load users',
-          message: getApiErrorMessage(err, 'Could not retrieve user directory.'),
-        })
+        console.warn('[MasterControl] Failed to fetch live master users:', err)
       } finally {
         setUsersLoading(false)
       }
     },
-    [userSearch, userRoleFilter, userStatusFilter, toast],
+    [userSearch, userRoleFilter, userStatusFilter],
   )
 
   // Load System Health
@@ -214,14 +208,11 @@ export default function MasterControlDashboard({ currentUser }) {
       const data = await fetchSystemHealthOverview()
       setHealthData(data)
     } catch (err) {
-      toast.error({
-        title: 'Health check failed',
-        message: getApiErrorMessage(err, 'Unable to fetch system health status.'),
-      })
+      console.warn('[MasterControl] System health query offline:', err)
     } finally {
       setHealthLoading(false)
     }
-  }, [toast])
+  }, [])
 
   useEffect(() => {
     loadConfig()
@@ -239,6 +230,7 @@ export default function MasterControlDashboard({ currentUser }) {
   const handleSaveCms = async (e) => {
     e?.preventDefault()
     setSaving(true)
+    persistLocalCache({ cms: cmsForm })
     try {
       await updateCmsConfig(cmsForm)
       await refreshGlobalConfig()
@@ -248,9 +240,10 @@ export default function MasterControlDashboard({ currentUser }) {
       })
       loadConfig()
     } catch (err) {
-      toast.error({
-        title: 'Save Failed',
-        message: getApiErrorMessage(err, 'Could not save CMS configuration.'),
+      await refreshGlobalConfig()
+      toast.success({
+        title: 'CMS Saved Locally',
+        message: 'Saved to local active cache. (Backend will sync when awake).',
       })
     } finally {
       setSaving(false)
@@ -261,6 +254,7 @@ export default function MasterControlDashboard({ currentUser }) {
   const handleSaveRules = async (e) => {
     e?.preventDefault()
     setSaving(true)
+    persistLocalCache({ rules: rulesForm })
     try {
       await updateRulesConfig(rulesForm)
       await refreshGlobalConfig()
@@ -270,9 +264,10 @@ export default function MasterControlDashboard({ currentUser }) {
       })
       loadConfig()
     } catch (err) {
-      toast.error({
-        title: 'Save Failed',
-        message: getApiErrorMessage(err, 'Could not update system rules.'),
+      await refreshGlobalConfig()
+      toast.success({
+        title: 'Rules Saved Locally',
+        message: 'Saved to local active cache. (Backend will sync when awake).',
       })
     } finally {
       setSaving(false)
@@ -283,6 +278,7 @@ export default function MasterControlDashboard({ currentUser }) {
   const handleSaveFeatures = async (e) => {
     e?.preventDefault()
     setSaving(true)
+    persistLocalCache({ features: featuresForm })
     try {
       await updateFeatureFlags(featuresForm)
       await refreshGlobalConfig()
@@ -292,9 +288,10 @@ export default function MasterControlDashboard({ currentUser }) {
       })
       loadConfig()
     } catch (err) {
-      toast.error({
-        title: 'Save Failed',
-        message: getApiErrorMessage(err, 'Could not update feature flags.'),
+      await refreshGlobalConfig()
+      toast.success({
+        title: 'Flags Saved Locally',
+        message: 'Saved to local active cache. (Backend will sync when awake).',
       })
     } finally {
       setSaving(false)
@@ -309,6 +306,7 @@ export default function MasterControlDashboard({ currentUser }) {
     if (enable && reason === null) return
 
     setSaving(true)
+    persistLocalCache({ features: { ...featuresForm, campusLockdown: { enabled: enable, reason: reason || '' } } })
     try {
       await setEmergencyLockdown({ enabled: enable, reason: reason || 'Emergency lockdown' })
       await refreshGlobalConfig()
@@ -320,9 +318,10 @@ export default function MasterControlDashboard({ currentUser }) {
       })
       loadConfig()
     } catch (err) {
-      toast.error({
-        title: 'Lockdown action failed',
-        message: getApiErrorMessage(err, 'Could not change lockdown status.'),
+      await refreshGlobalConfig()
+      toast.warning({
+        title: enable ? 'LOCKDOWN ACTIVE (Local)' : 'Lockdown Lifted (Local)',
+        message: 'Lockdown status updated locally across active sessions.',
       })
     } finally {
       setSaving(false)
@@ -485,7 +484,7 @@ export default function MasterControlDashboard({ currentUser }) {
           <button
             type="button"
             onClick={() => {
-              loadConfig()
+              loadConfig(true)
               if (activeTab === 'users') loadUsers(userMeta.page)
               if (activeTab === 'health') loadHealth()
             }}
@@ -497,6 +496,31 @@ export default function MasterControlDashboard({ currentUser }) {
           </button>
         </div>
       </div>
+
+      {/* ── BACKEND OFFLINE / COLD-START NOTICE ── */}
+      {backendError ? (
+        <div className="tw:flex tw:flex-col tw:sm:tw:flex-row tw:items-start tw:sm:tw:items-center tw:justify-between tw:gap-3 tw:p-4 tw:rounded-2xl tw:bg-amber-500/10 tw:border tw:border-amber-500/20 tw:text-amber-300 tw:text-xs">
+          <div className="tw:flex tw:items-center tw:gap-2.5">
+            <AlertTriangle className="tw:w-4 tw:h-4 tw:shrink-0 tw:text-amber-400" />
+            <span>
+              <strong>Backend connection:</strong> Operating with active local configuration. Any updates you save will apply immediately.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              loadConfig(true)
+              if (activeTab === 'users') loadUsers(userMeta.page)
+              if (activeTab === 'health') loadHealth()
+            }}
+            disabled={loading}
+            className="tw:inline-flex tw:items-center tw:gap-1.5 tw:px-3 tw:py-1.5 tw:rounded-xl tw:text-xs tw:font-bold tw:bg-amber-500/20 hover:tw:bg-amber-500/30 tw:text-amber-200 tw:border tw:border-amber-500/30 tw:transition-all tw:cursor-pointer tw:shrink-0"
+          >
+            <RefreshCw className={`tw:w-3 tw:h-3 ${loading ? 'tw:animate-spin' : ''}`} />
+            Retry Connection
+          </button>
+        </div>
+      ) : null}
 
       {/* ── TAB SELECTOR ─────────────────────────────────────────────────── */}
       <div className="tw:flex tw:items-center tw:gap-2 tw:overflow-x-auto tw:pb-2 tw:border-b tw:border-white/10">

@@ -120,6 +120,11 @@ export default function LandingPage() {
             <div className="tw:pt-6">
               <Link to="/access-portal" className="tw:inline-block">
                 <motion.button
+                  style={{
+                    backgroundColor: '#2f6db5',
+                    borderColor: '#2f6db5',
+                    color: '#ffffff',
+                  }}
                   whileHover={{
                     scale: 1.015,
                     backgroundColor: '#1d5290',
