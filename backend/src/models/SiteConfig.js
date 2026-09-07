@@ -109,12 +109,12 @@ const siteConfigSchema = new mongoose.Schema(
         },
         primaryPhone: {
           type: String,
-          default: '+91 93285 63802',
+          default: '',
           trim: true
         },
         secondaryPhone: {
           type: String,
-          default: '+91 92657 93539',
+          default: '',
           trim: true
         },
         operatingHours: {

@@ -298,8 +298,11 @@ function buildOtpEmailTemplate({
             <p style="margin:0 0 12px;font-size:14px;line-height:1.7;color:#516273;">
               This code expires in <strong>${safeExpiryMinutes} minutes</strong>. Do not share it with anyone.
             </p>
-            <p style="margin:0;font-size:13px;line-height:1.7;color:#7c8b98;">
+            <p style="margin:0 0 8px;font-size:13px;line-height:1.7;color:#7c8b98;">
               If you did not request this code, you can safely ignore this email.
+            </p>
+            <p style="margin:0;font-size:13px;line-height:1.7;color:#7c8b98;">
+              Need help? Contact support at <a href="mailto:dwarpal@neotech.ac.in" style="color:#1f5a80;text-decoration:none;font-weight:600;">dwarpal@neotech.ac.in</a>.
             </p>
           </div>
         </div>
@@ -316,7 +319,8 @@ function buildOtpEmailTemplate({
     `OTP: ${otp}`,
     `This code expires in ${expiryMinutes} minutes.`,
     '',
-    'If you did not request this code, you can ignore this email.'
+    'If you did not request this code, you can ignore this email.',
+    'Support: dwarpal@neotech.ac.in'
   ].join('\n');
 
   return {
@@ -992,7 +996,7 @@ async function sendStudentOnboardingEmail({ email, fullName, enrollmentNo, tempo
               </div>
 
               <p style="margin:0;font-size:13px;color:#64748b;line-height:1.6;">
-                For security reasons, this link will expire in 24 hours. If you need any assistance, please contact the campus support desk.
+                For security reasons, this link will expire in 24 hours. If you need any assistance, please contact the campus support desk at <a href="mailto:dwarpal@neotech.ac.in" style="color:#2872a1;text-decoration:none;">dwarpal@neotech.ac.in</a>.
               </p>
             </td>
           </tr>
@@ -1242,6 +1246,7 @@ async function sendStaffWelcomeEmail({ email, fullName, role, enrollmentNo, empl
 
         <!-- ── Footer ── -->
         <div style="border-top:1px solid #e2e8f0;padding-top:20px;text-align:center;">
+          <p style="margin:0 0 8px;font-size:12px;color:#64748b;line-height:1.6;">Need support or have questions? Contact us at <a href="mailto:dwarpal@neotech.ac.in" style="color:#1e40af;text-decoration:none;font-weight:600;">dwarpal@neotech.ac.in</a></p>
           <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.6;">If you did not initiate this registration, please contact your campus administrator immediately.<br/>&copy; ${year} DwarPal &bull; ${safeCollegeName}</p>
         </div>
 
@@ -1270,6 +1275,7 @@ async function sendStaffWelcomeEmail({ email, fullName, role, enrollmentNo, empl
     '',
     `Sign in using your Enrollment Number (${enrollmentNo}) and the password you set during registration.`,
     '',
+    `Support   : dwarpal@neotech.ac.in`,
     `If you did not initiate this registration, contact campus administration.`,
     `© ${year} DwarPal • ${collegeName || env.collegeName || 'Neotech Campus'}`
   ] : [
@@ -1285,6 +1291,7 @@ async function sendStaffWelcomeEmail({ email, fullName, role, enrollmentNo, empl
     '',
     'Sign in using the credentials you set during registration.',
     '',
+    'Support: dwarpal@neotech.ac.in',
     'If you did not initiate this registration, contact your IT administrator.',
     `© ${year} DwarPal • ${collegeName || env.collegeName || 'Neotech Campus'}`
   ];

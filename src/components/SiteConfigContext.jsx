@@ -23,8 +23,8 @@ export const DEFAULT_SITE_CONFIG = {
     support: {
       appName: 'DwarPal',
       supportEmail: 'dwarpal@neotech.ac.in',
-      primaryPhone: '+91 93285 63802',
-      secondaryPhone: '+91 92657 93539',
+      primaryPhone: '',
+      secondaryPhone: '',
       operatingHours: 'Monday – Saturday, 8:00 AM – 6:00 PM IST',
       officeLocation: 'Central Security Cabin / IT Helpdesk, Gate 1',
     },

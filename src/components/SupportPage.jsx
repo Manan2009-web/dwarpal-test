@@ -37,7 +37,7 @@ const FAQ_ITEMS = [
     icon: MessageSquare,
     question: 'I\'m not receiving OTP emails. What should I do?',
     answer:
-      'First, check your spam or junk folder — automated emails sometimes land there. Make sure the email address shown on the login screen matches your official institutional address. If the problem persists for more than a few minutes, contact the campus IT Helpdesk directly (numbers listed above). The administrator can verify delivery status and resend the OTP manually if needed.',
+      'First, check your spam or junk folder — automated emails sometimes land there. Make sure the email address shown on the login screen matches your official institutional address. If the problem persists for more than a few minutes, contact the campus IT Helpdesk directly at dwarpal@neotech.ac.in. The administrator can verify delivery status and resend the OTP manually if needed.',
   },
   {
     icon: Undo2,
@@ -104,7 +104,7 @@ export default function SupportPage() {
               <p>
                 Whether you're troubleshooting biometric registration, chasing a delayed OTP, or have a question about
                 the approval workflow — our support team is available during campus hours.
-                For urgent gate issues, use the IT Helpdesk numbers below.
+                For urgent gate issues, contact the campus IT Helpdesk via the support email below.
               </p>
             </div>
           </div>
@@ -134,23 +134,23 @@ export default function SupportPage() {
               </div>
 
               <div className="support-contact-card">
-                <div className="support-contact-icon"><Phone size={20} /></div>
+                <div className="support-contact-icon"><Mail size={20} /></div>
                 <strong>Campus IT Helpdesk</strong>
                 <div className="support-contact-value" style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                   <span>
-                    Primary Helpline —{' '}
-                    <a href={`tel:${support.primaryPhone || '+919328563802'}`} className="policy-link">
-                      {support.primaryPhone || '+91 93285 63802'}
+                    Manan Dabgar —{' '}
+                    <a href={`mailto:${support.supportEmail || 'dwarpal@neotech.ac.in'}`} className="policy-link">
+                      {support.supportEmail || 'dwarpal@neotech.ac.in'}
                     </a>
                   </span>
                   <span>
-                    Secondary Helpline —{' '}
-                    <a href={`tel:${support.secondaryPhone || '+919265793539'}`} className="policy-link">
-                      {support.secondaryPhone || '+91 92657 93539'}
+                    Atharva Chitale —{' '}
+                    <a href={`mailto:${support.supportEmail || 'dwarpal@neotech.ac.in'}`} className="policy-link">
+                      {support.supportEmail || 'dwarpal@neotech.ac.in'}
                     </a>
                   </span>
                 </div>
-                <span className="support-contact-note">For urgent gate queries</span>
+                <span className="support-contact-note">Contact via email for assistance</span>
               </div>
 
             </div>
