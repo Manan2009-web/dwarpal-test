@@ -923,15 +923,28 @@ async function sendStudentLoginOtpEmail({ email, name, otp, expiryMinutes = env.
   });
 }
 
+function resolveCollegeName(name) {
+  const trimmed = String(name || '').trim();
+  if (trimmed && trimmed.toLowerCase() !== 'your college name') {
+    return trimmed;
+  }
+  const envName = String(env.collegeName || '').trim();
+  if (envName && envName.toLowerCase() !== 'your college name') {
+    return envName;
+  }
+  return 'Neotech Campus';
+}
+
 async function sendStudentOnboardingEmail({ email, fullName, enrollmentNo, temporaryPassword, collegeName }, options = {}) {
   if (!isEmailConfigured()) {
     console.info('[email] Email sending not configured — skipping student onboarding email.', { to: maskEmail(email) });
     return { skipped: true, reason: 'email_not_configured' };
   }
 
+  const resolvedCollegeName = resolveCollegeName(collegeName);
   const safeFullName   = escapeHtml(fullName || 'Student');
   const safeEnrollmentNo = escapeHtml(enrollmentNo || '');
-  const safeCollegeName  = escapeHtml(collegeName || env.collegeName || 'Neotech Campus');
+  const safeCollegeName  = escapeHtml(resolvedCollegeName);
   const clientUrl      = env.clientUrl || 'https://dwarpal-test.vercel.app';
   const activationUrl  = `${clientUrl}/login?action=activate`;
   const safeActivationUrl = escapeHtml(activationUrl);
@@ -1022,7 +1035,7 @@ async function sendStudentOnboardingEmail({ email, fullName, enrollmentNo, tempo
     '',
     `Hello ${fullName},`,
     '',
-    `An account has been set up for you on the DwarPal gatepass network on behalf of ${collegeName || env.collegeName || 'Neotech Campus'}.`,
+    `An account has been set up for you on the DwarPal gatepass network on behalf of ${resolvedCollegeName}.`,
     '',
     `Enrollment number: ${enrollmentNo}`,
     `Access code      : STUDENT2026`,
@@ -1095,6 +1108,7 @@ async function sendStaffWelcomeEmail({ email, fullName, role, enrollmentNo, empl
   }
 
   const isStudent       = String(role || '').toLowerCase() === 'student';
+  const resolvedCollegeName = resolveCollegeName(collegeName);
   const safeFullName    = escapeHtml(fullName || (isStudent ? 'Student' : 'Team Member'));
   const safeRole        = escapeHtml(role ? role.charAt(0).toUpperCase() + role.slice(1) : (isStudent ? 'Student' : 'Staff'));
   const safeEnrollmentNo= escapeHtml(String(enrollmentNo || '').trim());
@@ -1102,7 +1116,7 @@ async function sendStaffWelcomeEmail({ email, fullName, role, enrollmentNo, empl
   const safeProgram     = escapeHtml(String(program || '').trim());
   const safeDepartment  = escapeHtml(String(department || '').trim());
   const safeSemester    = semester ? escapeHtml(String(semester).trim()) : '';
-  const safeCollegeName = escapeHtml(collegeName || env.collegeName || 'Neotech Campus');
+  const safeCollegeName = escapeHtml(resolvedCollegeName);
   const clientUrl       = env.clientUrl || 'https://dwarpal-test.vercel.app';
   const loginUrl        = isStudent ? `${clientUrl}/login` : clientUrl;
   const safeLoginUrl    = escapeHtml(loginUrl);
@@ -1277,7 +1291,7 @@ async function sendStaffWelcomeEmail({ email, fullName, role, enrollmentNo, empl
     '',
     `Support   : dwarpal@neotech.ac.in`,
     `If you did not initiate this registration, contact campus administration.`,
-    `© ${year} DwarPal • ${collegeName || env.collegeName || 'Neotech Campus'}`
+    `© ${year} DwarPal • ${resolvedCollegeName}`
   ] : [
     `Welcome to DwarPal — Account Registration Received`,
     '',
@@ -1293,7 +1307,7 @@ async function sendStaffWelcomeEmail({ email, fullName, role, enrollmentNo, empl
     '',
     'Support: dwarpal@neotech.ac.in',
     'If you did not initiate this registration, contact your IT administrator.',
-    `© ${year} DwarPal • ${collegeName || env.collegeName || 'Neotech Campus'}`
+    `© ${year} DwarPal • ${resolvedCollegeName}`
   ];
 
   const text = textLines.join('\n');

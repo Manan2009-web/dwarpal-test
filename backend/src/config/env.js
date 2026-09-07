@@ -304,7 +304,10 @@ const env = {
     'dwarpal-dev-qr-signing-secret',
   envFilePath: resolvedEnvPath,
   defaultPhoneCountryCode: normalizeEnvString(process.env.DEFAULT_PHONE_COUNTRY_CODE) || '+91',
-  collegeName: normalizeEnvString(process.env.COLLEGE_NAME) || 'Neotech Campus',
+  collegeName: (function() {
+    const raw = normalizeEnvString(process.env.COLLEGE_NAME);
+    return (raw && raw.toLowerCase() !== 'your college name') ? raw : 'Neotech Campus';
+  })(),
   httpRequestTimeoutMs: parsePositiveIntegerEnv(process.env.HTTP_REQUEST_TIMEOUT_MS, 30000),
   httpHeadersTimeoutMs: parsePositiveIntegerEnv(process.env.HTTP_HEADERS_TIMEOUT_MS, 35000),
   httpKeepAliveTimeoutMs: parsePositiveIntegerEnv(process.env.HTTP_KEEP_ALIVE_TIMEOUT_MS, 5000),
