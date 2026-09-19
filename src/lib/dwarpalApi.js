@@ -546,8 +546,8 @@ export function clearBiometricDeviceId() {
 }
 
 function getDefaultErrorMessage(status, path) {
-  if (status === 401 && path === '/auth/login') {
-    return 'Invalid credentials. Please check your enrollment number or employee ID and password.'
+  if (status === 401 && (path === '/auth/login' || path === '/auth/student-login-start')) {
+    return 'Authentication failed. Please check your credentials and try again.'
   }
 
   if (status === 404) {

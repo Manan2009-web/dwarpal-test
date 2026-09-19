@@ -638,24 +638,44 @@ async function loginUser(payload, req, requestMeta) {
 
   if (!user) {
     await recordFailedLoginAttempt(identifier, req);
-    throw new AppError(
-      'Invalid credentials. Please check your enrollment number or employee ID and password and try again.',
-      401
-    );
+    const isStudent =
+      req.portalAccess?.accessType === 'student' ||
+      req.originalUrl?.includes('student') ||
+      /^\d{10,14}$/.test(identifier);
+    const message = isStudent
+      ? 'Enrollment number not found. Please check your enrollment number.'
+      : 'Enrollment number or employee ID not found. Please check your ID and try again.';
+
+    const err = new AppError(message, 401, [
+      { field: 'identifier', message }
+    ]);
+    err.code = 'ERR_USER_NOT_FOUND';
+    throw err;
   }
 
   if (!user.isActive) {
-    throw new AppError('Your account is inactive. Please contact administration.', 403);
+    const isStudent = user.role === 'student';
+    const message = isStudent
+      ? 'Your student account is inactive. Please contact the CAO office or administration.'
+      : 'Your account is inactive. Please contact administration.';
+
+    const err = new AppError(message, 403, [
+      { field: 'identifier', message }
+    ]);
+    err.code = 'ERR_ACCOUNT_INACTIVE';
+    throw err;
   }
 
   const passwordMatches = await user.comparePassword(payload.password);
 
   if (!passwordMatches) {
     await recordFailedLoginAttempt(identifier, req);
-    throw new AppError(
-      'Invalid credentials. Please check your enrollment number or employee ID and password and try again.',
-      401
-    );
+    const message = 'Incorrect password. Please check your password and try again.';
+    const err = new AppError(message, 401, [
+      { field: 'password', message }
+    ]);
+    err.code = 'ERR_INCORRECT_PASSWORD';
+    throw err;
   }
 
   const normalizedRole = normalizeRole(user.role);

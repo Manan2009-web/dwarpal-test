@@ -965,12 +965,16 @@ function App() {
               errorDetails.message !== 'Unauthorized' &&
               !/invalid credentials/i.test(errorDetails.message)
 
+            const fallbackMsg = errorDetails.fieldErrors?.password
+              ? 'Incorrect password. Please check your password and try again.'
+              : errorDetails.fieldErrors?.identifier
+                ? 'Enrollment number not found. Please check your enrollment number.'
+                : 'Unable to sign in. Please verify your credentials.'
+
             return {
               ...errorDetails,
-              fieldErrors: {},
-              message: hasSpecificBackendMessage
-                ? errorDetails.message
-                : 'Invalid enrollment number or password. Please check your credentials and try again.',
+              fieldErrors: errorDetails.fieldErrors || {},
+              message: hasSpecificBackendMessage ? errorDetails.message : fallbackMsg,
             }
           }
 
@@ -982,12 +986,16 @@ function App() {
               errorDetails.message !== 'Unauthorized' &&
               !/invalid credentials/i.test(errorDetails.message)
 
+            const fallbackMsg = errorDetails.fieldErrors?.password
+              ? 'Incorrect password. Please check your password and try again.'
+              : errorDetails.fieldErrors?.identifier
+                ? 'Enrollment number or employee ID not found. Please check and try again.'
+                : 'Unable to sign in. Please verify your credentials.'
+
             return {
               ...errorDetails,
-              fieldErrors: {},
-              message: hasSpecificBackendMessage
-                ? errorDetails.message
-                : 'Invalid credentials. Please check your enrollment number or employee ID and password.',
+              fieldErrors: errorDetails.fieldErrors || {},
+              message: hasSpecificBackendMessage ? errorDetails.message : fallbackMsg,
             }
           }
 
@@ -1280,6 +1288,7 @@ function App() {
         error: errorDetails.message,
         code: errorDetails.code,
         status: errorDetails.status,
+        fieldErrors: errorDetails.fieldErrors || {},
       }
     }
   }
@@ -2568,7 +2577,13 @@ function LoginScreen({ onLogin, portalAccess }) {
 
     if (Object.keys(nextFieldErrors).length) {
       setFieldErrors(nextFieldErrors)
-      setError(`Please enter both your ${identifierUsageLabel} and password.`)
+      if (nextFieldErrors.identifier && nextFieldErrors.password) {
+        setError(`Please enter both your ${identifierUsageLabel} and password.`)
+      } else if (nextFieldErrors.identifier) {
+        setError(`Please enter your ${identifierUsageLabel}.`)
+      } else if (nextFieldErrors.password) {
+        setError('Please enter your password.')
+      }
       return
     }
 
@@ -2593,6 +2608,9 @@ function LoginScreen({ onLogin, portalAccess }) {
       const result = await onLogin(normalizedIdentifier, form.password)
       if (!result?.ok) {
         setError(result?.error || 'Unable to sign in. Please try again.')
+        if (result?.fieldErrors && Object.keys(result.fieldErrors).length) {
+          setFieldErrors(result.fieldErrors)
+        }
         return
       }
 
