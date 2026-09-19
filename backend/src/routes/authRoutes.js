@@ -45,11 +45,23 @@ function formatRetryWindow(retryAfterSeconds) {
 }
 
 function getLoginIdentifierKey(req) {
-  return normalizeLookupValue(req.body?.identifier || req.body?.enrollment || req.body?.employeeId);
+  return normalizeLookupValue(
+    req.body?.identifier ||
+    req.body?.enrollmentNo ||
+    req.body?.enrollment ||
+    req.body?.enrollmentNumber ||
+    req.body?.employeeId
+  );
 }
 
 function getForgotPasswordIdentifierKey(req) {
-  return normalizeLookupValue(req.body?.identifier || req.body?.enrollment || req.body?.employeeId);
+  return normalizeLookupValue(
+    req.body?.identifier ||
+    req.body?.enrollmentNo ||
+    req.body?.enrollment ||
+    req.body?.enrollmentNumber ||
+    req.body?.employeeId
+  );
 }
 
 function getRegisterIdentityKey(req) {
@@ -265,6 +277,7 @@ router.post(
 );
 router.post(
   '/register',
+  dbConnectMiddleware,
   requirePortalAccess('faculty', 'student'),
   registerNetworkRateLimit,
   registerIdentityRateLimit,
@@ -284,6 +297,7 @@ router.post(
 );
 router.post(
   '/student-login-start',
+  dbConnectMiddleware,
   requirePortalAccess('student'),
   studentLoginStartValidation,
   validateRequest,
@@ -291,6 +305,7 @@ router.post(
 );
 router.post(
   '/student-login-verify-otp',
+  dbConnectMiddleware,
   requirePortalAccess('student'),
   studentLoginVerifyOtpValidation,
   validateRequest,
@@ -298,6 +313,7 @@ router.post(
 );
 router.post(
   '/forgot-password/account',
+  dbConnectMiddleware,
   requirePortalAccess('faculty', 'student'),
   forgotPasswordStartRateLimit,
   forgotPasswordAccountValidation,
@@ -306,6 +322,7 @@ router.post(
 );
 router.post(
   '/forgot-password/start',
+  dbConnectMiddleware,
   requirePortalAccess('faculty', 'student'),
   forgotPasswordStartRateLimit,
   forgotPasswordStartValidation,
@@ -314,6 +331,7 @@ router.post(
 );
 router.post(
   '/forgot-password/verify-otp',
+  dbConnectMiddleware,
   requirePortalAccess('faculty', 'student'),
   forgotPasswordVerifyRateLimit,
   forgotPasswordVerifyOtpValidation,
@@ -322,6 +340,7 @@ router.post(
 );
 router.post(
   '/forgot-password/reset',
+  dbConnectMiddleware,
   requirePortalAccess('faculty', 'student'),
   forgotPasswordResetRateLimit,
   forgotPasswordResetValidation,

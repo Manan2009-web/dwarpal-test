@@ -37,7 +37,18 @@ function otpValidation(field = 'otp') {
 
 function identifierValidation(field = 'identifier', message = 'Enrollment number or employee ID is required') {
   return body(field)
-    .customSanitizer((value, { req }) => String(value || req.body.enrollment || req.body.employeeId || '').trim())
+    .customSanitizer((value, { req }) =>
+      String(
+        value ||
+        req.body.enrollmentNo ||
+        req.body.enrollment ||
+        req.body.enrollmentNumber ||
+        req.body.employeeId ||
+        ''
+      )
+        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+        .trim()
+    )
     .notEmpty()
     .withMessage(message)
     .custom((value) => {
@@ -51,7 +62,17 @@ function identifierValidation(field = 'identifier', message = 'Enrollment number
 
 function enrollmentValidation(field = 'identifier', message = 'Enrollment number is required') {
   return body(field)
-    .customSanitizer((value, { req }) => String(value || req.body.enrollmentNo || req.body.enrollment || '').trim())
+    .customSanitizer((value, { req }) =>
+      String(
+        value ||
+        req.body.enrollmentNo ||
+        req.body.enrollment ||
+        req.body.enrollmentNumber ||
+        ''
+      )
+        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+        .trim()
+    )
     .notEmpty()
     .withMessage(message)
     .custom((value) => {

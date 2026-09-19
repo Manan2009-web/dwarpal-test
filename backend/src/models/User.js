@@ -510,7 +510,9 @@ userSchema.pre('validate', function syncLegacyFields(next) {
   }
 
   if (this.role === 'student') {
-    const normalizedEnrollment = String(this.enrollmentNo || this.enrollment || '').trim();
+    const normalizedEnrollment = String(this.enrollmentNo || this.enrollment || '')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .trim();
 
     this.enrollmentNo = normalizedEnrollment || undefined;
     this.enrollment = normalizedEnrollment || undefined;

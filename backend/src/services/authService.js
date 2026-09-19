@@ -63,7 +63,9 @@ function buildSessionPayload(auth = {}) {
 }
 
 function normalizeIdentifier(identifier) {
-  return String(identifier || '').trim();
+  return String(identifier || '')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .trim();
 }
 
 function escapeRegex(value) {
@@ -71,7 +73,13 @@ function escapeRegex(value) {
 }
 
 function extractLoginIdentifier(payload = {}) {
-  return normalizeIdentifier(payload.identifier || payload.enrollment || payload.employeeId);
+  return normalizeIdentifier(
+    payload.identifier ||
+    payload.enrollmentNo ||
+    payload.enrollment ||
+    payload.enrollmentNumber ||
+    payload.employeeId
+  );
 }
 
 function normalizeRateLimitIdentifier(identifier) {
@@ -390,21 +398,69 @@ async function registerUser(payload, req, requestMeta) {
 }
 
 async function findUserByIdentifier(identifier, selection = '+password') {
-  const normalizedIdentifier = String(identifier || '').trim();
+  const cleanIdentifier = normalizeIdentifier(identifier);
 
-  if (!normalizedIdentifier) {
+  if (!cleanIdentifier) {
     return null;
   }
 
-  const cleanEmployeeId = normalizedIdentifier.toUpperCase();
+  const cleanUpper = cleanIdentifier.toUpperCase();
+  const cleanLower = cleanIdentifier.toLowerCase();
+  const compactIdentifier = cleanIdentifier.replace(/\s+/g, '');
+  const compactUpper = compactIdentifier.toUpperCase();
+  const compactLower = compactIdentifier.toLowerCase();
+
+  const escaped = escapeRegex(cleanIdentifier);
+  const caseInsensitiveRegex = new RegExp(`^${escaped}$`, 'i');
+
+  const orConditions = [
+    { enrollmentNo: cleanIdentifier },
+    { enrollmentNo: cleanUpper },
+    { enrollmentNo: cleanLower },
+    { enrollmentNo: { $regex: caseInsensitiveRegex } },
+    { enrollment: cleanIdentifier },
+    { enrollment: cleanUpper },
+    { enrollment: cleanLower },
+    { enrollment: { $regex: caseInsensitiveRegex } },
+    { enrollmentNumber: cleanIdentifier },
+    { enrollmentNumber: cleanUpper },
+    { enrollmentNumber: cleanLower },
+    { enrollmentNumber: { $regex: caseInsensitiveRegex } },
+    { employeeId: cleanUpper },
+    { employeeId: cleanIdentifier },
+    { employeeId: { $regex: caseInsensitiveRegex } }
+  ];
+
+  if (compactIdentifier && compactIdentifier !== cleanIdentifier) {
+    const compactEscaped = escapeRegex(compactIdentifier);
+    const compactRegex = new RegExp(`^${compactEscaped}$`, 'i');
+    orConditions.push(
+      { enrollmentNo: compactIdentifier },
+      { enrollmentNo: compactUpper },
+      { enrollmentNo: compactLower },
+      { enrollmentNo: { $regex: compactRegex } },
+      { enrollment: compactIdentifier },
+      { enrollment: compactUpper },
+      { enrollment: compactLower },
+      { enrollment: { $regex: compactRegex } },
+      { employeeId: compactUpper }
+    );
+  }
+
+  // Fallback to registered phone number if the identifier is a phone number (e.g. 10 digits or E.164 format)
+  try {
+    const normalizedPhone = normalizePhoneNumber(cleanIdentifier, {
+      defaultCountryCode: env.defaultPhoneCountryCode
+    });
+    if (normalizedPhone) {
+      orConditions.push({ phone: normalizedPhone });
+    }
+  } catch {
+    // Ignore phone normalization errors for non-phone identifiers
+  }
 
   return User.findOne({
-    $or: [
-      { enrollmentNumber: normalizedIdentifier },
-      { enrollmentNo: normalizedIdentifier },
-      { enrollment: normalizedIdentifier },
-      { employeeId: cleanEmployeeId }
-    ]
+    $or: orConditions
   }).select(selection);
 }
 

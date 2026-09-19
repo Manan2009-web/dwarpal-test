@@ -422,7 +422,18 @@ async function updateStudent(studentId, payload, actor, requestMeta = {}) {
     const requestedEnrollmentNo = normalizedPayload.enrollmentNo;
 
     if (requestedEnrollmentNo && requestedEnrollmentNo !== student.enrollmentNo) {
-      throw createFieldError('Enrollment number cannot be changed after student creation.', 'enrollmentNo', 400);
+      const canUpdateEnrollment =
+        student.isTemporaryEnrollment ||
+        actor?.role === 'admin' ||
+        actor?.role === 'cao';
+
+      if (!canUpdateEnrollment) {
+        throw createFieldError('Enrollment number cannot be changed after student creation.', 'enrollmentNo', 400);
+      }
+
+      student.enrollmentNo = requestedEnrollmentNo;
+      student.enrollment = requestedEnrollmentNo;
+      student.isTemporaryEnrollment = false;
     }
   }
 

@@ -958,18 +958,36 @@ function App() {
           }
 
           if (authMode === 'student-login') {
+            const hasSpecificBackendMessage =
+              errorDetails.message &&
+              errorDetails.message !== fallbackMessage &&
+              errorDetails.message !== 'Request failed.' &&
+              errorDetails.message !== 'Unauthorized' &&
+              !/invalid credentials/i.test(errorDetails.message)
+
             return {
               ...errorDetails,
               fieldErrors: {},
-              message: 'Invalid enrollment number or password.',
+              message: hasSpecificBackendMessage
+                ? errorDetails.message
+                : 'Invalid enrollment number or password. Please check your credentials and try again.',
             }
           }
 
           if (authMode === 'login') {
+            const hasSpecificBackendMessage =
+              errorDetails.message &&
+              errorDetails.message !== fallbackMessage &&
+              errorDetails.message !== 'Request failed.' &&
+              errorDetails.message !== 'Unauthorized' &&
+              !/invalid credentials/i.test(errorDetails.message)
+
             return {
               ...errorDetails,
               fieldErrors: {},
-              message: 'Invalid credentials. Please check your enrollment number or employee ID and password.',
+              message: hasSpecificBackendMessage
+                ? errorDetails.message
+                : 'Invalid credentials. Please check your enrollment number or employee ID and password.',
             }
           }
 
@@ -1225,7 +1243,9 @@ function App() {
   }
 
   async function login(identifier, password) {
-    const normalizedIdentifier = String(identifier || '').trim()
+    const normalizedIdentifier = String(identifier || '')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .trim()
 
     try {
       let user
@@ -2567,7 +2587,9 @@ function LoginScreen({ onLogin, portalAccess }) {
     setIsSubmitting(true)
 
     try {
-      const normalizedIdentifier = String(form.identifier || '').trim()
+      const normalizedIdentifier = String(form.identifier || '')
+        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+        .trim()
       const result = await onLogin(normalizedIdentifier, form.password)
       if (!result?.ok) {
         setError(result?.error || 'Unable to sign in. Please try again.')
